@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Card } from '@/components/common/Card'
 import { TokenIcon } from '@/components/common/TokenIcon'
-import { Settings, ArrowDownUp, ChevronDown, Info, AlertTriangle } from 'lucide-react'
+import { Settings, ArrowDownUp, ChevronDown, Info, AlertTriangle, Wifi } from 'lucide-react'
 import { USDC, EURC } from '@/config/tokens'
 import { ROUTER_ADDRESS } from '@/config/contracts'
 import { useAccount } from 'wagmi'
@@ -9,6 +9,7 @@ import { usePairReserves } from '@/hooks/usePairReserves'
 import { useTokenBalance } from '@/hooks/useTokenBalance'
 import { useApprove } from '@/hooks/useApprove'
 import { useSwap } from '@/hooks/useSwap'
+import { useNetworkGuard } from '@/hooks/useNetworkGuard'
 import { useTransactionSettings } from '@/hooks/useSettings'
 import { formatTokenAmount, parseTokenAmount } from '@/utils/format'
 import { getAmountOut, calculatePriceImpact, calculateMinimumReceived } from '@/utils/price'
@@ -21,6 +22,9 @@ export function SwapPage() {
   const [fromAmount, setFromAmount] = useState('')
   const [showSettings, setShowSettings] = useState(false)
   const { slippage, slippageBps, setSlippage, getDeadlineTimestamp, deadline, setDeadline } = useTransactionSettings()
+
+  // Network guard — require Arc Testnet for all DEX operations
+  const { isWrongNetwork, switchToArc, isSwitching } = useNetworkGuard()
 
   // Live reserves
   const { reserveUsdc, reserveEurc, rate, hasLiquidity, isLoading: reservesLoading } = usePairReserves()
@@ -71,6 +75,7 @@ export function SwapPage() {
   // Button state machine
   const buttonState = useMemo(() => {
     if (!isConnected) return { text: 'Connect Wallet', disabled: true, action: 'connect' as const }
+    if (isWrongNetwork) return { text: isSwitching ? 'Switching...' : 'Switch to Arc Testnet', disabled: isSwitching, action: 'switch-network' as const }
     if (reservesLoading) return { text: 'Loading...', disabled: true, action: 'loading' as const }
     if (!hasLiquidity) return { text: 'Pool has no liquidity', disabled: true, action: 'no-liquidity' as const }
     if (!fromAmount || parseFloat(fromAmount) <= 0) return { text: 'Enter an amount', disabled: true, action: 'enter' as const }
@@ -79,10 +84,12 @@ export function SwapPage() {
     if (needsApproval) return { text: `Approve ${fromToken.symbol}`, disabled: false, action: 'approve' as const }
     if (isSwapping || isSwapConfirming) return { text: 'Swapping...', disabled: true, action: 'swapping' as const }
     return { text: 'Swap', disabled: false, action: 'swap' as const }
-  }, [isConnected, reservesLoading, hasLiquidity, fromAmount, fromBalance, fromAmountRaw, isApproving, isApprovalConfirming, needsApproval, fromToken.symbol, isSwapping, isSwapConfirming])
+  }, [isConnected, isWrongNetwork, isSwitching, reservesLoading, hasLiquidity, fromAmount, fromBalance, fromAmountRaw, isApproving, isApprovalConfirming, needsApproval, fromToken.symbol, isSwapping, isSwapConfirming])
 
   const handleButtonClick = () => {
-    if (buttonState.action === 'approve') {
+    if (buttonState.action === 'switch-network') {
+      switchToArc()
+    } else if (buttonState.action === 'approve') {
       approve()
     } else if (buttonState.action === 'swap' && address) {
       swap({
@@ -120,8 +127,16 @@ export function SwapPage() {
           <SwapSettings slippage={slippage} setSlippage={setSlippage} deadline={deadline} setDeadline={setDeadline} />
         )}
 
+        {/* Wrong network banner */}
+        {isWrongNetwork && (
+          <div className="mb-4 flex items-start gap-2.5 rounded-xl bg-coco-red-500/10 border border-coco-red-500/20 p-3.5">
+            <Wifi className="h-4 w-4 text-coco-red-500 shrink-0 mt-0.5" />
+            <p className="text-xs text-coco-red-500">Wrong network. Switch to Arc Testnet to use Coco DEX.</p>
+          </div>
+        )}
+
         {/* No liquidity banner */}
-        {!reservesLoading && !hasLiquidity && (
+        {!isWrongNetwork && !reservesLoading && !hasLiquidity && (
           <div className="mb-4 flex items-start gap-2.5 rounded-xl bg-coco-amber-500/10 border border-coco-amber-500/20 p-3.5">
             <AlertTriangle className="h-4 w-4 text-coco-amber-500 shrink-0 mt-0.5" />
             <p className="text-xs text-coco-amber-500">This pool has no liquidity yet. Add liquidity before swapping.</p>

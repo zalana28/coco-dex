@@ -4,13 +4,14 @@ import { Card } from '@/components/common/Card'
 import { TokenIcon } from '@/components/common/TokenIcon'
 import { USDC, EURC } from '@/config/tokens'
 import { ROUTER_ADDRESS } from '@/config/contracts'
-import { ArrowLeft, ChevronDown, Plus, Info, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, ChevronDown, Plus, Info, AlertTriangle, Wifi } from 'lucide-react'
 import { useAccount } from 'wagmi'
 import { usePairReserves } from '@/hooks/usePairReserves'
 import { useTokenBalance } from '@/hooks/useTokenBalance'
 import { useApprove } from '@/hooks/useApprove'
 import { useAddLiquidity } from '@/hooks/useAddLiquidity'
 import { useLPBalance } from '@/hooks/useLPBalance'
+import { useNetworkGuard } from '@/hooks/useNetworkGuard'
 import { useTransactionSettings } from '@/hooks/useSettings'
 import { formatTokenAmount, parseTokenAmount } from '@/utils/format'
 import type { Token } from '@/types/token'
@@ -22,6 +23,9 @@ export function AddLiquidityPage() {
   const [amount0, setAmount0] = useState('')
   const [amount1, setAmount1] = useState('')
   const { getDeadlineTimestamp, slippageBps } = useTransactionSettings()
+
+  // Network guard — require Arc Testnet
+  const { isWrongNetwork, switchToArc, isSwitching } = useNetworkGuard()
 
   // Live reserves
   const { reserveUsdc, reserveEurc, hasLiquidity } = usePairReserves()
@@ -93,6 +97,7 @@ export function AddLiquidityPage() {
   // Button state machine
   const buttonState = useMemo(() => {
     if (!isConnected) return { text: 'Connect Wallet', disabled: true, action: 'connect' as const }
+    if (isWrongNetwork) return { text: isSwitching ? 'Switching...' : 'Switch to Arc Testnet', disabled: isSwitching, action: 'switch-network' as const }
     if (!amount0 || parseFloat(amount0) <= 0 || !amount1 || parseFloat(amount1) <= 0) return { text: 'Enter amounts', disabled: true, action: 'enter' as const }
     if (balance0 !== undefined && amount0Raw > balance0) return { text: 'Insufficient USDC', disabled: true, action: 'insufficient-0' as const }
     if (balance1 !== undefined && amount1Raw > balance1) return { text: 'Insufficient EURC', disabled: true, action: 'insufficient-1' as const }
@@ -105,7 +110,9 @@ export function AddLiquidityPage() {
   }, [isConnected, amount0, amount1, balance0, balance1, amount0Raw, amount1Raw, approveUsdc, approveEurc, isSupplying, isSupplyConfirming])
 
   const handleButtonClick = () => {
-    if (buttonState.action === 'approve-0') {
+    if (buttonState.action === 'switch-network') {
+      switchToArc()
+    } else if (buttonState.action === 'approve-0') {
       approveUsdc.approve()
     } else if (buttonState.action === 'approve-1') {
       approveEurc.approve()
@@ -145,8 +152,16 @@ export function AddLiquidityPage() {
           <h2 className="text-xl font-semibold text-coco-dark-text">Add Liquidity</h2>
         </div>
 
+        {/* Wrong network banner */}
+        {isWrongNetwork && (
+          <div className="mb-4 flex items-start gap-2.5 rounded-xl bg-coco-red-500/10 border border-coco-red-500/20 p-3.5">
+            <Wifi className="h-4 w-4 text-coco-red-500 shrink-0 mt-0.5" />
+            <p className="text-xs text-coco-red-500">Wrong network. Switch to Arc Testnet to use Coco DEX.</p>
+          </div>
+        )}
+
         {/* First liquidity provider notice */}
-        {!hasLiquidity && (
+        {!hasLiquidity && !isWrongNetwork && (
           <div className="mb-4 flex items-start gap-2.5 rounded-xl bg-coco-teal-400/10 border border-coco-teal-400/20 p-3.5">
             <Info className="h-4 w-4 text-coco-teal-400 shrink-0 mt-0.5" />
             <div>
