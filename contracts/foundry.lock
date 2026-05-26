@@ -2,7 +2,7 @@
   "lib/forge-std": {
     "tag": {
       "name": "v1.16.1",
-      "rev": "620536fa5277db4e3fd46772d5cbc1ea0696fb43"
+      "rev": "998e00015cb0df48fef5264fb8aa47da55af3f5a"
     }
   }
 }

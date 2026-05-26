@@ -9,6 +9,13 @@ optimizer = true
 optimizer_runs = 200
 evm_version = "paris"
 
+# Suppress block-timestamp lint warning for the deadline modifier.
+# The deadline comparison against block.timestamp is intentional and standard
+# for DEX routers (same pattern as Uniswap V2). Validator timestamp manipulation
+# of a few seconds is acceptable for user-provided transaction deadlines.
+[lint]
+exclude_lints = ["block-timestamp"]
+
 [rpc_endpoints]
 arc_testnet = "${ARC_TESTNET_RPC_URL}"
 
