@@ -1,25 +1,33 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Card } from '@/components/common/Card'
 import { TokenIcon } from '@/components/common/TokenIcon'
-import { MOCK_POOLS, MOCK_USER_POSITIONS } from '@/constants/mock'
-import { formatCompact, formatPercentage } from '@/utils/format'
-import { Plus, Minus, Droplets } from 'lucide-react'
+import { formatCompact, formatPercentage, formatTokenAmount } from '@/utils/format'
+import { Plus, Minus, Droplets, AlertTriangle } from 'lucide-react'
 import { useAccount } from 'wagmi'
+import { usePairReserves } from '@/hooks/usePairReserves'
+import { useLPBalance } from '@/hooks/useLPBalance'
+import { USDC, EURC } from '@/config/tokens'
 
 type Tab = 'all' | 'my'
 
 export function PoolsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('all')
-  const { isConnected } = useAccount()
+  const { address, isConnected } = useAccount()
+  const { reserveUsdc, reserveEurc, hasLiquidity, isLoading } = usePairReserves()
+  const { balance: lpBalance, share } = useLPBalance(address)
 
   return (
     <div className="pt-24 pb-12 px-4 mx-auto max-w-4xl">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-coco-dark-text">Pools</h1>
-        <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-coco-green-500 text-white text-sm font-medium hover:bg-coco-green-600 transition-colors">
+        <Link
+          to="/pools/add"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-coco-green-500 text-white text-sm font-medium hover:bg-coco-green-600 transition-colors"
+        >
           <Plus className="h-4 w-4" />
           New Position
-        </button>
+        </Link>
       </div>
 
       {/* Tabs */}
@@ -28,11 +36,26 @@ export function PoolsPage() {
         <TabButton active={activeTab === 'my'} onClick={() => setActiveTab('my')}>My Positions</TabButton>
       </div>
 
-      {activeTab === 'all' ? <AllPools /> : <MyPositions isConnected={isConnected} />}
+      {activeTab === 'all' ? (
+        <AllPools
+          reserveUsdc={reserveUsdc}
+          reserveEurc={reserveEurc}
+          hasLiquidity={hasLiquidity}
+          isLoading={isLoading}
+        />
+      ) : (
+        <MyPositions
+          isConnected={isConnected}
+          lpBalance={lpBalance}
+          share={share}
+          reserveUsdc={reserveUsdc}
+          reserveEurc={reserveEurc}
+          hasLiquidity={hasLiquidity}
+        />
+      )}
     </div>
   )
 }
-
 
 function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
@@ -49,51 +72,74 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   )
 }
 
-function AllPools() {
+function AllPools({ reserveUsdc, reserveEurc, hasLiquidity, isLoading }: {
+  reserveUsdc: bigint | undefined; reserveEurc: bigint | undefined; hasLiquidity: boolean; isLoading: boolean
+}) {
+  const tvl = hasLiquidity && reserveUsdc && reserveEurc
+    ? (Number(reserveUsdc) / 1e6) + (Number(reserveEurc) / 1e6 * 1.086) // EURC ≈ $1.086
+    : 0
+
   return (
     <div className="space-y-4">
-      {MOCK_POOLS.map((pool) => (
-        <Card key={pool.id} className="p-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex -space-x-2">
-                <TokenIcon symbol={pool.token0} color="#2775CA" size="md" />
-                <TokenIcon symbol={pool.token1} color="#1434CB" size="md" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-coco-dark-text">{pool.token0} / {pool.token1}</h3>
-                <p className="text-xs text-coco-dark-muted">{pool.feeTier}% fee tier</p>
-              </div>
+      <Card className="p-5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex -space-x-2">
+              <TokenIcon symbol="USDC" color="#2775CA" size="md" />
+              <TokenIcon symbol="EURC" color="#1434CB" size="md" />
             </div>
-            <div className="text-right">
-              <p className="text-sm font-medium text-coco-green-500">APR {formatPercentage(pool.apr)}</p>
+            <div>
+              <h3 className="font-semibold text-coco-dark-text">USDC / EURC</h3>
+              <p className="text-xs text-coco-dark-muted">0.3% fee tier</p>
             </div>
           </div>
+          <div className="text-right">
+            {hasLiquidity ? (
+              <p className="text-sm font-medium text-coco-green-500">Active</p>
+            ) : (
+              <p className="text-sm font-medium text-coco-amber-500">No Liquidity</p>
+            )}
+          </div>
+        </div>
 
-          <div className="mt-4 grid grid-cols-3 gap-4 pt-4 border-t border-coco-dark-border">
-            <div>
-              <p className="text-xs text-coco-dark-muted">TVL</p>
-              <p className="text-sm font-mono font-medium text-coco-dark-text">{formatCompact(pool.tvl)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-coco-dark-muted">24h Volume</p>
-              <p className="text-sm font-mono font-medium text-coco-dark-text">{formatCompact(pool.volume24h)}</p>
-            </div>
-            <div className="flex items-end justify-end gap-2">
-              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-coco-green-500/10 text-coco-green-500 text-xs font-medium hover:bg-coco-green-500/20 transition-colors">
-                <Plus className="h-3 w-3" />
-                Add
-              </button>
-            </div>
+        <div className="mt-4 grid grid-cols-3 gap-4 pt-4 border-t border-coco-dark-border">
+          <div>
+            <p className="text-xs text-coco-dark-muted">TVL</p>
+            <p className="text-sm font-mono font-medium text-coco-dark-text">
+              {isLoading ? '...' : hasLiquidity ? formatCompact(tvl) : '$0'}
+            </p>
           </div>
-        </Card>
-      ))}
+          <div>
+            <p className="text-xs text-coco-dark-muted">USDC Reserve</p>
+            <p className="text-sm font-mono font-medium text-coco-dark-text">
+              {isLoading ? '...' : reserveUsdc ? formatTokenAmount(reserveUsdc, 6) : '0'}
+            </p>
+          </div>
+          <div className="flex items-end justify-end gap-2">
+            <Link
+              to="/pools/add"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-coco-green-500/10 text-coco-green-500 text-xs font-medium hover:bg-coco-green-500/20 transition-colors"
+            >
+              <Plus className="h-3 w-3" />
+              Add
+            </Link>
+          </div>
+        </div>
+
+        {!hasLiquidity && !isLoading && (
+          <div className="mt-3 flex items-center gap-2 rounded-lg bg-coco-amber-500/5 border border-coco-amber-500/10 p-2.5">
+            <AlertTriangle className="h-3.5 w-3.5 text-coco-amber-500 shrink-0" />
+            <p className="text-[11px] text-coco-amber-500">This pool has no liquidity. Be the first to add!</p>
+          </div>
+        )}
+      </Card>
     </div>
   )
 }
 
-
-function MyPositions({ isConnected }: { isConnected: boolean }) {
+function MyPositions({ isConnected, lpBalance, share, reserveUsdc, reserveEurc, hasLiquidity }: {
+  isConnected: boolean; lpBalance: bigint | undefined; share: number; reserveUsdc: bigint | undefined; reserveEurc: bigint | undefined; hasLiquidity: boolean
+}) {
   if (!isConnected) {
     return (
       <Card className="p-12 text-center">
@@ -104,59 +150,73 @@ function MyPositions({ isConnected }: { isConnected: boolean }) {
     )
   }
 
-  if (MOCK_USER_POSITIONS.length === 0) {
+  const hasPosition = lpBalance !== undefined && lpBalance > BigInt(0)
+
+  if (!hasPosition) {
     return (
       <Card className="p-12 text-center">
         <Droplets className="h-12 w-12 text-coco-dark-muted mx-auto mb-4" />
         <h3 className="text-lg font-medium text-coco-dark-text">No positions found</h3>
-        <p className="mt-2 text-sm text-coco-dark-muted">Add liquidity to a pool to start earning fees.</p>
+        <p className="mt-2 text-sm text-coco-dark-muted">Add liquidity to the USDC/EURC pool to start earning fees.</p>
+        <Link
+          to="/pools/add"
+          className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-coco-green-500 text-white text-sm font-medium hover:bg-coco-green-600 transition-colors"
+        >
+          <Plus className="h-4 w-4" />
+          Add Liquidity
+        </Link>
       </Card>
     )
   }
 
+  // Calculate user's share of underlying tokens
+  const userUsdc = hasLiquidity && reserveUsdc ? (Number(reserveUsdc) * share) / 1e6 : 0
+  const userEurc = hasLiquidity && reserveEurc ? (Number(reserveEurc) * share) / 1e6 : 0
+
   return (
     <div className="space-y-4">
-      {MOCK_USER_POSITIONS.map((pos) => (
-        <Card key={pos.poolId} className="p-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex -space-x-2">
-                <TokenIcon symbol={pos.token0} color="#2775CA" size="md" />
-                <TokenIcon symbol={pos.token1} color="#1434CB" size="md" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-coco-dark-text">{pos.token0} / {pos.token1}</h3>
-                <p className="text-xs text-coco-dark-muted">Share: {formatPercentage(pos.share)}</p>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-sm font-mono font-medium text-coco-dark-text">${pos.value.toLocaleString()}</p>
-            </div>
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-4 pt-4 border-t border-coco-dark-border">
-            <div>
-              <p className="text-xs text-coco-dark-muted">{pos.token0}</p>
-              <p className="text-sm font-mono text-coco-dark-text">{pos.token0Amount.toLocaleString()}</p>
+      <Card className="p-5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex -space-x-2">
+              <TokenIcon symbol="USDC" color="#2775CA" size="md" />
+              <TokenIcon symbol="EURC" color="#1434CB" size="md" />
             </div>
             <div>
-              <p className="text-xs text-coco-dark-muted">{pos.token1}</p>
-              <p className="text-sm font-mono text-coco-dark-text">{pos.token1Amount.toLocaleString()}</p>
+              <h3 className="font-semibold text-coco-dark-text">USDC / EURC</h3>
+              <p className="text-xs text-coco-dark-muted">Share: {formatPercentage(share * 100)}</p>
             </div>
           </div>
+        </div>
 
-          <div className="mt-4 flex gap-2">
-            <button className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-coco-green-500/10 text-coco-green-500 text-sm font-medium hover:bg-coco-green-500/20 transition-colors">
-              <Plus className="h-3.5 w-3.5" />
-              Add
-            </button>
-            <button className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-coco-red-500/10 text-coco-red-500 text-sm font-medium hover:bg-coco-red-500/20 transition-colors">
-              <Minus className="h-3.5 w-3.5" />
-              Remove
-            </button>
+        <div className="mt-4 grid grid-cols-2 gap-4 pt-4 border-t border-coco-dark-border">
+          <div>
+            <p className="text-xs text-coco-dark-muted">USDC</p>
+            <p className="text-sm font-mono text-coco-dark-text">{userUsdc.toFixed(2)}</p>
           </div>
-        </Card>
-      ))}
+          <div>
+            <p className="text-xs text-coco-dark-muted">EURC</p>
+            <p className="text-sm font-mono text-coco-dark-text">{userEurc.toFixed(2)}</p>
+          </div>
+        </div>
+
+        <div className="mt-4 flex gap-2">
+          <Link
+            to="/pools/add"
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-coco-green-500/10 text-coco-green-500 text-sm font-medium hover:bg-coco-green-500/20 transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add
+          </Link>
+          <Link
+            to="/pools/remove"
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-coco-red-500/10 text-coco-red-500 text-sm font-medium hover:bg-coco-red-500/20 transition-colors"
+          >
+            <Minus className="h-3.5 w-3.5" />
+            Remove
+          </Link>
+        </div>
+      </Card>
     </div>
   )
 }

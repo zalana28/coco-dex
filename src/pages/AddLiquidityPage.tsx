@@ -1,25 +1,59 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { Card } from '@/components/common/Card'
 import { TokenIcon } from '@/components/common/TokenIcon'
 import { USDC, EURC } from '@/config/tokens'
-import { MOCK_EXCHANGE_RATE } from '@/constants/mock'
-import { ArrowLeft, ChevronDown, Plus, Info } from 'lucide-react'
+import { ROUTER_ADDRESS } from '@/config/contracts'
+import { ArrowLeft, ChevronDown, Plus, Info, AlertTriangle } from 'lucide-react'
 import { useAccount } from 'wagmi'
+import { usePairReserves } from '@/hooks/usePairReserves'
+import { useTokenBalance } from '@/hooks/useTokenBalance'
+import { useApprove } from '@/hooks/useApprove'
+import { useAddLiquidity } from '@/hooks/useAddLiquidity'
+import { useLPBalance } from '@/hooks/useLPBalance'
+import { useTransactionSettings } from '@/hooks/useSettings'
+import { formatTokenAmount, parseTokenAmount } from '@/utils/format'
 import type { Token } from '@/types/token'
 
 export function AddLiquidityPage() {
-  const { isConnected } = useAccount()
+  const { address, isConnected } = useAccount()
   const [token0] = useState<Token>(USDC)
   const [token1] = useState<Token>(EURC)
   const [amount0, setAmount0] = useState('')
   const [amount1, setAmount1] = useState('')
+  const { getDeadlineTimestamp, slippageBps } = useTransactionSettings()
 
-  // Auto-fill second amount based on rate
+  // Live reserves
+  const { reserveUsdc, reserveEurc, hasLiquidity } = usePairReserves()
+
+  // Live balances (ERC-20, 6 decimals)
+  const { balance: balance0 } = useTokenBalance(token0, address)
+  const { balance: balance1 } = useTokenBalance(token1, address)
+
+  // LP balance for pool share
+  const { totalSupply } = useLPBalance(address)
+
+  // Parse amounts
+  const amount0Raw = useMemo(() => {
+    if (!amount0 || parseFloat(amount0) <= 0) return BigInt(0)
+    return parseTokenAmount(amount0, token0.decimals)
+  }, [amount0, token0.decimals])
+
+  const amount1Raw = useMemo(() => {
+    if (!amount1 || parseFloat(amount1) <= 0) return BigInt(0)
+    return parseTokenAmount(amount1, token1.decimals)
+  }, [amount1, token1.decimals])
+
+  // Autofill second amount from reserves ratio (only for non-empty pool)
   const handleAmount0Change = (val: string) => {
     setAmount0(val)
-    if (val && parseFloat(val) > 0) {
-      setAmount1((parseFloat(val) * MOCK_EXCHANGE_RATE).toFixed(6).replace(/\.?0+$/, ''))
+    if (hasLiquidity && reserveUsdc && reserveEurc && val && parseFloat(val) > 0) {
+      const raw0 = parseTokenAmount(val, token0.decimals)
+      // quote: amount1 = amount0 * reserveEurc / reserveUsdc
+      const optimal1 = (raw0 * reserveEurc) / reserveUsdc
+      setAmount1(formatTokenAmount(optimal1, token1.decimals))
+    } else if (!hasLiquidity) {
+      // Empty pool: user sets both freely
     } else {
       setAmount1('')
     }
@@ -27,24 +61,78 @@ export function AddLiquidityPage() {
 
   const handleAmount1Change = (val: string) => {
     setAmount1(val)
-    if (val && parseFloat(val) > 0) {
-      setAmount0((parseFloat(val) / MOCK_EXCHANGE_RATE).toFixed(6).replace(/\.?0+$/, ''))
+    if (hasLiquidity && reserveUsdc && reserveEurc && val && parseFloat(val) > 0) {
+      const raw1 = parseTokenAmount(val, token1.decimals)
+      const optimal0 = (raw1 * reserveUsdc) / reserveEurc
+      setAmount0(formatTokenAmount(optimal0, token0.decimals))
+    } else if (!hasLiquidity) {
+      // Empty pool: user sets both freely
     } else {
       setAmount0('')
     }
   }
 
-  const poolShare = amount0 && parseFloat(amount0) > 0
-    ? Math.min((parseFloat(amount0) / (1_200_000 + parseFloat(amount0))) * 100, 100)
-    : 0
+  // Pool share calculation
+  const poolShare = useMemo(() => {
+    if (!hasLiquidity) return amount0Raw > BigInt(0) ? 100 : 0
+    if (!totalSupply || totalSupply <= BigInt(0) || !reserveUsdc || reserveUsdc <= BigInt(0)) return 0
+    if (amount0Raw <= BigInt(0)) return 0
+    // New LP minted ≈ amount0 * totalSupply / reserveUsdc
+    const newLp = (amount0Raw * totalSupply) / reserveUsdc
+    const share = Number(newLp) / Number(totalSupply + newLp) * 100
+    return share
+  }, [hasLiquidity, amount0Raw, totalSupply, reserveUsdc])
 
-  const getButtonState = () => {
-    if (!isConnected) return { text: 'Connect Wallet', disabled: true }
-    if (!amount0 || parseFloat(amount0) === 0) return { text: 'Enter an amount', disabled: true }
-    return { text: 'Supply', disabled: false }
+  // Approvals
+  const approveUsdc = useApprove(token0, ROUTER_ADDRESS, amount0Raw)
+  const approveEurc = useApprove(token1, ROUTER_ADDRESS, amount1Raw)
+
+  // Add liquidity hook
+  const { addLiquidity, isPending: isSupplying, isConfirming: isSupplyConfirming } = useAddLiquidity()
+
+  // Button state machine
+  const buttonState = useMemo(() => {
+    if (!isConnected) return { text: 'Connect Wallet', disabled: true, action: 'connect' as const }
+    if (!amount0 || parseFloat(amount0) <= 0 || !amount1 || parseFloat(amount1) <= 0) return { text: 'Enter amounts', disabled: true, action: 'enter' as const }
+    if (balance0 !== undefined && amount0Raw > balance0) return { text: 'Insufficient USDC', disabled: true, action: 'insufficient-0' as const }
+    if (balance1 !== undefined && amount1Raw > balance1) return { text: 'Insufficient EURC', disabled: true, action: 'insufficient-1' as const }
+    if (approveUsdc.isApproving || approveUsdc.isWaitingForReceipt) return { text: 'Approving USDC...', disabled: true, action: 'approving-0' as const }
+    if (approveUsdc.needsApproval) return { text: 'Approve USDC', disabled: false, action: 'approve-0' as const }
+    if (approveEurc.isApproving || approveEurc.isWaitingForReceipt) return { text: 'Approving EURC...', disabled: true, action: 'approving-1' as const }
+    if (approveEurc.needsApproval) return { text: 'Approve EURC', disabled: false, action: 'approve-1' as const }
+    if (isSupplying || isSupplyConfirming) return { text: 'Supplying...', disabled: true, action: 'supplying' as const }
+    return { text: 'Supply', disabled: false, action: 'supply' as const }
+  }, [isConnected, amount0, amount1, balance0, balance1, amount0Raw, amount1Raw, approveUsdc, approveEurc, isSupplying, isSupplyConfirming])
+
+  const handleButtonClick = () => {
+    if (buttonState.action === 'approve-0') {
+      approveUsdc.approve()
+    } else if (buttonState.action === 'approve-1') {
+      approveEurc.approve()
+    } else if (buttonState.action === 'supply' && address) {
+      // Apply slippage tolerance to min amounts
+      const minA = (amount0Raw * BigInt(10000 - slippageBps)) / BigInt(10000)
+      const minB = (amount1Raw * BigInt(10000 - slippageBps)) / BigInt(10000)
+      addLiquidity({
+        tokenA: token0,
+        tokenB: token1,
+        amountA: amount0Raw,
+        amountB: amount1Raw,
+        amountAMin: minA,
+        amountBMin: minB,
+        to: address,
+        deadline: getDeadlineTimestamp(),
+      })
+    }
   }
 
-  const buttonState = getButtonState()
+  const formattedBalance0 = balance0 !== undefined ? formatTokenAmount(balance0, token0.decimals) : '—'
+  const formattedBalance1 = balance1 !== undefined ? formatTokenAmount(balance1, token1.decimals) : '—'
+
+  // Rate display
+  const rateDisplay = hasLiquidity && reserveUsdc && reserveEurc && reserveUsdc > BigInt(0)
+    ? (Number(reserveEurc) / Number(reserveUsdc)).toFixed(6)
+    : null
 
   return (
     <div className="pt-24 pb-12 px-4 flex flex-col items-center">
@@ -57,13 +145,24 @@ export function AddLiquidityPage() {
           <h2 className="text-xl font-semibold text-coco-dark-text">Add Liquidity</h2>
         </div>
 
+        {/* First liquidity provider notice */}
+        {!hasLiquidity && (
+          <div className="mb-4 flex items-start gap-2.5 rounded-xl bg-coco-teal-400/10 border border-coco-teal-400/20 p-3.5">
+            <Info className="h-4 w-4 text-coco-teal-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs text-coco-teal-400 font-medium">You are the first liquidity provider for this pool.</p>
+              <p className="text-xs text-coco-dark-muted mt-1">The ratio of tokens you add will set the initial price. Enter both amounts freely.</p>
+            </div>
+          </div>
+        )}
 
-        {/* First Token Input */}
+        {/* Token 0 Input */}
         <LiquidityTokenInput
           token={token0}
           amount={amount0}
           onAmountChange={handleAmount0Change}
-          balance="1,000.00"
+          balance={formattedBalance0}
+          onMax={() => balance0 && setAmount0(formatTokenAmount(balance0, token0.decimals))}
         />
 
         {/* Plus separator */}
@@ -73,25 +172,32 @@ export function AddLiquidityPage() {
           </div>
         </div>
 
-        {/* Second Token Input */}
+        {/* Token 1 Input */}
         <LiquidityTokenInput
           token={token1}
           amount={amount1}
           onAmountChange={handleAmount1Change}
-          balance="500.00"
+          balance={formattedBalance1}
+          onMax={() => balance1 && setAmount1(formatTokenAmount(balance1, token1.decimals))}
         />
 
         {/* Price and Pool Share */}
-        {amount0 && parseFloat(amount0) > 0 && (
+        {(amount0 && parseFloat(amount0) > 0) && (
           <div className="mt-4 rounded-xl bg-coco-dark-bg border border-coco-dark-border p-4">
             <div className="flex items-center gap-1.5 mb-3">
               <Info className="h-3.5 w-3.5 text-coco-dark-muted" />
               <span className="text-xs text-coco-dark-muted">Prices and pool share</span>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <PriceStat label={`${token1.symbol} per ${token0.symbol}`} value={MOCK_EXCHANGE_RATE.toFixed(4)} />
-              <PriceStat label={`${token0.symbol} per ${token1.symbol}`} value={(1 / MOCK_EXCHANGE_RATE).toFixed(4)} />
-              <PriceStat label="Share of pool" value={`${poolShare.toFixed(4)}%`} />
+              <PriceStat
+                label={`${token1.symbol} per ${token0.symbol}`}
+                value={rateDisplay ?? (amount1 && amount0 ? (parseFloat(amount1) / parseFloat(amount0)).toFixed(6) : '—')}
+              />
+              <PriceStat
+                label={`${token0.symbol} per ${token1.symbol}`}
+                value={rateDisplay ? (1 / parseFloat(rateDisplay)).toFixed(6) : (amount0 && amount1 ? (parseFloat(amount0) / parseFloat(amount1)).toFixed(6) : '—')}
+              />
+              <PriceStat label="Share of pool" value={`${poolShare.toFixed(2)}%`} />
             </div>
           </div>
         )}
@@ -99,6 +205,7 @@ export function AddLiquidityPage() {
         {/* Supply Button */}
         <button
           disabled={buttonState.disabled}
+          onClick={handleButtonClick}
           className={`mt-6 w-full py-3.5 rounded-xl font-medium text-base transition-all ${
             buttonState.disabled
               ? 'bg-coco-dark-border text-coco-dark-muted cursor-not-allowed'
@@ -112,26 +219,16 @@ export function AddLiquidityPage() {
   )
 }
 
-
 function LiquidityTokenInput({
-  token,
-  amount,
-  onAmountChange,
-  balance,
+  token, amount, onAmountChange, balance, onMax,
 }: {
-  token: Token
-  amount: string
-  onAmountChange: (v: string) => void
-  balance: string
+  token: Token; amount: string; onAmountChange: (v: string) => void; balance: string; onMax?: () => void
 }) {
   return (
     <div className="rounded-xl bg-coco-dark-bg border border-coco-dark-border p-4 mt-2">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs text-coco-dark-muted">Input</span>
-        <button
-          onClick={() => onAmountChange(balance.replace(/,/g, ''))}
-          className="text-xs text-coco-dark-muted hover:text-coco-green-500 transition-colors"
-        >
+        <button onClick={onMax} className="text-xs text-coco-dark-muted hover:text-coco-green-500 transition-colors">
           Balance: <span className="font-mono">{balance}</span>
         </button>
       </div>
