@@ -1,39 +1,59 @@
+import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
+import { useState, useCallback } from 'react'
 import { ROUTER_ADDRESS } from '@/config/contracts'
+import { UNISWAP_V2_ROUTER_ABI } from '@/config/abis-dex'
 import type { Token } from '@/types/token'
 
 /**
- * Hook placeholder for executing token swaps.
+ * Hook for executing swapExactTokensForTokens via the CocoRouter.
  *
- * TODO: Implement when ROUTER_ADDRESS is set to a deployed contract.
- * This will use wagmi's useWriteContract to call:
- *   router.swapExactTokensForTokens(amountIn, amountOutMin, path, to, deadline)
+ * All amounts use ERC-20 decimals (6 for USDC/EURC).
+ * NEVER pass native 18-decimal values.
  */
 export function useSwap() {
-  const isReady = !!ROUTER_ADDRESS
+  const [txHash, setTxHash] = useState<`0x${string}` | undefined>()
+  const { writeContract, isPending, error } = useWriteContract()
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
+    hash: txHash,
+    query: { enabled: !!txHash },
+  })
 
-  const swap = async (_params: {
+  const swap = useCallback(async (params: {
     tokenIn: Token
     tokenOut: Token
     amountIn: bigint
     amountOutMin: bigint
+    to: `0x${string}`
     deadline: number
   }) => {
-    if (!ROUTER_ADDRESS) {
-      console.warn('[useSwap] Router address not configured. Deploy contracts first.')
-      return
-    }
-    // TODO: Implement actual swap transaction
-    // 1. Check allowance, approve if needed
-    // 2. Call swapExactTokensForTokens
-    // 3. Wait for transaction receipt
-    // 4. Return result
-  }
+    const { tokenIn, tokenOut, amountIn, amountOutMin, to, deadline } = params
+
+    writeContract(
+      {
+        address: ROUTER_ADDRESS,
+        abi: UNISWAP_V2_ROUTER_ABI,
+        functionName: 'swapExactTokensForTokens',
+        args: [
+          amountIn,
+          amountOutMin,
+          [tokenIn.address as `0x${string}`, tokenOut.address as `0x${string}`],
+          to,
+          BigInt(deadline),
+        ],
+      },
+      {
+        onSuccess: (hash) => setTxHash(hash),
+      }
+    )
+  }, [writeContract])
 
   return {
     swap,
-    isReady,
-    isPending: false,
-    isSuccess: false,
-    error: null as Error | null,
+    isPending,
+    isConfirming,
+    isSuccess,
+    txHash,
+    error,
+    reset: () => setTxHash(undefined),
   }
 }
