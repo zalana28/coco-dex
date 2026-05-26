@@ -22,6 +22,11 @@ import "./CocoPair.sol";
 contract CocoRouter {
     address public immutable factory;
 
+    // Deadline is a user-provided Unix timestamp. Comparing against block.timestamp
+    // is intentional — it allows users to set transaction expiry to protect against
+    // delayed inclusion. Validator manipulation of block.timestamp by a few seconds
+    // is acceptable for this use case (same design as Uniswap V2).
+    // forge-lint: disable-next-line(block-timestamp)
     modifier ensure(uint256 deadline) {
         require(deadline >= block.timestamp, "CocoRouter: EXPIRED");
         _;
@@ -72,8 +77,8 @@ contract CocoRouter {
         uint256 deadline
     ) external ensure(deadline) returns (uint256 amountA, uint256 amountB) {
         address pair = CocoLibrary.pairFor(factory, tokenA, tokenB);
-        // Transfer LP tokens to the pair
-        CocoPair(pair).transferFrom(msg.sender, pair, liquidity);
+        // Transfer LP tokens to the pair (check return value for safety)
+        require(CocoPair(pair).transferFrom(msg.sender, pair, liquidity), "CocoRouter: LP_TRANSFER_FAILED");
         // Burn and receive tokens
         (uint256 amount0, uint256 amount1) = CocoPair(pair).burn(to);
         (address token0,) = CocoLibrary.sortTokens(tokenA, tokenB);
