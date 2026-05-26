@@ -156,8 +156,8 @@ function MyPositions({ isConnected, lpBalance, share, reserveUsdc, reserveEurc, 
     return (
       <Card className="p-12 text-center">
         <Droplets className="h-12 w-12 text-coco-dark-muted mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-coco-dark-text">No positions found</h3>
-        <p className="mt-2 text-sm text-coco-dark-muted">Add liquidity to the USDC/EURC pool to start earning fees.</p>
+        <h3 className="text-lg font-medium text-coco-dark-text">You do not have a position in this pool yet.</h3>
+        <p className="mt-2 text-sm text-coco-dark-muted">Add liquidity to the USDC/EURC pool to start earning trading fees.</p>
         <Link
           to="/pools/add"
           className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-coco-green-500 text-white text-sm font-medium hover:bg-coco-green-600 transition-colors"
@@ -169,13 +169,24 @@ function MyPositions({ isConnected, lpBalance, share, reserveUsdc, reserveEurc, 
     )
   }
 
-  // Calculate user's share of underlying tokens
-  const userUsdc = hasLiquidity && reserveUsdc ? (Number(reserveUsdc) * share) / 1e6 : 0
-  const userEurc = hasLiquidity && reserveEurc ? (Number(reserveEurc) * share) / 1e6 : 0
+  // Calculate user's withdrawable amounts:
+  // userUSDC = reserveUSDC * userLP / totalSupply
+  // userEURC = reserveEURC * userLP / totalSupply
+  const withdrawableUsdc = hasLiquidity && reserveUsdc
+    ? Number(reserveUsdc) * share / 1e6
+    : 0
+  const withdrawableEurc = hasLiquidity && reserveEurc
+    ? Number(reserveEurc) * share / 1e6
+    : 0
+
+  // LP balance formatted (18 decimals for LP tokens)
+  const lpFormatted = lpBalance ? (Number(lpBalance) / 1e18).toFixed(6) : '0'
 
   return (
     <div className="space-y-4">
+      {/* Position Card */}
       <Card className="p-5">
+        {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex -space-x-2">
@@ -184,36 +195,53 @@ function MyPositions({ isConnected, lpBalance, share, reserveUsdc, reserveEurc, 
             </div>
             <div>
               <h3 className="font-semibold text-coco-dark-text">USDC / EURC</h3>
-              <p className="text-xs text-coco-dark-muted">Share: {formatPercentage(share * 100)}</p>
+              <p className="text-xs text-coco-dark-muted">Your Position</p>
             </div>
           </div>
-        </div>
-
-        <div className="mt-4 grid grid-cols-2 gap-4 pt-4 border-t border-coco-dark-border">
-          <div>
-            <p className="text-xs text-coco-dark-muted">USDC</p>
-            <p className="text-sm font-mono text-coco-dark-text">{userUsdc.toFixed(2)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-coco-dark-muted">EURC</p>
-            <p className="text-sm font-mono text-coco-dark-text">{userEurc.toFixed(2)}</p>
+          <div className="text-right">
+            <p className="text-sm font-medium text-coco-green-500">{formatPercentage(share * 100)}</p>
+            <p className="text-[10px] text-coco-dark-muted">Pool Share</p>
           </div>
         </div>
 
+        {/* Position Details */}
+        <div className="mt-4 space-y-3 pt-4 border-t border-coco-dark-border">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-coco-dark-muted">LP Tokens</span>
+            <span className="text-sm font-mono text-coco-dark-text">{lpFormatted}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-coco-dark-muted">Withdrawable USDC</span>
+            <span className="text-sm font-mono text-coco-dark-text">{withdrawableUsdc.toFixed(4)}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-coco-dark-muted">Withdrawable EURC</span>
+            <span className="text-sm font-mono text-coco-dark-text">{withdrawableEurc.toFixed(4)}</span>
+          </div>
+        </div>
+
+        {/* Fee Explanation */}
+        <div className="mt-4 rounded-lg bg-coco-dark-bg border border-coco-dark-border p-3">
+          <p className="text-[11px] text-coco-dark-muted leading-relaxed">
+            Fees are included in your withdrawable liquidity. Coco DEX uses a V2-style AMM where 0.3% trading fees stay inside the pool and increase the value of your LP tokens. To collect fees, remove liquidity.
+          </p>
+        </div>
+
+        {/* Actions */}
         <div className="mt-4 flex gap-2">
           <Link
             to="/pools/add"
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-coco-green-500/10 text-coco-green-500 text-sm font-medium hover:bg-coco-green-500/20 transition-colors"
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-coco-green-500/10 text-coco-green-500 text-sm font-medium hover:bg-coco-green-500/20 transition-colors"
           >
             <Plus className="h-3.5 w-3.5" />
-            Add
+            Add More
           </Link>
           <Link
             to="/pools/remove"
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-coco-red-500/10 text-coco-red-500 text-sm font-medium hover:bg-coco-red-500/20 transition-colors"
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-coco-red-500/10 text-coco-red-500 text-sm font-medium hover:bg-coco-red-500/20 transition-colors"
           >
             <Minus className="h-3.5 w-3.5" />
-            Remove
+            <span>Remove</span>
           </Link>
         </div>
       </Card>
