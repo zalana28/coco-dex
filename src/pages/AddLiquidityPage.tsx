@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Card } from '@/components/common/Card'
 import { TokenIcon } from '@/components/common/TokenIcon'
+import { TransactionProgressPanel } from '@/components/transactions/TransactionProgressPanel'
 import { USDC, EURC } from '@/config/tokens'
 import { ROUTER_ADDRESS } from '@/config/contracts'
 import { ArrowLeft, ChevronDown, Plus, Info, AlertTriangle, Wifi } from 'lucide-react'
@@ -13,6 +14,7 @@ import { useAddLiquidity } from '@/hooks/useAddLiquidity'
 import { useLPBalance } from '@/hooks/useLPBalance'
 import { useNetworkGuard } from '@/hooks/useNetworkGuard'
 import { useTransactionSettings } from '@/hooks/useSettings'
+import { useTransactionProgress } from '@/hooks/useTransactionProgress'
 import { formatTokenAmount, parseTokenAmount } from '@/utils/format'
 import type { Token } from '@/types/token'
 
@@ -92,7 +94,67 @@ export function AddLiquidityPage() {
   const approveEurc = useApprove(token1, ROUTER_ADDRESS, amount1Raw)
 
   // Add liquidity hook
-  const { addLiquidity, isPending: isSupplying, isConfirming: isSupplyConfirming } = useAddLiquidity()
+  const { addLiquidity, isPending: isSupplying, isConfirming: isSupplyConfirming, txHash: supplyTxHash } = useAddLiquidity()
+
+  // Transaction progress tracking
+  const txProgress = useTransactionProgress()
+
+  // Track USDC approval progress
+  useEffect(() => {
+    if (approveUsdc.isApproving && txProgress.currentFlow) {
+      txProgress.updateStep('approve_usdc', 'waiting_wallet_confirmation')
+    }
+  }, [approveUsdc.isApproving])
+
+  useEffect(() => {
+    if (approveUsdc.isWaitingForReceipt && txProgress.currentFlow) {
+      txProgress.updateStep('approve_usdc', 'pending_onchain')
+    }
+  }, [approveUsdc.isWaitingForReceipt])
+
+  useEffect(() => {
+    if (approveUsdc.isApproved && txProgress.currentFlow) {
+      txProgress.updateStep('approve_usdc', 'success')
+    }
+  }, [approveUsdc.isApproved])
+
+  // Track EURC approval progress
+  useEffect(() => {
+    if (approveEurc.isApproving && txProgress.currentFlow) {
+      txProgress.updateStep('approve_eurc', 'waiting_wallet_confirmation')
+    }
+  }, [approveEurc.isApproving])
+
+  useEffect(() => {
+    if (approveEurc.isWaitingForReceipt && txProgress.currentFlow) {
+      txProgress.updateStep('approve_eurc', 'pending_onchain')
+    }
+  }, [approveEurc.isWaitingForReceipt])
+
+  useEffect(() => {
+    if (approveEurc.isApproved && txProgress.currentFlow) {
+      txProgress.updateStep('approve_eurc', 'success')
+    }
+  }, [approveEurc.isApproved])
+
+  // Track supply progress
+  useEffect(() => {
+    if (isSupplying && txProgress.currentFlow) {
+      txProgress.updateStep('add_liquidity', 'waiting_wallet_confirmation')
+    }
+  }, [isSupplying])
+
+  useEffect(() => {
+    if (supplyTxHash && txProgress.currentFlow) {
+      txProgress.setTxHash('add_liquidity', supplyTxHash)
+    }
+  }, [supplyTxHash])
+
+  useEffect(() => {
+    if (isSupplyConfirming && !isSupplying && supplyTxHash && txProgress.currentFlow) {
+      txProgress.updateStep('add_liquidity', 'pending_onchain')
+    }
+  }, [isSupplyConfirming, isSupplying, supplyTxHash])
 
   // Button state machine
   const buttonState = useMemo(() => {
@@ -113,10 +175,28 @@ export function AddLiquidityPage() {
     if (buttonState.action === 'switch-network') {
       switchToArc()
     } else if (buttonState.action === 'approve-0') {
+      // Start full 3-step flow
+      txProgress.startFlow([
+        { type: 'approve_usdc', label: 'Approve USDC' },
+        { type: 'approve_eurc', label: 'Approve EURC' },
+        { type: 'add_liquidity', label: 'Supply Liquidity' },
+      ])
+      txProgress.updateStep('approve_usdc', 'waiting_wallet_confirmation')
       approveUsdc.approve()
     } else if (buttonState.action === 'approve-1') {
+      if (!txProgress.currentFlow) {
+        txProgress.startFlow([
+          { type: 'approve_eurc', label: 'Approve EURC' },
+          { type: 'add_liquidity', label: 'Supply Liquidity' },
+        ])
+      }
+      txProgress.updateStep('approve_eurc', 'waiting_wallet_confirmation')
       approveEurc.approve()
     } else if (buttonState.action === 'supply' && address) {
+      if (!txProgress.currentFlow) {
+        txProgress.startFlow([{ type: 'add_liquidity', label: 'Supply Liquidity' }])
+      }
+      txProgress.updateStep('add_liquidity', 'waiting_wallet_confirmation')
       // Apply slippage tolerance to min amounts
       const minA = (amount0Raw * BigInt(10000 - slippageBps)) / BigInt(10000)
       const minB = (amount1Raw * BigInt(10000 - slippageBps)) / BigInt(10000)
@@ -230,6 +310,13 @@ export function AddLiquidityPage() {
           {buttonState.text}
         </button>
       </Card>
+
+      {/* Transaction Progress Panel */}
+      <TransactionProgressPanel
+        currentFlow={txProgress.currentFlow}
+        history={txProgress.history}
+        onClear={txProgress.clearFlow}
+      />
     </div>
   )
 }
