@@ -1,4 +1,4 @@
-import { CheckCircle, XCircle, Loader2, Clock, Copy, ExternalLink, X } from 'lucide-react'
+import { CheckCircle, XCircle, Loader2, Clock, Copy, ExternalLink, X, RefreshCw } from 'lucide-react'
 import type { TransactionFlow, TransactionStep, TransactionStatus } from '@/types/transactions'
 import { getExplorerTxUrl, truncateTxHash, getStatusMessage } from '@/types/transactions'
 import { useState } from 'react'
@@ -7,15 +7,20 @@ interface TransactionProgressPanelProps {
   currentFlow: TransactionFlow | null
   history: TransactionFlow[]
   onClear: () => void
+  onCheckStatus?: () => void
 }
 
 /**
  * Transaction progress panel displayed below Swap/Add Liquidity cards.
  * Shows step-by-step transaction status, tx hashes, and explorer links.
  *
- * Follows DESIGN.md: rounded glass card, subtle spinner, green/red states.
+ * Rules enforced by this panel:
+ * - Only the active step shows a spinner.
+ * - Future steps show as idle (empty circle).
+ * - Past steps show success/failed checkmarks.
+ * - Each step's tx hash is displayed only for that step.
  */
-export function TransactionProgressPanel({ currentFlow, history, onClear }: TransactionProgressPanelProps) {
+export function TransactionProgressPanel({ currentFlow, history, onClear, onCheckStatus }: TransactionProgressPanelProps) {
   if (!currentFlow && history.length === 0) return null
 
   return (
@@ -25,13 +30,24 @@ export function TransactionProgressPanel({ currentFlow, history, onClear }: Tran
         <div className="rounded-2xl bg-coco-dark-surface/80 backdrop-blur-sm border border-coco-dark-border p-4">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-medium text-coco-dark-muted uppercase tracking-wider">Transaction Progress</span>
-            <button
-              onClick={onClear}
-              className="p-1 rounded-md text-coco-dark-muted hover:text-coco-dark-text hover:bg-coco-dark-bg transition-colors"
-              title="Clear"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+            <div className="flex items-center gap-1">
+              {onCheckStatus && (
+                <button
+                  onClick={onCheckStatus}
+                  className="p-1 rounded-md text-coco-dark-muted hover:text-coco-teal-400 hover:bg-coco-dark-bg transition-colors"
+                  title="Check status"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                </button>
+              )}
+              <button
+                onClick={onClear}
+                className="p-1 rounded-md text-coco-dark-muted hover:text-coco-dark-text hover:bg-coco-dark-bg transition-colors"
+                title="Clear"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
 
           <div className="space-y-2">
