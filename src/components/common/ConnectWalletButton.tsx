@@ -46,12 +46,22 @@ export function ConnectWalletButton() {
           onClick={() => setShowDropdown(!showDropdown)}
           className="flex items-center gap-2 px-4 py-2 rounded-xl bg-coco-dark-surface border border-coco-dark-border text-sm text-coco-dark-text hover:border-coco-green-500/50 transition-colors"
         >
-          <div className="h-2 w-2 rounded-full bg-coco-green-500" />
+          {isWrongNetwork ? (
+            <div className="h-2 w-2 rounded-full bg-coco-red-500" />
+          ) : (
+            <div className="h-2 w-2 rounded-full bg-coco-green-500" />
+          )}
           <span className="font-mono">{truncateAddress(address)}</span>
         </button>
 
         {showDropdown && (
           <div className="absolute right-0 top-full mt-2 w-48 rounded-xl bg-coco-dark-surface border border-coco-dark-border shadow-coco-2 py-1">
+            <div className="px-4 py-2 border-b border-coco-dark-border">
+              <p className="text-[10px] text-coco-dark-muted uppercase tracking-wider">Network</p>
+              <p className={`text-xs font-medium mt-0.5 ${isWrongNetwork ? 'text-coco-red-500' : 'text-coco-green-500'}`}>
+                {isWrongNetwork ? 'Wrong Network' : 'Arc Testnet'}
+              </p>
+            </div>
             <button
               onClick={() => { disconnect(); setShowDropdown(false) }}
               className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-coco-dark-muted hover:text-coco-red-500 hover:bg-coco-dark-bg transition-colors"
