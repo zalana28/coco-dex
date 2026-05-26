@@ -4,6 +4,13 @@ import type { Token } from '@/types/token'
 
 /**
  * Hook to fetch ERC-20 token balance for connected wallet.
+ *
+ * This is the CORRECT hook for all DEX operations (swaps, pools, approvals).
+ * It reads balanceOf() from the ERC-20 contract, returning 6-decimal amounts
+ * for both USDC and EURC on Arc Testnet.
+ *
+ * DO NOT use wagmi's useBalance() for DEX token amounts — that returns
+ * native gas balance at 18 decimals. Use useNativeBalance() for gas display only.
  */
 export function useTokenBalance(token: Token | undefined, address: `0x${string}` | undefined) {
   const { data, isLoading, refetch } = useReadContract({

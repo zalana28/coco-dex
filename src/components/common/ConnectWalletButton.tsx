@@ -2,7 +2,8 @@ import { useAccount, useConnect, useDisconnect, useChainId, useSwitchChain } fro
 import { truncateAddress } from '@/utils/format'
 import { arcTestnet } from '@/config/chains'
 import { Wallet, LogOut, AlertTriangle } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
+import { useClickOutside } from '@/hooks/useClickOutside'
 
 export function ConnectWalletButton() {
   const { address, isConnected, isConnecting } = useAccount()
@@ -11,6 +12,9 @@ export function ConnectWalletButton() {
   const chainId = useChainId()
   const { switchChain } = useSwitchChain()
   const [showDropdown, setShowDropdown] = useState(false)
+
+  const closeDropdown = useCallback(() => setShowDropdown(false), [])
+  const dropdownRef = useClickOutside<HTMLDivElement>(closeDropdown)
 
   const isWrongNetwork = isConnected && chainId !== arcTestnet.id
 
@@ -37,7 +41,7 @@ export function ConnectWalletButton() {
 
   if (isConnected && address) {
     return (
-      <div className="relative">
+      <div className="relative" ref={dropdownRef}>
         <button
           onClick={() => setShowDropdown(!showDropdown)}
           className="flex items-center gap-2 px-4 py-2 rounded-xl bg-coco-dark-surface border border-coco-dark-border text-sm text-coco-dark-text hover:border-coco-green-500/50 transition-colors"
