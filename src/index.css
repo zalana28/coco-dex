@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+@theme {
+  /* Coco Green */
+  --color-coco-green-50: #f0fdf4;
+  --color-coco-green-100: #dcfce7;
+  --color-coco-green-200: #bbf7d0;
+  --color-coco-green-500: #22c55e;
+  --color-coco-green-600: #16a34a;
+  --color-coco-green-900: #14532d;
+
+  /* Coco Sand */
+  --color-coco-sand-50: #fefdfb;
+  --color-coco-sand-100: #fdf9f3;
+  --color-coco-sand-200: #f5efe6;
+  --color-coco-sand-300: #e8dfd3;
+  --color-coco-sand-700: #6b5e50;
+  --color-coco-sand-900: #3d3530;
+
+  /* Coco Teal */
+  --color-coco-teal-400: #2dd4bf;
+  --color-coco-teal-600: #0d9488;
+
+  /* Dark Mode */
+  --color-coco-dark-bg: #1a1814;
+  --color-coco-dark-surface: #252119;
+  --color-coco-dark-border: #3d3530;
+  --color-coco-dark-text: #fdf9f3;
+  --color-coco-dark-muted: #a89b8c;
+
+  /* Semantic */
+  --color-coco-red-500: #ef4444;
+  --color-coco-amber-500: #f59e0b;
+
+  /* Fonts */
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Shadows */
+  --shadow-coco-1: 0 1px 3px rgba(61, 53, 48, 0.04), 0 1px 2px rgba(61, 53, 48, 0.06);
+  --shadow-coco-2: 0 4px 6px rgba(61, 53, 48, 0.04), 0 2px 4px rgba(61, 53, 48, 0.06);
+  --shadow-coco-3: 0 20px 25px rgba(61, 53, 48, 0.08), 0 8px 10px rgba(61, 53, 48, 0.04);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-coco-dark-bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-coco-dark-border);
+  border-radius: 3px;
+}
+
+/* Number inputs - hide spinners */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
