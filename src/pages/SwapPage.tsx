@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Card } from '@/components/common/Card'
 import { TokenIcon } from '@/components/common/TokenIcon'
+import { TransactionProgressPanel } from '@/components/transactions/TransactionProgressPanel'
 import { Settings, ArrowDownUp, ChevronDown, Info, AlertTriangle, Wifi } from 'lucide-react'
 import { USDC, EURC } from '@/config/tokens'
 import { ROUTER_ADDRESS } from '@/config/contracts'
@@ -11,6 +12,7 @@ import { useApprove } from '@/hooks/useApprove'
 import { useSwap } from '@/hooks/useSwap'
 import { useNetworkGuard } from '@/hooks/useNetworkGuard'
 import { useTransactionSettings } from '@/hooks/useSettings'
+import { useTransactionProgress } from '@/hooks/useTransactionProgress'
 import { formatTokenAmount, parseTokenAmount } from '@/utils/format'
 import { getAmountOut, calculatePriceImpact, calculateMinimumReceived } from '@/utils/price'
 import type { Token } from '@/types/token'
@@ -70,7 +72,44 @@ export function SwapPage() {
   )
 
   // Swap execution
-  const { swap, isPending: isSwapping, isConfirming: isSwapConfirming } = useSwap()
+  const { swap, isPending: isSwapping, isConfirming: isSwapConfirming, txHash: swapTxHash } = useSwap()
+
+  // Transaction progress tracking
+  const txProgress = useTransactionProgress()
+
+  // Track approval progress
+  useEffect(() => {
+    if (isApproving && txProgress.currentFlow) {
+      const approveType = fromToken.symbol === 'USDC' ? 'approve_usdc' as const : 'approve_eurc' as const
+      txProgress.updateStep(approveType, 'waiting_wallet_confirmation')
+    }
+  }, [isApproving])
+
+  useEffect(() => {
+    if (isApprovalConfirming && txProgress.currentFlow) {
+      const approveType = fromToken.symbol === 'USDC' ? 'approve_usdc' as const : 'approve_eurc' as const
+      txProgress.updateStep(approveType, 'pending_onchain')
+    }
+  }, [isApprovalConfirming])
+
+  // Track swap progress
+  useEffect(() => {
+    if (isSwapping && txProgress.currentFlow) {
+      txProgress.updateStep('swap', 'waiting_wallet_confirmation')
+    }
+  }, [isSwapping])
+
+  useEffect(() => {
+    if (swapTxHash && txProgress.currentFlow) {
+      txProgress.setTxHash('swap', swapTxHash)
+    }
+  }, [swapTxHash])
+
+  useEffect(() => {
+    if (isSwapConfirming && !isSwapping && swapTxHash && txProgress.currentFlow) {
+      txProgress.updateStep('swap', 'pending_onchain')
+    }
+  }, [isSwapConfirming, isSwapping, swapTxHash])
 
   // Button state machine
   const buttonState = useMemo(() => {
@@ -90,8 +129,18 @@ export function SwapPage() {
     if (buttonState.action === 'switch-network') {
       switchToArc()
     } else if (buttonState.action === 'approve') {
+      const approveType = fromToken.symbol === 'USDC' ? 'approve_usdc' as const : 'approve_eurc' as const
+      txProgress.startFlow([
+        { type: approveType, label: `Approve ${fromToken.symbol}` },
+        { type: 'swap', label: 'Swap' },
+      ])
+      txProgress.updateStep(approveType, 'waiting_wallet_confirmation')
       approve()
     } else if (buttonState.action === 'swap' && address) {
+      if (!txProgress.currentFlow) {
+        txProgress.startFlow([{ type: 'swap', label: 'Swap' }])
+      }
+      txProgress.updateStep('swap', 'waiting_wallet_confirmation')
       swap({
         tokenIn: fromToken,
         tokenOut: toToken,
@@ -198,6 +247,13 @@ export function SwapPage() {
           {buttonState.text}
         </button>
       </Card>
+
+      {/* Transaction Progress Panel */}
+      <TransactionProgressPanel
+        currentFlow={txProgress.currentFlow}
+        history={txProgress.history}
+        onClear={txProgress.clearFlow}
+      />
     </div>
   )
 }
