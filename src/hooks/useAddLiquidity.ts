@@ -1,41 +1,64 @@
+import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
+import { useState, useCallback } from 'react'
 import { ROUTER_ADDRESS } from '@/config/contracts'
+import { UNISWAP_V2_ROUTER_ABI } from '@/config/abis-dex'
 import type { Token } from '@/types/token'
 
 /**
- * Hook placeholder for adding liquidity to a pool.
+ * Hook for adding liquidity via the CocoRouter.
  *
- * TODO: Implement when ROUTER_ADDRESS is set to a deployed contract.
- * This will use wagmi's useWriteContract to call:
- *   router.addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin, to, deadline)
+ * All amounts use ERC-20 decimals (6 for USDC/EURC).
+ * NEVER pass native 18-decimal values.
  */
 export function useAddLiquidity() {
-  const isReady = !!ROUTER_ADDRESS
+  const [txHash, setTxHash] = useState<`0x${string}` | undefined>()
+  const { writeContract, isPending, error } = useWriteContract()
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
+    hash: txHash,
+    query: { enabled: !!txHash },
+  })
 
-  const addLiquidity = async (_params: {
+  const addLiquidity = useCallback(async (params: {
     tokenA: Token
     tokenB: Token
     amountA: bigint
     amountB: bigint
     amountAMin: bigint
     amountBMin: bigint
+    to: `0x${string}`
     deadline: number
   }) => {
-    if (!ROUTER_ADDRESS) {
-      console.warn('[useAddLiquidity] Router address not configured. Deploy contracts first.')
-      return
-    }
-    // TODO: Implement actual addLiquidity transaction
-    // 1. Approve tokenA for router
-    // 2. Approve tokenB for router
-    // 3. Call addLiquidity
-    // 4. Wait for transaction receipt
-  }
+    const { tokenA, tokenB, amountA, amountB, amountAMin, amountBMin, to, deadline } = params
+
+    writeContract(
+      {
+        address: ROUTER_ADDRESS,
+        abi: UNISWAP_V2_ROUTER_ABI,
+        functionName: 'addLiquidity',
+        args: [
+          tokenA.address as `0x${string}`,
+          tokenB.address as `0x${string}`,
+          amountA,
+          amountB,
+          amountAMin,
+          amountBMin,
+          to,
+          BigInt(deadline),
+        ],
+      },
+      {
+        onSuccess: (hash) => setTxHash(hash),
+      }
+    )
+  }, [writeContract])
 
   return {
     addLiquidity,
-    isReady,
-    isPending: false,
-    isSuccess: false,
-    error: null as Error | null,
+    isPending,
+    isConfirming,
+    isSuccess,
+    txHash,
+    error,
+    reset: () => setTxHash(undefined),
   }
 }

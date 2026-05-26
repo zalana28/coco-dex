@@ -1,39 +1,62 @@
+import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
+import { useState, useCallback } from 'react'
 import { ROUTER_ADDRESS } from '@/config/contracts'
+import { UNISWAP_V2_ROUTER_ABI } from '@/config/abis-dex'
 import type { Token } from '@/types/token'
 
 /**
- * Hook placeholder for removing liquidity from a pool.
+ * Hook for removing liquidity via the CocoRouter.
  *
- * TODO: Implement when ROUTER_ADDRESS is set to a deployed contract.
- * This will use wagmi's useWriteContract to call:
- *   router.removeLiquidity(tokenA, tokenB, liquidity, amountAMin, amountBMin, to, deadline)
+ * Liquidity amount is in LP token units (18 decimals).
+ * amountAMin/amountBMin are in ERC-20 token units (6 decimals for USDC/EURC).
  */
 export function useRemoveLiquidity() {
-  const isReady = !!ROUTER_ADDRESS
+  const [txHash, setTxHash] = useState<`0x${string}` | undefined>()
+  const { writeContract, isPending, error } = useWriteContract()
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
+    hash: txHash,
+    query: { enabled: !!txHash },
+  })
 
-  const removeLiquidity = async (_params: {
+  const removeLiquidity = useCallback(async (params: {
     tokenA: Token
     tokenB: Token
     liquidity: bigint
     amountAMin: bigint
     amountBMin: bigint
+    to: `0x${string}`
     deadline: number
   }) => {
-    if (!ROUTER_ADDRESS) {
-      console.warn('[useRemoveLiquidity] Router address not configured. Deploy contracts first.')
-      return
-    }
-    // TODO: Implement actual removeLiquidity transaction
-    // 1. Approve LP token for router
-    // 2. Call removeLiquidity
-    // 3. Wait for transaction receipt
-  }
+    const { tokenA, tokenB, liquidity, amountAMin, amountBMin, to, deadline } = params
+
+    writeContract(
+      {
+        address: ROUTER_ADDRESS,
+        abi: UNISWAP_V2_ROUTER_ABI,
+        functionName: 'removeLiquidity',
+        args: [
+          tokenA.address as `0x${string}`,
+          tokenB.address as `0x${string}`,
+          liquidity,
+          amountAMin,
+          amountBMin,
+          to,
+          BigInt(deadline),
+        ],
+      },
+      {
+        onSuccess: (hash) => setTxHash(hash),
+      }
+    )
+  }, [writeContract])
 
   return {
     removeLiquidity,
-    isReady,
-    isPending: false,
-    isSuccess: false,
-    error: null as Error | null,
+    isPending,
+    isConfirming,
+    isSuccess,
+    txHash,
+    error,
+    reset: () => setTxHash(undefined),
   }
 }
