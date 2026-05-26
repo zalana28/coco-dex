@@ -348,7 +348,7 @@ contract CocoDexTest is Test {
 
     // ========== 6-DECIMAL HANDLING ==========
 
-    function test_SixDecimalTokens_CorrectPrecision() public {
+    function test_SixDecimalTokens_CorrectPrecision() public view {
         assertEq(usdc.decimals(), 6, "USDC should be 6 decimals");
         assertEq(eurc.decimals(), 6, "EURC should be 6 decimals");
     }

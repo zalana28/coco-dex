@@ -175,8 +175,14 @@ contract CocoPair is CocoERC20 {
     // --- Internal helpers ---
 
     function _update(uint256 balance0, uint256 balance1) private {
-        require(balance0 <= type(uint112).max && balance1 <= type(uint112).max, "CocoPair: OVERFLOW");
+        // Explicit overflow guards before downcasting to uint112.
+        // uint112.max = 5.19e33, which is far larger than any realistic ERC-20 supply.
+        require(balance0 <= type(uint112).max, "CocoPair: OVERFLOW");
+        require(balance1 <= type(uint112).max, "CocoPair: OVERFLOW");
+        // casting to 'uint112' is safe because of the require guards above
+        // forge-lint: disable-next-line(unsafe-typecast)
         reserve0 = uint112(balance0);
+        // forge-lint: disable-next-line(unsafe-typecast)
         reserve1 = uint112(balance1);
         blockTimestampLast = uint32(block.timestamp % 2**32);
         emit Sync(reserve0, reserve1);
