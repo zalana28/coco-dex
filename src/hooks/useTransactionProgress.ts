@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react'
-import type { TransactionStep, TransactionType, TransactionStatus, TransactionFlow } from '@/types/transactions'
+import type { TransactionType, TransactionStatus, TransactionFlow } from '@/types/transactions'
 
 let flowIdCounter = 0
 

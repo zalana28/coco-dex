@@ -1,3 +1,4 @@
+import { formatUnits } from 'viem'
 import { useBalance } from 'wagmi'
 
 /**
@@ -32,7 +33,7 @@ export function useNativeBalance(address: `0x${string}` | undefined) {
     /** Native balance in wei (18 decimals). For gas display only. */
     balance: data?.value,
     /** Formatted string with proper decimals for display */
-    formatted: data?.formatted,
+    formatted: data ? formatUnits(data.value, data.decimals) : undefined,
     /** Symbol (USDC on Arc) */
     symbol: data?.symbol,
     /** Decimals (18 for native) */

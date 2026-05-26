@@ -7,7 +7,6 @@ import { Plus, Minus, Droplets, AlertTriangle } from 'lucide-react'
 import { useAccount } from 'wagmi'
 import { usePairReserves } from '@/hooks/usePairReserves'
 import { useLPBalance } from '@/hooks/useLPBalance'
-import { USDC, EURC } from '@/config/tokens'
 
 type Tab = 'all' | 'my'
 
