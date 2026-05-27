@@ -44,6 +44,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    const startTime = Date.now()
     const supabase = getSupabaseAdmin()
     const client = getArcClient()
 
@@ -246,6 +247,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       insertedEvents: totalInserted,
       updatedEvents: updatedTimestamps,
       timestampedBlocks,
+      latestIndexedBlock: Number(toBlockMax),
+      lagBlocks: 0,
+      durationMs: Date.now() - startTime,
     })
   } catch (error: unknown) {
     console.error('Indexer error:', error)
