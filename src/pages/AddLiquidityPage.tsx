@@ -99,7 +99,15 @@ export function AddLiquidityPage() {
   // Transaction progress tracking (strict sequential)
   const txProgress = useTransactionProgress()
 
-  // Sync USDC approval state → progress panel
+  // Sync USDC approval tx hash → markSubmitted
+  useEffect(() => {
+    if (!txProgress.currentFlow || !approveUsdc.approvalTxHash) return
+    const step = txProgress.currentFlow.steps.find((s) => s.type === 'approve_usdc')
+    if (!step || step.status !== 'waiting_wallet_confirmation') return
+    txProgress.markSubmitted('approve_usdc', approveUsdc.approvalTxHash)
+  }, [approveUsdc.approvalTxHash, txProgress])
+
+  // Sync USDC approval receipt → markSuccess/markFailed
   useEffect(() => {
     if (!txProgress.currentFlow) return
     const step = txProgress.currentFlow.steps.find((s) => s.type === 'approve_usdc')
@@ -107,6 +115,8 @@ export function AddLiquidityPage() {
 
     if (approveUsdc.isApproved) {
       txProgress.markSuccess('approve_usdc')
+    } else if (approveUsdc.isReverted) {
+      txProgress.markFailed('approve_usdc', 'Transaction reverted')
     } else if (approveUsdc.error) {
       const msg = approveUsdc.error.message || 'Approval failed'
       if (msg.includes('rejected') || msg.includes('denied')) {
@@ -115,9 +125,17 @@ export function AddLiquidityPage() {
         txProgress.markFailed('approve_usdc', msg.slice(0, 80))
       }
     }
-  }, [approveUsdc.isApproved, approveUsdc.error])
+  }, [approveUsdc.isApproved, approveUsdc.isReverted, approveUsdc.error, txProgress])
 
-  // Sync EURC approval state → progress panel
+  // Sync EURC approval tx hash → markSubmitted
+  useEffect(() => {
+    if (!txProgress.currentFlow || !approveEurc.approvalTxHash) return
+    const step = txProgress.currentFlow.steps.find((s) => s.type === 'approve_eurc')
+    if (!step || step.status !== 'waiting_wallet_confirmation') return
+    txProgress.markSubmitted('approve_eurc', approveEurc.approvalTxHash)
+  }, [approveEurc.approvalTxHash, txProgress])
+
+  // Sync EURC approval receipt → markSuccess/markFailed
   useEffect(() => {
     if (!txProgress.currentFlow) return
     const step = txProgress.currentFlow.steps.find((s) => s.type === 'approve_eurc')
@@ -125,6 +143,8 @@ export function AddLiquidityPage() {
 
     if (approveEurc.isApproved) {
       txProgress.markSuccess('approve_eurc')
+    } else if (approveEurc.isReverted) {
+      txProgress.markFailed('approve_eurc', 'Transaction reverted')
     } else if (approveEurc.error) {
       const msg = approveEurc.error.message || 'Approval failed'
       if (msg.includes('rejected') || msg.includes('denied')) {
@@ -133,7 +153,7 @@ export function AddLiquidityPage() {
         txProgress.markFailed('approve_eurc', msg.slice(0, 80))
       }
     }
-  }, [approveEurc.isApproved, approveEurc.error])
+  }, [approveEurc.isApproved, approveEurc.isReverted, approveEurc.error, txProgress])
 
   // Sync supply state → progress panel
   useEffect(() => {
