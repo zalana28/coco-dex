@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { PAIR_ADDRESS, USDC_IS_TOKEN0 } from './arcClient.js'
+import { PAIR_ADDRESS } from './arcClient.js'
 
 const DECIMALS = 6
 const DIVISOR = 10 ** DECIMALS
@@ -101,8 +101,6 @@ export async function getTokenData(supabase: SupabaseClient) {
   const reserveEurc = snapshot ? Number(snapshot.reserve_eurc) / DIVISOR : 0
 
   // Price derived from reserves
-  const usdcPriceInEurc = reserveEurc > 0 ? reserveUsdc / reserveEurc : 0
-  const eurcPriceInUsdc = reserveUsdc > 0 ? reserveEurc / reserveUsdc : 0
 
   return [
     {

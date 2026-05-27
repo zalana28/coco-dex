@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { Card } from '@/components/common/Card'
 import { formatCompact } from '@/utils/format'
-import { TrendingUp, BarChart3, DollarSign, Activity, ExternalLink, RefreshCw } from 'lucide-react'
+import { TrendingUp, BarChart3, DollarSign, Activity, ExternalLink, RefreshCw, Info } from 'lucide-react'
 
 interface Summary {
   tvl: number
@@ -49,37 +50,87 @@ interface TvlPoint {
   timestamp: string
 }
 
-function useFetch<T>(url: string) {
-  const [data, setData] = useState<T | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+interface HealthData {
+  latestBlock: number
+  lastIndexedBlock: number
+  lagBlocks: number
+  timestamp: string
+}
 
-  const refetch = () => {
-    setLoading(true)
-    setError(null)
+function useFetch<T>(url: string) {
+  const [state, setState] = useState<{ data: T | null; loading: boolean; error: string | null }>({ data: null, loading: true, error: null })
+  const [trigger, setTrigger] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setState((s) => ({ ...s, loading: true, error: null }))
     fetch(url)
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
-      .then((d) => { setData(d as T); setLoading(false) })
-      .catch((e) => { setError(e.message); setLoading(false) })
-  }
+      .then((d) => { if (!cancelled) setState({ data: d as T, loading: false, error: null }) })
+      .catch((e: Error) => { if (!cancelled) setState((s) => ({ ...s, loading: false, error: e.message })) })
+    return () => { cancelled = true }
+  }, [url, trigger])
 
-  useEffect(() => { refetch() }, [url])
+  const refetch = useCallback(() => { setTrigger((t) => t + 1) }, [])
 
-  return { data, loading, error, refetch }
+  return { ...state, refetch }
 }
 
 export function AnalyticsPage() {
-  const { data: summary, loading: summaryLoading } = useFetch<Summary>('/api/analytics/summary')
-  const { data: pools, loading: poolsLoading } = useFetch<Pool[]>('/api/analytics/pools')
-  const { data: tokens, loading: tokensLoading } = useFetch<TokenInfo[]>('/api/analytics/tokens')
+  const { data: summary, loading: summaryLoading, refetch: refetchSummary } = useFetch<Summary>('/api/analytics/summary')
+  const { data: pools, loading: poolsLoading, refetch: refetchPools } = useFetch<Pool[]>('/api/analytics/pools')
+  const { data: tokens, loading: tokensLoading, refetch: refetchTokens } = useFetch<TokenInfo[]>('/api/analytics/tokens')
   const { data: activity, loading: activityLoading, refetch: refetchActivity } = useFetch<ActivityEvent[]>('/api/analytics/activity?limit=20')
-  const { data: tvlChart } = useFetch<TvlPoint[]>('/api/analytics/tvl-chart?range=7d')
+  const { data: tvlChart, refetch: refetchChart } = useFetch<TvlPoint[]>('/api/analytics/tvl-chart?range=7d')
+  const { data: health } = useFetch<HealthData>('/api/health')
+
+  const [refreshing, setRefreshing] = useState(false)
+
+  const handleRefreshAll = useCallback(() => {
+    setRefreshing(true)
+    refetchSummary()
+    refetchPools()
+    refetchTokens()
+    refetchActivity()
+    refetchChart()
+    setTimeout(() => setRefreshing(false), 1000)
+  }, [refetchSummary, refetchPools, refetchTokens, refetchActivity, refetchChart])
 
   const isEmpty = !summaryLoading && summary && summary.totalTrades === 0
 
+  // Format chart data for Recharts
+  const chartData = (tvlChart ?? []).map((p) => ({
+    tvl: p.tvl,
+    date: new Date(p.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+  }))
+
   return (
     <div className="pt-24 pb-12 px-4 mx-auto max-w-5xl">
-      <h1 className="text-2xl font-bold text-coco-dark-text mb-6">Analytics</h1>
+      {/* Header with global refresh */}
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-coco-dark-text">Analytics</h1>
+        <button
+          onClick={handleRefreshAll}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-coco-dark-surface border border-coco-dark-border text-coco-dark-muted hover:text-coco-dark-text ${refreshing ? 'animate-spin-once' : ''}`}
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
+      </div>
+
+      {/* Indexer status info */}
+      <div className="mb-6 rounded-xl bg-coco-dark-surface/50 border border-coco-dark-border p-3.5 flex items-start gap-2.5">
+        <Info className="h-4 w-4 text-coco-dark-muted shrink-0 mt-0.5" />
+        <div className="text-xs text-coco-dark-muted space-y-1">
+          <p>Analytics updates after the indexer syncs blockchain events. External cron currently runs every 15 minutes.</p>
+          {health && (
+            <p className="font-mono">
+              Latest block: {health.latestBlock.toLocaleString()} | Indexed: {health.lastIndexedBlock.toLocaleString()} | Lag: {health.lagBlocks.toLocaleString()} blocks
+            </p>
+          )}
+        </div>
+      </div>
 
       {/* Warming up notice */}
       {isEmpty && (
@@ -96,27 +147,33 @@ export function AnalyticsPage() {
         <MetricCard icon={<Activity />} label="Total Trades" value={summaryLoading ? '—' : (summary?.totalTrades ?? 0).toLocaleString()} />
       </div>
 
-      {/* TVL Chart */}
+      {/* TVL Chart — Recharts Area */}
       <Card className="p-6 mb-8">
         <h2 className="text-lg font-semibold text-coco-dark-text mb-4">TVL Over Time</h2>
-        {tvlChart && tvlChart.length > 0 ? (
-          <div className="h-48 rounded-xl bg-coco-dark-bg border border-coco-dark-border p-4 flex items-end gap-1">
-            {tvlChart.map((point, i) => {
-              const maxTvl = Math.max(...tvlChart.map((p) => p.tvl), 1)
-              const height = (point.tvl / maxTvl) * 100
-              return (
-                <div
-                  key={i}
-                  className="flex-1 bg-coco-green-500/60 rounded-t-sm min-h-[2px] transition-all"
-                  style={{ height: `${height}%` }}
-                  title={`$${point.tvl.toFixed(2)} — ${new Date(point.timestamp).toLocaleDateString()}`}
+        {chartData.length >= 2 ? (
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="tvlGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `$${formatCompact(v)}`} width={60} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#1a1a2e', border: '1px solid #2d2d44', borderRadius: 8 }}
+                  labelStyle={{ color: '#9ca3af', fontSize: 11 }}
+                  formatter={(value) => [`$${Number(value).toFixed(2)}`, 'TVL']}
                 />
-              )
-            })}
+                <Area type="monotone" dataKey="tvl" stroke="#22c55e" strokeWidth={2} fill="url(#tvlGradient)" />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         ) : (
-          <div className="h-48 rounded-xl bg-coco-dark-bg border border-coco-dark-border flex items-center justify-center">
-            <p className="text-sm text-coco-dark-muted">{isEmpty ? 'No data yet' : 'Loading chart...'}</p>
+          <div className="h-56 rounded-xl bg-coco-dark-bg border border-coco-dark-border flex items-center justify-center">
+            <p className="text-sm text-coco-dark-muted">{isEmpty ? 'No data yet' : chartData.length === 1 ? 'Need more data points for chart' : 'Loading chart...'}</p>
           </div>
         )}
       </Card>
@@ -187,9 +244,6 @@ export function AnalyticsPage() {
       <Card className="p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-coco-dark-text">Recent Activity</h2>
-          <button onClick={refetchActivity} className="p-1.5 rounded-lg hover:bg-coco-dark-bg text-coco-dark-muted hover:text-coco-dark-text transition-colors">
-            <RefreshCw className="h-4 w-4" />
-          </button>
         </div>
         {activityLoading ? <Skeleton /> : activity && activity.length > 0 ? (
           <div className="overflow-x-auto">
