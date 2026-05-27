@@ -6,6 +6,8 @@ import type { DexEventRow } from '../_lib/dexEvents'
 
 const BATCH_SIZE = 2000n
 const FEE_RATE = 0.003 // 0.3%
+/** Coco DEX deployment block — never index before this */
+const DEPLOYMENT_BLOCK = 44170190n
 
 /**
  * Vercel Cron handler: indexes new Pair events from Arc Testnet.
@@ -38,12 +40,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const lastBlock = BigInt(state?.last_indexed_block ?? 0)
     const currentBlock = await client.getBlockNumber()
 
-    if (currentBlock <= lastBlock) {
-      return res.status(200).json({ message: 'Already up to date', lastBlock: Number(lastBlock) })
+    // Clamp: never start before deployment block
+    const effectiveLastBlock = lastBlock < DEPLOYMENT_BLOCK ? DEPLOYMENT_BLOCK - 1n : lastBlock
+
+    if (currentBlock <= effectiveLastBlock) {
+      return res.status(200).json({ message: 'Already up to date', lastBlock: Number(effectiveLastBlock) })
     }
 
     // Process in chunks
-    let fromBlock = lastBlock + 1n
+    let fromBlock = effectiveLastBlock + 1n
     const toBlockMax = currentBlock
     let totalInserted = 0
     let latestReserve0: bigint | null = null
@@ -204,7 +209,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json({
       message: 'Indexer run complete',
-      fromBlock: Number(lastBlock + 1n),
+      fromBlock: Number(effectiveLastBlock + 1n),
       toBlock: Number(toBlockMax),
       eventsInserted: totalInserted,
     })

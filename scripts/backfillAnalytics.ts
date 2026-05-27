@@ -7,7 +7,19 @@
  * Requires environment variables:
  *   ARC_TESTNET_RPC_URL, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  *
+ * Optional environment variables:
+ *   BACKFILL_FROM_BLOCK  — default: 44170190 (Coco DEX deployment block)
+ *   BACKFILL_TO_BLOCK    — default: latest block from RPC
+ *   BACKFILL_CHUNK_SIZE  — default: 5000
+ *
+ * The effective start block is:
+ *   max(BACKFILL_FROM_BLOCK, last_indexed_block + 1)
+ *
  * Safe to rerun — uses upsert with unique(tx_hash, log_index).
+ *
+ * If a previous backfill started from too early blocks, either:
+ *   - Rerun with BACKFILL_FROM_BLOCK=44170190 (it will clamp automatically), or
+ *   - Reset the indexer_state row in Supabase before rerunning.
  */
 
 import { createClient } from '@supabase/supabase-js'
@@ -22,9 +34,13 @@ const USDC_ADDRESS = '0x3600000000000000000000000000000000000000'
 const EURC_ADDRESS = '0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a'
 const USDC_IS_TOKEN0 = USDC_ADDRESS.toLowerCase() < EURC_ADDRESS.toLowerCase()
 const FEE_RATE = 0.003
-const BATCH_SIZE = 5000n
-// Start block: approximate deployment block (adjust if known)
-const START_BLOCK = 1n
+
+/** Coco DEX deployment block on Arc Testnet */
+const DEFAULT_DEPLOYMENT_BLOCK = 44170190n
+
+const BACKFILL_FROM_BLOCK = BigInt(process.env.BACKFILL_FROM_BLOCK || '44170190')
+const BACKFILL_TO_BLOCK = process.env.BACKFILL_TO_BLOCK ? BigInt(process.env.BACKFILL_TO_BLOCK) : null
+const BATCH_SIZE = BigInt(process.env.BACKFILL_CHUNK_SIZE || '5000')
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY')
@@ -59,19 +75,38 @@ function computeSwapVolumeUsd(a0In: bigint, a1In: bigint, a0Out: bigint, a1Out: 
 
 async function main() {
   console.log('Starting backfill...')
+  console.log(`  BACKFILL_FROM_BLOCK: ${BACKFILL_FROM_BLOCK}`)
+  console.log(`  BACKFILL_TO_BLOCK: ${BACKFILL_TO_BLOCK ?? 'latest'}`)
+  console.log(`  BATCH_SIZE: ${BATCH_SIZE}`)
 
-  // Get last indexed block
+  // Get last indexed block from DB
   const { data: state } = await supabase
     .from('indexer_state')
     .select('last_indexed_block')
     .eq('id', 'arc_testnet')
     .single()
 
-  let fromBlock = BigInt(state?.last_indexed_block ?? 0) + 1n
-  if (fromBlock < START_BLOCK) fromBlock = START_BLOCK
+  const lastIndexedBlock = BigInt(state?.last_indexed_block ?? 0)
 
-  const currentBlock = await client.getBlockNumber()
-  console.log(`Backfilling from block ${fromBlock} to ${currentBlock}`)
+  // Effective start = max(BACKFILL_FROM_BLOCK, last_indexed_block + 1)
+  // This ensures we never scan blocks before deployment, even if indexer_state
+  // was previously written with a low value.
+  const fromDbOrConfig = lastIndexedBlock + 1n > BACKFILL_FROM_BLOCK
+    ? lastIndexedBlock + 1n
+    : BACKFILL_FROM_BLOCK
+
+  let fromBlock = fromDbOrConfig
+
+  const currentBlock = BACKFILL_TO_BLOCK ?? await client.getBlockNumber()
+
+  console.log(`  DB last_indexed_block: ${lastIndexedBlock}`)
+  console.log(`  Effective start block: ${fromBlock}`)
+  console.log(`  Target end block: ${currentBlock}`)
+
+  if (fromBlock > currentBlock) {
+    console.log('Already up to date. Nothing to backfill.')
+    return
+  }
 
   let totalInserted = 0
   let latestReserve0: bigint | null = null
