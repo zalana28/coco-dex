@@ -3,13 +3,15 @@ import { Link } from 'react-router-dom'
 import { Card } from '@/components/common/Card'
 import { TokenIcon } from '@/components/common/TokenIcon'
 import { MOCK_USER_POSITIONS } from '@/constants/mock'
-import { ArrowLeft, ArrowDown } from 'lucide-react'
+import { ArrowLeft, ArrowDown, Wifi } from 'lucide-react'
 import { useAccount } from 'wagmi'
+import { useNetworkGuard } from '@/hooks/useNetworkGuard'
 
 const PERCENTAGE_PRESETS = [25, 50, 75, 100]
 
 export function RemoveLiquidityPage() {
   const { isConnected } = useAccount()
+  const { isWrongNetwork, switchToArc, isSwitching } = useNetworkGuard()
   const [percentage, setPercentage] = useState(0)
   const position = MOCK_USER_POSITIONS[0]!
 
@@ -17,12 +19,21 @@ export function RemoveLiquidityPage() {
   const token1Out = ((position.token1Amount * percentage) / 100).toFixed(2)
 
   const getButtonState = () => {
-    if (!isConnected) return { text: 'Connect Wallet', disabled: true }
-    if (percentage === 0) return { text: 'Select amount', disabled: true }
-    return { text: 'Remove', disabled: false }
+    if (!isConnected) return { text: 'Connect Wallet', disabled: true, action: 'connect' as const }
+    // ─── Network guard: must be on Arc Testnet before any DEX action ───
+    if (isWrongNetwork) return { text: isSwitching ? 'Switching...' : 'Switch to Arc Testnet', disabled: isSwitching, action: 'switch-network' as const }
+    if (percentage === 0) return { text: 'Select amount', disabled: true, action: 'select' as const }
+    return { text: 'Remove', disabled: false, action: 'remove' as const }
   }
 
   const buttonState = getButtonState()
+
+  const handleButtonClick = () => {
+    if (buttonState.action === 'switch-network') {
+      switchToArc()
+    }
+    // Remove action will be implemented when real removeLiquidity is wired up
+  }
 
   return (
     <div className="pt-24 pb-12 px-4 flex flex-col items-center">
@@ -35,6 +46,13 @@ export function RemoveLiquidityPage() {
           <h2 className="text-xl font-semibold text-coco-dark-text">Remove Liquidity</h2>
         </div>
 
+        {/* Wrong network banner */}
+        {isWrongNetwork && (
+          <div className="mb-4 flex items-start gap-2.5 rounded-xl bg-coco-red-500/10 border border-coco-red-500/20 p-3.5">
+            <Wifi className="h-4 w-4 text-coco-red-500 shrink-0 mt-0.5" />
+            <p className="text-xs text-coco-red-500">Wrong network. Switch to Arc Testnet to use Coco DEX.</p>
+          </div>
+        )}
 
         {/* Amount */}
         <div className="rounded-xl bg-coco-dark-bg border border-coco-dark-border p-5">
@@ -99,10 +117,13 @@ export function RemoveLiquidityPage() {
         {/* Remove Button */}
         <button
           disabled={buttonState.disabled}
+          onClick={handleButtonClick}
           className={`mt-6 w-full py-3.5 rounded-xl font-medium text-base transition-all ${
             buttonState.disabled
               ? 'bg-coco-dark-border text-coco-dark-muted cursor-not-allowed'
-              : 'bg-coco-red-500 text-white hover:bg-coco-red-500/90 active:scale-[0.99]'
+              : buttonState.action === 'switch-network'
+                ? 'bg-coco-amber-500 text-white hover:bg-coco-amber-500/90 active:scale-[0.99]'
+                : 'bg-coco-red-500 text-white hover:bg-coco-red-500/90 active:scale-[0.99]'
           }`}
         >
           {buttonState.text}
