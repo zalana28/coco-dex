@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getSupabaseAdmin } from '../_lib/supabaseAdmin'
-import { getArcClient, PAIR_ADDRESS, USDC_IS_TOKEN0 } from '../_lib/arcClient'
-import { fetchPairLogs, computeSwapVolumeUsd, computeTvlUsd } from '../_lib/dexEvents'
-import type { DexEventRow } from '../_lib/dexEvents'
+import { getSupabaseAdmin } from '../_lib/supabaseAdmin.js'
+import { getArcClient, PAIR_ADDRESS, USDC_IS_TOKEN0 } from '../_lib/arcClient.js'
+import { fetchPairLogs, computeSwapVolumeUsd, computeTvlUsd } from '../_lib/dexEvents.js'
+import type { DexEventRow } from '../_lib/dexEvents.js'
 
 const BATCH_SIZE = 2000n
 const FEE_RATE = 0.003 // 0.3%

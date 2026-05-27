@@ -1,5 +1,5 @@
 import { type PublicClient, parseAbiItem, type Log } from 'viem'
-import { PAIR_ADDRESS, USDC_IS_TOKEN0 } from './arcClient'
+import { PAIR_ADDRESS, USDC_IS_TOKEN0 } from './arcClient.js'
 
 /**
  * Uniswap V2 Pair event signatures (standard).
