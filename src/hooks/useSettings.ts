@@ -2,11 +2,19 @@ import { useState, useCallback } from 'react'
 import { validateSlippage, validateDeadline } from '@/utils/validation'
 
 /**
+ * Approval mode type.
+ * - 'exact': approves only the current input amount (safer, requires re-approval each swap)
+ * - 'max': approves max uint256 (better UX, one-time approval per token)
+ */
+export type ApprovalMode = 'exact' | 'max'
+
+/**
  * LocalStorage keys for persisted settings.
  */
 const STORAGE_KEYS = {
   SLIPPAGE: 'coco-dex:slippage',
   DEADLINE: 'coco-dex:deadline',
+  APPROVAL_MODE: 'coco-dex:approval-mode',
 } as const
 
 /**
@@ -20,6 +28,8 @@ export const SLIPPAGE_PRESETS = [0.1, 0.5, 1.0] as const
 export const DEADLINE_DEFAULT = 20 // 20 minutes
 export const DEADLINE_MIN = 1
 export const DEADLINE_MAX = 180
+
+export const APPROVAL_MODE_DEFAULT: ApprovalMode = 'max'
 
 /**
  * Read a numeric value from localStorage with validation.
@@ -113,14 +123,48 @@ export function useDeadline() {
 }
 
 /**
+ * Hook for managing approval mode with localStorage persistence.
+ *
+ * - 'max': approve max uint256 (default, one-time approval per token)
+ * - 'exact': approve only the current input amount (safer, repeated)
+ */
+export function useApprovalMode() {
+  const [approvalMode, setApprovalModeRaw] = useState<ApprovalMode>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.APPROVAL_MODE)
+      if (stored === 'exact' || stored === 'max') return stored
+      return APPROVAL_MODE_DEFAULT
+    } catch {
+      return APPROVAL_MODE_DEFAULT
+    }
+  })
+
+  const setApprovalMode = useCallback((mode: ApprovalMode) => {
+    setApprovalModeRaw(mode)
+    try {
+      localStorage.setItem(STORAGE_KEYS.APPROVAL_MODE, mode)
+    } catch {
+      // localStorage might be unavailable; continue with in-memory value
+    }
+  }, [])
+
+  return {
+    approvalMode,
+    setApprovalMode,
+  }
+}
+
+/**
  * Combined hook for all transaction settings.
  */
 export function useTransactionSettings() {
   const slippageState = useSlippage()
   const deadlineState = useDeadline()
+  const approvalModeState = useApprovalMode()
 
   return {
     ...slippageState,
     ...deadlineState,
+    ...approvalModeState,
   }
 }

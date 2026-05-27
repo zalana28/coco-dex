@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react'
 import { Card } from '@/components/common/Card'
 import { TokenIcon } from '@/components/common/TokenIcon'
 import { TransactionProgressPanel } from '@/components/transactions/TransactionProgressPanel'
-import { Settings, ArrowDownUp, ChevronDown, Info, AlertTriangle, Wifi } from 'lucide-react'
+import { Settings, ArrowDownUp, ChevronDown, Info, AlertTriangle, Wifi, Shield } from 'lucide-react'
 import { USDC, EURC } from '@/config/tokens'
 import { ROUTER_ADDRESS } from '@/config/contracts'
 import { useAccount } from 'wagmi'
@@ -12,6 +12,7 @@ import { useApprove } from '@/hooks/useApprove'
 import { useSwap } from '@/hooks/useSwap'
 import { useNetworkGuard } from '@/hooks/useNetworkGuard'
 import { useTransactionSettings } from '@/hooks/useSettings'
+import type { ApprovalMode } from '@/hooks/useSettings'
 import { useTransactionProgress } from '@/hooks/useTransactionProgress'
 import { useCheckReceipt } from '@/hooks/useCheckReceipt'
 import { formatTokenAmount, parseTokenAmount } from '@/utils/format'
@@ -27,7 +28,7 @@ export function SwapPage() {
   const [toToken, setToToken] = useState<Token>(EURC)
   const [fromAmount, setFromAmount] = useState('')
   const [showSettings, setShowSettings] = useState(false)
-  const { slippage, slippageBps, setSlippage, getDeadlineTimestamp, deadline, setDeadline } = useTransactionSettings()
+  const { slippage, slippageBps, setSlippage, getDeadlineTimestamp, deadline, setDeadline, approvalMode, setApprovalMode } = useTransactionSettings()
 
   // Network guard — require Arc Testnet for all DEX operations
   const { isWrongNetwork, switchToArc, isSwitching } = useNetworkGuard()
@@ -78,7 +79,7 @@ export function SwapPage() {
     needsApproval, approve, isApproving, isWaitingForReceipt: isApprovalConfirming,
     isApproved: approvalConfirmed, isReverted: approvalReverted,
     approvalTxHash, error: approveError, refetchAllowance, resetApproval,
-  } = useApprove(fromToken, ROUTER_ADDRESS, fromAmountRaw)
+  } = useApprove(fromToken, ROUTER_ADDRESS, fromAmountRaw, approvalMode)
 
   // Swap execution
   const { swap, isPending: isSwapping, isConfirming: isSwapConfirming, txHash: swapTxHash, isSuccess: swapSuccess, isReverted: swapReverted, error: swapError, reset: resetSwap } = useSwap()
@@ -291,7 +292,7 @@ export function SwapPage() {
 
         {/* Settings */}
         {showSettings && (
-          <SwapSettings slippage={slippage} setSlippage={setSlippage} deadline={deadline} setDeadline={setDeadline} />
+          <SwapSettings slippage={slippage} setSlippage={setSlippage} deadline={deadline} setDeadline={setDeadline} approvalMode={approvalMode} setApprovalMode={setApprovalMode} />
         )}
 
         {/* Wrong network banner */}
@@ -413,7 +414,7 @@ function TokenInput({
   )
 }
 
-function SwapSettings({ slippage, setSlippage, deadline, setDeadline }: { slippage: number; setSlippage: (v: number) => string | null; deadline: number; setDeadline: (v: number) => string | null }) {
+function SwapSettings({ slippage, setSlippage, deadline, setDeadline, approvalMode, setApprovalMode }: { slippage: number; setSlippage: (v: number) => string | null; deadline: number; setDeadline: (v: number) => string | null; approvalMode: ApprovalMode; setApprovalMode: (v: ApprovalMode) => void }) {
   const presets = [0.1, 0.5, 1.0]
   return (
     <div className="mb-4 rounded-xl bg-coco-dark-bg border border-coco-dark-border p-4 space-y-4">
@@ -459,6 +460,40 @@ function SwapSettings({ slippage, setSlippage, deadline, setDeadline }: { slippa
           />
           <span className="text-xs text-coco-dark-muted">minutes</span>
         </div>
+      </div>
+      {/* Approval Mode */}
+      <div>
+        <div className="flex items-center gap-1.5 mb-3">
+          <Shield className="h-3.5 w-3.5 text-coco-dark-muted" />
+          <span className="text-xs text-coco-dark-muted">Approval Mode</span>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setApprovalMode('max')}
+            className={`flex-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              approvalMode === 'max'
+                ? 'bg-coco-green-500/10 text-coco-green-500 border border-coco-green-500/30'
+                : 'bg-coco-dark-surface border border-coco-dark-border text-coco-dark-muted hover:text-coco-dark-text'
+            }`}
+          >
+            Max approval
+          </button>
+          <button
+            onClick={() => setApprovalMode('exact')}
+            className={`flex-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              approvalMode === 'exact'
+                ? 'bg-coco-green-500/10 text-coco-green-500 border border-coco-green-500/30'
+                : 'bg-coco-dark-surface border border-coco-dark-border text-coco-dark-muted hover:text-coco-dark-text'
+            }`}
+          >
+            Exact amount
+          </button>
+        </div>
+        <p className="text-[11px] text-coco-dark-muted mt-2">
+          {approvalMode === 'max'
+            ? 'Max approval lets you swap without approving every time. You can revoke token allowances anytime from your wallet or explorer.'
+            : 'Exact approval is safer but requires re-approval on each swap.'}
+        </p>
       </div>
     </div>
   )

@@ -3,8 +3,10 @@ import { useAccount, useChainId, useReadContract, useWriteContract, useWaitForTr
 import { ERC20_ABI } from '@/config/abis'
 import { arcTestnet } from '@/config/chains'
 import type { Token } from '@/types/token'
+import type { ApprovalMode } from '@/hooks/useSettings'
 
 const ARC_CHAIN_ID = arcTestnet.id
+const MAX_UINT256 = BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')
 
 /**
  * Hook for ERC-20 token approval flow with network guard.
@@ -12,11 +14,9 @@ const ARC_CHAIN_ID = arcTestnet.id
  * Hard guard: refuses to execute writeContract if chainId !== 5042002.
  * Passes explicit chainId to writeContract to prevent accidental cross-chain writes.
  *
- * Manages the full approval lifecycle:
- * 1. Check current allowance
- * 2. Determine if approval is needed
- * 3. Send approve transaction
- * 4. Wait for confirmation via receipt polling
+ * Supports two approval modes:
+ * - 'exact': approves only the current input amount (safer, requires re-approval each swap)
+ * - 'max': approves max uint256 (better UX, one-time approval per token)
  *
  * All amounts use ERC-20 decimals (6 for USDC/EURC on Arc).
  * NEVER pass native 18-decimal values to this hook.
@@ -26,7 +26,8 @@ const ARC_CHAIN_ID = arcTestnet.id
 export function useApprove(
   token: Token | undefined,
   spender: `0x${string}` | undefined,
-  amount: bigint = BigInt(0)
+  amount: bigint = BigInt(0),
+  approvalMode: ApprovalMode = 'max'
 ) {
   const { address } = useAccount()
   const chainId = useChainId()
@@ -75,7 +76,9 @@ export function useApprove(
   /**
    * Send approval transaction.
    * HARD GUARD: Returns 'WRONG_NETWORK' if not on Arc Testnet.
-   * Approves the exact amount needed (not unlimited) for safety.
+   * Approves based on approvalMode:
+   * - 'exact': approves only the current input amount
+   * - 'max': approves max uint256 for one-time approval
    * Returns the tx hash via the onHash callback if provided.
    */
   const approve = useCallback((onHash?: (hash: `0x${string}`) => void): 'WRONG_NETWORK' | undefined => {
@@ -95,12 +98,15 @@ export function useApprove(
       return undefined
     }
 
+    // Determine approval amount based on mode
+    const approveAmount = approvalMode === 'max' ? MAX_UINT256 : amount
+
     writeContract(
       {
         address: token.address as `0x${string}`,
         abi: ERC20_ABI,
         functionName: 'approve',
-        args: [spender, amount],
+        args: [spender, approveAmount],
         chainId: ARC_CHAIN_ID, // Explicit chain target
       },
       {
@@ -111,7 +117,7 @@ export function useApprove(
       }
     )
     return undefined
-  }, [token, spender, address, amount, needsApproval, writeContract, chainId])
+  }, [token, spender, address, amount, approvalMode, needsApproval, writeContract, chainId])
 
   /**
    * Reset the approval state so a new approval can be initiated.
