@@ -14,6 +14,9 @@ const ARC_CHAIN_ID = arcTestnet.id
  * Passes explicit chainId to writeContract.
  *
  * All amounts use ERC-20 decimals (6 for USDC/EURC).
+ * NEVER pass native 18-decimal values.
+ *
+ * The tx hash is exposed so callers can track progress independently.
  */
 export function useSwap() {
   const chainId = useChainId()
@@ -24,6 +27,9 @@ export function useSwap() {
     query: { enabled: !!txHash },
   })
 
+  /**
+   * Whether the swap receipt indicates a reverted transaction.
+   */
   const isReverted = swapReceipt?.status === 'reverted'
 
   const swap = useCallback((
@@ -69,6 +75,9 @@ export function useSwap() {
     return undefined
   }, [writeContract, chainId])
 
+  /**
+   * Reset the swap state so a new swap can be initiated.
+   */
   const resetSwap = useCallback(() => {
     setTxHash(undefined)
     resetWrite()
