@@ -9,23 +9,33 @@ import type { Token } from '@/types/token'
  *
  * All amounts use ERC-20 decimals (6 for USDC/EURC).
  * NEVER pass native 18-decimal values.
+ *
+ * The tx hash is exposed so callers can track progress independently.
  */
 export function useSwap() {
   const [txHash, setTxHash] = useState<`0x${string}` | undefined>()
-  const { writeContract, isPending, error } = useWriteContract()
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
+  const { writeContract, isPending, error, reset: resetWrite } = useWriteContract()
+  const { isLoading: isConfirming, isSuccess, data: swapReceipt } = useWaitForTransactionReceipt({
     hash: txHash,
     query: { enabled: !!txHash },
   })
 
-  const swap = useCallback(async (params: {
-    tokenIn: Token
-    tokenOut: Token
-    amountIn: bigint
-    amountOutMin: bigint
-    to: `0x${string}`
-    deadline: number
-  }) => {
+  /**
+   * Whether the swap receipt indicates a reverted transaction.
+   */
+  const isReverted = swapReceipt?.status === 'reverted'
+
+  const swap = useCallback((
+    params: {
+      tokenIn: Token
+      tokenOut: Token
+      amountIn: bigint
+      amountOutMin: bigint
+      to: `0x${string}`
+      deadline: number
+    },
+    onHash?: (hash: `0x${string}`) => void
+  ) => {
     const { tokenIn, tokenOut, amountIn, amountOutMin, to, deadline } = params
 
     writeContract(
@@ -42,18 +52,30 @@ export function useSwap() {
         ],
       },
       {
-        onSuccess: (hash) => setTxHash(hash),
+        onSuccess: (hash) => {
+          setTxHash(hash)
+          onHash?.(hash)
+        },
       }
     )
   }, [writeContract])
+
+  /**
+   * Reset the swap state so a new swap can be initiated.
+   */
+  const resetSwap = useCallback(() => {
+    setTxHash(undefined)
+    resetWrite()
+  }, [resetWrite])
 
   return {
     swap,
     isPending,
     isConfirming,
     isSuccess,
+    isReverted,
     txHash,
     error,
-    reset: () => setTxHash(undefined),
+    reset: resetSwap,
   }
 }
