@@ -13,14 +13,18 @@ import { useSwap } from '@/hooks/useSwap'
 import { useNetworkGuard } from '@/hooks/useNetworkGuard'
 import { useTransactionSettings } from '@/hooks/useSettings'
 import { useTransactionProgress } from '@/hooks/useTransactionProgress'
+import { useCheckReceipt } from '@/hooks/useCheckReceipt'
 import { formatTokenAmount, parseTokenAmount } from '@/utils/format'
 import { getAmountOut, calculatePriceImpact, calculateMinimumReceived } from '@/utils/price'
 import type { Token } from '@/types/token'
+import type { TransactionType } from '@/types/transactions'
 
 export function SwapPage() {
   const { address, isConnected } = useAccount()
-  const [fromToken] = useState<Token>(USDC)
-  const [toToken] = useState<Token>(EURC)
+
+  // ─── Fix 2: Real fromToken/toToken state with flip ───
+  const [fromToken, setFromToken] = useState<Token>(USDC)
+  const [toToken, setToToken] = useState<Token>(EURC)
   const [fromAmount, setFromAmount] = useState('')
   const [showSettings, setShowSettings] = useState(false)
   const { slippage, slippageBps, setSlippage, getDeadlineTimestamp, deadline, setDeadline } = useTransactionSettings()
@@ -29,11 +33,11 @@ export function SwapPage() {
   const { isWrongNetwork, switchToArc, isSwitching } = useNetworkGuard()
 
   // Live reserves
-  const { reserveUsdc, reserveEurc, rate, hasLiquidity, isLoading: reservesLoading } = usePairReserves()
+  const { reserveUsdc, reserveEurc, hasLiquidity, isLoading: reservesLoading, refetch: refetchReserves } = usePairReserves()
 
   // Live balances (ERC-20, 6 decimals — NOT native 18-decimal gas)
-  const { balance: fromBalance } = useTokenBalance(fromToken, address)
-  const { balance: toBalance } = useTokenBalance(toToken, address)
+  const { balance: fromBalance, refetch: refetchFromBalance } = useTokenBalance(fromToken, address)
+  const { balance: toBalance, refetch: refetchToBalance } = useTokenBalance(toToken, address)
 
   // Parse input to bigint
   const fromAmountRaw = useMemo(() => {
@@ -41,19 +45,23 @@ export function SwapPage() {
     return parseTokenAmount(fromAmount, fromToken.decimals)
   }, [fromAmount, fromToken.decimals])
 
-  // Compute output from live reserves
-  const { toAmountRaw, toAmountDisplay, priceImpact, minReceivedRaw, minReceivedDisplay } = useMemo(() => {
+  // Compute output from live reserves — direction-aware
+  const { toAmountRaw, toAmountDisplay, priceImpact, minReceivedRaw, minReceivedDisplay, rate } = useMemo(() => {
     if (!hasLiquidity || fromAmountRaw <= BigInt(0) || !reserveUsdc || !reserveEurc) {
-      return { toAmountRaw: BigInt(0), toAmountDisplay: '', priceImpact: 0, minReceivedRaw: BigInt(0), minReceivedDisplay: '' }
+      return { toAmountRaw: BigInt(0), toAmountDisplay: '', priceImpact: 0, minReceivedRaw: BigInt(0), minReceivedDisplay: '', rate: undefined }
     }
 
-    // Determine reserve order based on token direction
-    const rIn = fromToken.address.toLowerCase() === USDC.address.toLowerCase() ? reserveUsdc : reserveEurc
-    const rOut = fromToken.address.toLowerCase() === USDC.address.toLowerCase() ? reserveEurc : reserveUsdc
+    // Direction-aware reserves: which is the input reserve, which is output
+    const isFromUsdc = fromToken.address.toLowerCase() === USDC.address.toLowerCase()
+    const rIn = isFromUsdc ? reserveUsdc : reserveEurc
+    const rOut = isFromUsdc ? reserveEurc : reserveUsdc
 
     const out = getAmountOut(fromAmountRaw, rIn, rOut)
     const impact = calculatePriceImpact(fromAmountRaw, out, rIn, rOut)
     const minRec = calculateMinimumReceived(out, slippageBps)
+
+    // Rate: how much toToken per 1 fromToken
+    const computedRate = rIn > BigInt(0) ? Number(rOut) / Number(rIn) : undefined
 
     return {
       toAmountRaw: out,
@@ -61,73 +69,150 @@ export function SwapPage() {
       priceImpact: impact,
       minReceivedRaw: minRec,
       minReceivedDisplay: formatTokenAmount(minRec, toToken.decimals),
+      rate: computedRate,
     }
   }, [hasLiquidity, fromAmountRaw, reserveUsdc, reserveEurc, fromToken, toToken, slippageBps])
 
-  // Approval
+  // ─── Approval: targets the fromToken (the token being spent) ───
   const {
     needsApproval, approve, isApproving, isWaitingForReceipt: isApprovalConfirming,
-    isApproved: approvalConfirmed, error: approveError, refetchAllowance,
+    isApproved: approvalConfirmed, isReverted: approvalReverted,
+    approvalTxHash, error: approveError, refetchAllowance, resetApproval,
   } = useApprove(fromToken, ROUTER_ADDRESS, fromAmountRaw)
 
   // Swap execution
-  const { swap, isPending: isSwapping, isConfirming: isSwapConfirming, txHash: swapTxHash, isSuccess: swapSuccess, error: swapError } = useSwap()
+  const { swap, isPending: isSwapping, isConfirming: isSwapConfirming, txHash: swapTxHash, isSuccess: swapSuccess, isReverted: swapReverted, error: swapError, reset: resetSwap } = useSwap()
 
   // Transaction progress tracking (strict sequential)
   const txProgress = useTransactionProgress()
-  const approveType = (fromToken.symbol === 'USDC' ? 'approve_usdc' : 'approve_eurc') as 'approve_usdc' | 'approve_eurc'
+  const { checkReceipt } = useCheckReceipt()
 
-  // Sync approval state → progress panel (only when flow exists and step matches)
+  // Derive approve type from current fromToken
+  const approveType: TransactionType = fromToken.symbol === 'USDC' ? 'approve_usdc' : 'approve_eurc'
+
+  // ─── Fix 1: Track approval submitted state via hash ───
+  // When approvalTxHash arrives, mark the approval step as submitted/pending_onchain
   useEffect(() => {
-    if (!txProgress.currentFlow) return
+    if (!txProgress.currentFlow || !approvalTxHash) return
+    const step = txProgress.currentFlow.steps.find((s) => s.type === approveType)
+    if (!step) return
+    // Only transition from waiting → pending_onchain
+    if (step.status === 'waiting_wallet_confirmation') {
+      txProgress.markSubmitted(approveType, approvalTxHash)
+    }
+  }, [approvalTxHash, approveType, txProgress])
+
+  // When approval receipt confirms success, mark step success
+  useEffect(() => {
+    if (!txProgress.currentFlow || !approvalConfirmed) return
     const step = txProgress.currentFlow.steps.find((s) => s.type === approveType)
     if (!step || step.status === 'success' || step.status === 'idle') return
+    txProgress.markSuccess(approveType)
+    // Refetch allowance so the button state updates
+    refetchAllowance()
+  }, [approvalConfirmed, approveType, txProgress, refetchAllowance])
 
-    if (approvalConfirmed) {
-      txProgress.markSuccess(approveType)
-    } else if (approveError) {
-      const msg = approveError.message || 'Approval failed'
-      if (msg.includes('rejected') || msg.includes('denied')) {
-        txProgress.markRejected(approveType)
-      } else {
-        txProgress.markFailed(approveType, msg.slice(0, 80))
-      }
-    }
-  }, [approvalConfirmed, approveError])
-
-  // Sync swap state → progress panel
+  // When approval receipt indicates revert, mark step failed
   useEffect(() => {
-    if (!txProgress.currentFlow) return
-    const step = txProgress.currentFlow.steps.find((s) => s.type === 'swap')
+    if (!txProgress.currentFlow || !approvalReverted) return
+    const step = txProgress.currentFlow.steps.find((s) => s.type === approveType)
     if (!step || step.status === 'success' || step.status === 'idle') return
+    txProgress.markFailed(approveType, 'Transaction reverted')
+  }, [approvalReverted, approveType, txProgress])
 
-    if (swapTxHash && step.status === 'waiting_wallet_confirmation') {
+  // When approval errors (user rejected etc), mark appropriately
+  useEffect(() => {
+    if (!txProgress.currentFlow || !approveError) return
+    const step = txProgress.currentFlow.steps.find((s) => s.type === approveType)
+    if (!step || step.status === 'success' || step.status === 'idle') return
+    const msg = approveError.message || 'Approval failed'
+    if (msg.includes('rejected') || msg.includes('denied')) {
+      txProgress.markRejected(approveType)
+    } else {
+      txProgress.markFailed(approveType, msg.slice(0, 80))
+    }
+  }, [approveError, approveType, txProgress])
+
+  // ─── Fix 1: Track swap submitted state via hash ───
+  useEffect(() => {
+    if (!txProgress.currentFlow || !swapTxHash) return
+    const step = txProgress.currentFlow.steps.find((s) => s.type === 'swap')
+    if (!step) return
+    if (step.status === 'waiting_wallet_confirmation') {
       txProgress.markSubmitted('swap', swapTxHash)
     }
-    if (swapSuccess) {
-      txProgress.markSuccess('swap')
-    }
-    if (swapError) {
-      const msg = swapError.message || 'Swap failed'
-      if (msg.includes('rejected') || msg.includes('denied')) {
-        txProgress.markRejected('swap')
-      } else {
-        txProgress.markFailed('swap', msg.slice(0, 80))
-      }
-    }
-  }, [swapTxHash, swapSuccess, swapError])
+  }, [swapTxHash, txProgress])
 
-  // Check status handler — refetch allowance/balances
-  const handleCheckStatus = useCallback(() => {
-    refetchAllowance()
-    // If allowance is now sufficient and step is pending, mark success
-    if (!needsApproval && txProgress.currentFlow) {
-      const step = txProgress.currentFlow.steps.find((s) => s.type === approveType)
-      if (step && step.status !== 'success' && step.status !== 'idle') {
-        txProgress.markSuccess(approveType)
-      }
+  // When swap receipt confirms success
+  useEffect(() => {
+    if (!txProgress.currentFlow || !swapSuccess) return
+    const step = txProgress.currentFlow.steps.find((s) => s.type === 'swap')
+    if (!step || step.status === 'success' || step.status === 'idle') return
+    txProgress.markSuccess('swap')
+    // Refetch balances and reserves after successful swap
+    refetchFromBalance()
+    refetchToBalance()
+    refetchReserves()
+  }, [swapSuccess, txProgress, refetchFromBalance, refetchToBalance, refetchReserves])
+
+  // When swap receipt indicates revert
+  useEffect(() => {
+    if (!txProgress.currentFlow || !swapReverted) return
+    const step = txProgress.currentFlow.steps.find((s) => s.type === 'swap')
+    if (!step || step.status === 'success' || step.status === 'idle') return
+    txProgress.markFailed('swap', 'Transaction reverted')
+  }, [swapReverted, txProgress])
+
+  // When swap errors
+  useEffect(() => {
+    if (!txProgress.currentFlow || !swapError) return
+    const step = txProgress.currentFlow.steps.find((s) => s.type === 'swap')
+    if (!step || step.status === 'success' || step.status === 'idle') return
+    const msg = swapError.message || 'Swap failed'
+    if (msg.includes('rejected') || msg.includes('denied')) {
+      txProgress.markRejected('swap')
+    } else {
+      txProgress.markFailed('swap', msg.slice(0, 80))
     }
-  }, [refetchAllowance, needsApproval, txProgress, approveType])
+  }, [swapError, txProgress])
+
+  // ─── Fix 1: Check Status handler — manually poll receipts for all known tx hashes ───
+  const handleCheckStatus = useCallback(async () => {
+    if (!txProgress.currentFlow) return
+
+    for (const step of txProgress.currentFlow.steps) {
+      if (!step.txHash) continue
+      // Only check steps that are still pending
+      if (step.status === 'success' || step.status === 'failed' || step.status === 'rejected' || step.status === 'idle') continue
+
+      const status = await checkReceipt(step.txHash)
+      if (status === 'success') {
+        txProgress.markSuccess(step.type)
+      } else if (status === 'reverted') {
+        txProgress.markFailed(step.type, 'Transaction reverted')
+      }
+      // 'pending' and 'error' — leave as-is, user can check again later
+    }
+
+    // Refetch on-chain state regardless
+    refetchAllowance()
+    refetchFromBalance()
+    refetchToBalance()
+    refetchReserves()
+  }, [txProgress, checkReceipt, refetchAllowance, refetchFromBalance, refetchToBalance, refetchReserves])
+
+  // ─── Fix 2: Flip handler — swap fromToken and toToken ───
+  const handleFlip = useCallback(() => {
+    setFromToken(toToken)
+    setToToken(fromToken)
+    // Move the computed output to the input field (swap amounts)
+    setFromAmount(toAmountDisplay || '')
+    // Clear any stale transaction progress from previous direction
+    txProgress.clearFlow()
+    // Reset approval/swap state for the new direction
+    resetApproval()
+    resetSwap()
+  }, [fromToken, toToken, toAmountDisplay, txProgress, resetApproval, resetSwap])
 
   // Button state machine
   const buttonState = useMemo(() => {
@@ -153,21 +238,29 @@ export function SwapPage() {
         { type: 'swap', label: 'Swap' },
       ])
       txProgress.markWaiting(approveType)
-      approve()
+      // Pass onHash callback to capture tx hash immediately
+      approve((hash) => {
+        txProgress.markSubmitted(approveType, hash)
+      })
     } else if (buttonState.action === 'swap' && address) {
       // Start or continue flow with just swap step
       if (!txProgress.currentFlow) {
         txProgress.startFlow([{ type: 'swap', label: 'Swap' }])
       }
       txProgress.markWaiting('swap')
-      swap({
-        tokenIn: fromToken,
-        tokenOut: toToken,
-        amountIn: fromAmountRaw,
-        amountOutMin: minReceivedRaw,
-        to: address,
-        deadline: getDeadlineTimestamp(),
-      })
+      swap(
+        {
+          tokenIn: fromToken,
+          tokenOut: toToken,
+          amountIn: fromAmountRaw,
+          amountOutMin: minReceivedRaw,
+          to: address,
+          deadline: getDeadlineTimestamp(),
+        },
+        (hash) => {
+          txProgress.markSubmitted('swap', hash)
+        }
+      )
     }
   }
 
@@ -221,9 +314,13 @@ export function SwapPage() {
           onMax={() => fromBalance && setFromAmount(formatTokenAmount(fromBalance, fromToken.decimals))}
         />
 
-        {/* Direction toggle */}
+        {/* Direction toggle — Fix 2: wired up with onClick */}
         <div className="flex justify-center -my-2 relative z-10">
-          <button className="p-2 rounded-xl bg-coco-dark-surface border border-coco-dark-border hover:border-coco-green-500/50 text-coco-dark-muted hover:text-coco-green-500 transition-all hover:rotate-180 duration-300">
+          <button
+            onClick={handleFlip}
+            className="p-2 rounded-xl bg-coco-dark-surface border border-coco-dark-border hover:border-coco-green-500/50 text-coco-dark-muted hover:text-coco-green-500 transition-all hover:rotate-180 duration-300"
+            title="Switch tokens"
+          >
             <ArrowDownUp className="h-4 w-4" />
           </button>
         </div>
