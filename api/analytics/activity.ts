@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getSupabaseAdmin } from '../_lib/supabaseAdmin'
-import { getRecentActivity } from '../_lib/analyticsQueries'
+import { getSupabaseAdmin } from '../_lib/supabaseAdmin.js'
+import { getRecentActivity } from '../_lib/analyticsQueries.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { PAIR_ADDRESS, USDC_IS_TOKEN0 } from './arcClient'
+import { PAIR_ADDRESS, USDC_IS_TOKEN0 } from './arcClient.js'
 
 const DECIMALS = 6
 const DIVISOR = 10 ** DECIMALS
