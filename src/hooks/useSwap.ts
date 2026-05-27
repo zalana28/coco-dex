@@ -1,18 +1,22 @@
-import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
+import { useWriteContract, useWaitForTransactionReceipt, useChainId } from 'wagmi'
 import { useState, useCallback } from 'react'
 import { ROUTER_ADDRESS } from '@/config/contracts'
 import { UNISWAP_V2_ROUTER_ABI } from '@/config/abis-dex'
+import { arcTestnet } from '@/config/chains'
 import type { Token } from '@/types/token'
+
+const ARC_CHAIN_ID = arcTestnet.id
 
 /**
  * Hook for executing swapExactTokensForTokens via the CocoRouter.
  *
- * All amounts use ERC-20 decimals (6 for USDC/EURC).
- * NEVER pass native 18-decimal values.
+ * Hard guard: refuses to execute writeContract if chainId !== 5042002.
+ * Passes explicit chainId to writeContract.
  *
- * The tx hash is exposed so callers can track progress independently.
+ * All amounts use ERC-20 decimals (6 for USDC/EURC).
  */
 export function useSwap() {
+  const chainId = useChainId()
   const [txHash, setTxHash] = useState<`0x${string}` | undefined>()
   const { writeContract, isPending, error, reset: resetWrite } = useWriteContract()
   const { isLoading: isConfirming, isSuccess, data: swapReceipt } = useWaitForTransactionReceipt({
@@ -20,9 +24,6 @@ export function useSwap() {
     query: { enabled: !!txHash },
   })
 
-  /**
-   * Whether the swap receipt indicates a reverted transaction.
-   */
   const isReverted = swapReceipt?.status === 'reverted'
 
   const swap = useCallback((
@@ -35,7 +36,13 @@ export function useSwap() {
       deadline: number
     },
     onHash?: (hash: `0x${string}`) => void
-  ) => {
+  ): 'WRONG_NETWORK' | undefined => {
+    // ─── Network guard: refuse execution on wrong chain ───
+    if (chainId !== ARC_CHAIN_ID) {
+      console.warn('[useSwap] BLOCKED: wallet is on wrong network', chainId)
+      return 'WRONG_NETWORK'
+    }
+
     const { tokenIn, tokenOut, amountIn, amountOutMin, to, deadline } = params
 
     writeContract(
@@ -50,6 +57,7 @@ export function useSwap() {
           to,
           BigInt(deadline),
         ],
+        chainId: ARC_CHAIN_ID, // Explicit chain target
       },
       {
         onSuccess: (hash) => {
@@ -58,11 +66,9 @@ export function useSwap() {
         },
       }
     )
-  }, [writeContract])
+    return undefined
+  }, [writeContract, chainId])
 
-  /**
-   * Reset the swap state so a new swap can be initiated.
-   */
   const resetSwap = useCallback(() => {
     setTxHash(undefined)
     resetWrite()

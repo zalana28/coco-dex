@@ -214,7 +214,13 @@ export function AddLiquidityPage() {
   const handleButtonClick = () => {
     if (buttonState.action === 'switch-network') {
       switchToArc()
-    } else if (buttonState.action === 'approve-0') {
+      return
+    }
+
+    // ─── Hard guard: never start DEX actions on wrong network ───
+    if (isWrongNetwork) return
+
+    if (buttonState.action === 'approve-0') {
       // Start full 3-step flow
       txProgress.startFlow([
         { type: 'approve_usdc', label: 'Approve USDC' },

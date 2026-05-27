@@ -231,7 +231,13 @@ export function SwapPage() {
   const handleButtonClick = () => {
     if (buttonState.action === 'switch-network') {
       switchToArc()
-    } else if (buttonState.action === 'approve') {
+      return
+    }
+
+    // ─── Hard guard: never start DEX actions on wrong network ───
+    if (isWrongNetwork) return
+
+    if (buttonState.action === 'approve') {
       // Start flow with approve + swap steps
       txProgress.startFlow([
         { type: approveType, label: `Approve ${fromToken.symbol}` },
