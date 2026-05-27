@@ -33,6 +33,10 @@ let toastIdCounter = 0
 export function useToast() {
   const [toasts, setToasts] = useState<Toast[]>([])
 
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+  }, [])
+
   const addToast = useCallback((
     type: ToastType,
     title: string,
@@ -60,11 +64,7 @@ export function useToast() {
     }
 
     return id
-  }, [])
-
-  const dismissToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id))
-  }, [])
+  }, [dismissToast])
 
   const dismissAll = useCallback(() => {
     setToasts([])
