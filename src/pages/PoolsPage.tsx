@@ -17,8 +17,8 @@ export function PoolsPage() {
   const { balance: lpBalance, share } = useLPBalance(address)
 
   return (
-    <div className="pt-24 pb-12 px-4 mx-auto max-w-4xl">
-      <div className="flex items-center justify-between mb-6">
+    <div className="pt-28 sm:pt-24 pb-12 px-3 sm:px-4 mx-auto max-w-4xl">
+      <div className="flex items-center justify-between mb-6 gap-3">
         <h1 className="text-2xl font-bold text-coco-dark-text">Pools</h1>
         <Link
           to="/pools/add"

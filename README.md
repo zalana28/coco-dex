@@ -98,7 +98,7 @@ npm run lint        # eslint
 4. **Set up external cron:**
    Configure a cron service (e.g., cron-job.org) to call:
    ```
-   POST https://coco-dex.vercel.app/api/cron/indexer
+   GET https://coco-dex.vercel.app/api/cron/indexer
    Authorization: Bearer <CRON_SECRET>
    ```
    Recommended interval: every 5-15 minutes.

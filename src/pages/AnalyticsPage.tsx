@@ -106,7 +106,7 @@ export function AnalyticsPage() {
   }))
 
   return (
-    <div className="pt-24 pb-12 px-4 mx-auto max-w-5xl">
+    <div className="pt-28 sm:pt-24 pb-12 px-3 sm:px-4 mx-auto max-w-5xl">
       {/* Header with global refresh */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-coco-dark-text">Analytics</h1>
@@ -140,7 +140,7 @@ export function AnalyticsPage() {
       )}
 
       {/* Metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
         <MetricCard icon={<DollarSign />} label="Total Value Locked" value={summaryLoading ? '—' : formatCompact(summary?.tvl ?? 0)} />
         <MetricCard icon={<BarChart3 />} label="24h Volume" value={summaryLoading ? '—' : formatCompact(summary?.volume24h ?? 0)} />
         <MetricCard icon={<TrendingUp />} label="24h Fees" value={summaryLoading ? '—' : formatCompact(summary?.fees24h ?? 0)} />
@@ -179,7 +179,7 @@ export function AnalyticsPage() {
       </Card>
 
       {/* Tables */}
-      <div className="grid lg:grid-cols-2 gap-6 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-8">
         {/* Top Pools */}
         <Card className="p-5">
           <h2 className="text-lg font-semibold text-coco-dark-text mb-4">Top Pools</h2>
