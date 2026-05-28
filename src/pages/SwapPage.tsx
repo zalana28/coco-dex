@@ -15,10 +15,12 @@ import { useTransactionSettings } from '@/hooks/useSettings'
 import type { ApprovalMode } from '@/hooks/useSettings'
 import { useTransactionProgress } from '@/hooks/useTransactionProgress'
 import { useCheckReceipt } from '@/hooks/useCheckReceipt'
+import { useAggregatedQuotes } from '@/hooks/useAggregatedQuotes'
 import { formatTokenAmount, parseTokenAmount } from '@/utils/format'
 import { getAmountOut, calculatePriceImpact, calculateMinimumReceived } from '@/utils/price'
 import type { Token } from '@/types/token'
 import type { TransactionType } from '@/types/transactions'
+import type { RouteQuote } from '@/lib/router/types'
 
 export function SwapPage() {
   const { address, isConnected } = useAccount()
@@ -28,6 +30,7 @@ export function SwapPage() {
   const [toToken, setToToken] = useState<Token>(EURC)
   const [fromAmount, setFromAmount] = useState('')
   const [showSettings, setShowSettings] = useState(false)
+  const [selectedRouteId, setSelectedRouteId] = useState<string>('coco-usdc-eurc')
   const { slippage, slippageBps, setSlippage, getDeadlineTimestamp, deadline, setDeadline, approvalMode, setApprovalMode } = useTransactionSettings()
 
   // Network guard — require Arc Testnet for all DEX operations
@@ -73,6 +76,20 @@ export function SwapPage() {
       rate: computedRate,
     }
   }, [hasLiquidity, fromAmountRaw, reserveUsdc, reserveEurc, fromToken, toToken, slippageBps])
+
+
+  const { quotes, bestQuote, selectedQuote, isLoading: quotesLoading, comingSoonSources } = useAggregatedQuotes({
+    tokenIn: fromToken,
+    tokenOut: toToken,
+    amountIn: fromAmountRaw,
+    reserveUsdc,
+    reserveEurc,
+    slippageBps,
+  })
+
+  const activeQuote = useMemo(() => {
+    return quotes.find((quote) => quote.id === selectedRouteId) ?? selectedQuote
+  }, [quotes, selectedRouteId, selectedQuote])
 
   // ─── Approval: targets the fromToken (the token being spent) ───
   const {
@@ -213,6 +230,7 @@ export function SwapPage() {
     // Reset approval/swap state for the new direction
     resetApproval()
     resetSwap()
+    setSelectedRouteId('coco-usdc-eurc')
   }, [fromToken, toToken, toAmountDisplay, txProgress, resetApproval, resetSwap])
 
   // Button state machine
@@ -223,11 +241,12 @@ export function SwapPage() {
     if (!hasLiquidity) return { text: 'Pool has no liquidity', disabled: true, action: 'no-liquidity' as const }
     if (!fromAmount || parseFloat(fromAmount) <= 0) return { text: 'Enter an amount', disabled: true, action: 'enter' as const }
     if (fromBalance !== undefined && fromAmountRaw > fromBalance) return { text: 'Insufficient balance', disabled: true, action: 'insufficient' as const }
+    if (activeQuote && !activeQuote.isExecutable) return { text: 'Quote available, execution coming soon.', disabled: true, action: 'route-not-executable' as const }
     if (isApproving || isApprovalConfirming) return { text: `Approving ${fromToken.symbol}...`, disabled: true, action: 'approving' as const }
     if (needsApproval) return { text: `Approve ${fromToken.symbol}`, disabled: false, action: 'approve' as const }
     if (isSwapping || isSwapConfirming) return { text: 'Swapping...', disabled: true, action: 'swapping' as const }
     return { text: 'Swap', disabled: false, action: 'swap' as const }
-  }, [isConnected, isWrongNetwork, isSwitching, reservesLoading, hasLiquidity, fromAmount, fromBalance, fromAmountRaw, isApproving, isApprovalConfirming, needsApproval, fromToken.symbol, isSwapping, isSwapConfirming])
+  }, [isConnected, isWrongNetwork, isSwitching, reservesLoading, hasLiquidity, fromAmount, fromBalance, fromAmountRaw, activeQuote, isApproving, isApprovalConfirming, needsApproval, fromToken.symbol, isSwapping, isSwapConfirming])
 
   const handleButtonClick = () => {
     if (buttonState.action === 'switch-network') {
@@ -260,7 +279,7 @@ export function SwapPage() {
           tokenIn: fromToken,
           tokenOut: toToken,
           amountIn: fromAmountRaw,
-          amountOutMin: minReceivedRaw,
+          amountOutMin: activeQuote?.minAmountOut ?? minReceivedRaw,
           to: address,
           deadline: getDeadlineTimestamp(),
         },
@@ -369,6 +388,19 @@ export function SwapPage() {
         >
           {buttonState.text}
         </button>
+
+        {/* Route Quotes */}
+        {fromAmountRaw > BigInt(0) && (
+          <QuotesPanel
+            quotes={quotes}
+            bestQuoteId={bestQuote?.id}
+            selectedQuoteId={activeQuote?.id}
+            isLoading={quotesLoading}
+            comingSoonSources={comingSoonSources}
+            outputSymbol={toToken.symbol}
+            onSelectQuote={setSelectedRouteId}
+          />
+        )}
       </Card>
 
       {/* Transaction Progress Panel */}
@@ -409,6 +441,93 @@ function TokenInput({
           readOnly={readOnly}
           className="w-full min-w-0 bg-transparent text-right text-xl sm:text-2xl font-mono text-coco-dark-text placeholder:text-coco-dark-border outline-none"
         />
+      </div>
+    </div>
+  )
+}
+
+function QuotesPanel({
+  quotes,
+  bestQuoteId,
+  selectedQuoteId,
+  isLoading,
+  comingSoonSources,
+  outputSymbol,
+  onSelectQuote,
+}: {
+  quotes: RouteQuote[]
+  bestQuoteId?: string
+  selectedQuoteId?: string
+  isLoading: boolean
+  comingSoonSources: Array<{ source: 'unitflow' | 'synthra'; label: string }>
+  outputSymbol: string
+  onSelectQuote: (quoteId: string) => void
+}) {
+  return (
+    <div className="mt-4 rounded-xl bg-coco-dark-bg border border-coco-dark-border p-3.5 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-coco-dark-text">Route quotes</h3>
+          <p className="text-[11px] text-coco-dark-muted">Compare Coco with available external DEX quotes.</p>
+        </div>
+        {isLoading && <span className="text-[11px] text-coco-dark-muted">Refreshing…</span>}
+      </div>
+
+      <div className="space-y-2">
+        {quotes.length === 0 && !isLoading && (
+          <div className="rounded-lg border border-coco-dark-border bg-coco-dark-surface p-3 text-xs text-coco-dark-muted">
+            Enter an amount to load route quotes.
+          </div>
+        )}
+
+        {quotes.map((quote) => {
+          const isBest = quote.id === bestQuoteId
+          const isSelected = quote.id === selectedQuoteId
+          return (
+            <button
+              key={quote.id}
+              type="button"
+              onClick={() => onSelectQuote(quote.id)}
+              className={`w-full rounded-lg border p-3 text-left transition-colors ${
+                isSelected
+                  ? 'border-coco-green-500/60 bg-coco-green-500/10'
+                  : isBest
+                    ? 'border-coco-green-500/30 bg-coco-dark-surface'
+                    : 'border-coco-dark-border bg-coco-dark-surface hover:border-coco-green-500/30'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-medium text-coco-dark-text">{quote.label}</span>
+                    {isBest && <span className="rounded-full bg-coco-green-500/15 px-2 py-0.5 text-[10px] font-medium text-coco-green-500">Best</span>}
+                    {!quote.isExecutable && <span className="rounded-full bg-coco-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-coco-amber-500">Quote only</span>}
+                  </div>
+                  <p className="mt-1 text-[11px] text-coco-dark-muted">{quote.routePath.join(' → ')}</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-mono text-sm text-coco-dark-text">{quote.amountOutFormatted} {outputSymbol}</p>
+                  <p className="text-[11px] text-coco-dark-muted">Min {formatTokenAmount(quote.minAmountOut)} {outputSymbol}</p>
+                </div>
+              </div>
+              {quote.warning && (
+                <div className="mt-2 flex items-start gap-2 rounded-lg bg-coco-amber-500/10 px-2.5 py-2 text-[11px] text-coco-amber-500">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                  <span>{quote.warning}</span>
+                </div>
+              )}
+            </button>
+          )
+        })}
+
+        {comingSoonSources.map((source) => (
+          <div key={source.source} className="rounded-lg border border-dashed border-coco-dark-border bg-coco-dark-surface/60 p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-coco-dark-muted">{source.label}</span>
+              <span className="rounded-full bg-coco-dark-border/50 px-2 py-0.5 text-[10px] font-medium text-coco-dark-muted">Coming soon</span>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )
