@@ -88,7 +88,8 @@ export function SwapPage() {
   })
 
   const activeQuote = useMemo(() => {
-    return quotes.find((quote) => quote.id === selectedRouteId) ?? selectedQuote
+    const quote = quotes.find((candidate) => candidate.id === selectedRouteId)
+    return quote?.availabilityStatus === 'available' ? quote : selectedQuote
   }, [quotes, selectedRouteId, selectedQuote])
 
   // ─── Approval: targets the fromToken (the token being spent) ───
@@ -241,7 +242,8 @@ export function SwapPage() {
     if (!hasLiquidity) return { text: 'Pool has no liquidity', disabled: true, action: 'no-liquidity' as const }
     if (!fromAmount || parseFloat(fromAmount) <= 0) return { text: 'Enter an amount', disabled: true, action: 'enter' as const }
     if (fromBalance !== undefined && fromAmountRaw > fromBalance) return { text: 'Insufficient balance', disabled: true, action: 'insufficient' as const }
-    if (activeQuote && !activeQuote.isExecutable) return { text: 'Quote available, execution coming soon.', disabled: true, action: 'route-not-executable' as const }
+    if (!activeQuote) return { text: 'Route unavailable', disabled: true, action: 'route-unavailable' as const }
+    if (activeQuote.executionStatus === 'non_executable') return { text: 'Execution coming soon', disabled: true, action: 'route-not-executable' as const }
     if (isApproving || isApprovalConfirming) return { text: `Approving ${fromToken.symbol}...`, disabled: true, action: 'approving' as const }
     if (needsApproval) return { text: `Approve ${fromToken.symbol}`, disabled: false, action: 'approve' as const }
     if (isSwapping || isSwapConfirming) return { text: 'Swapping...', disabled: true, action: 'swapping' as const }
@@ -390,17 +392,15 @@ export function SwapPage() {
         </button>
 
         {/* Route Quotes */}
-        {fromAmountRaw > BigInt(0) && (
-          <QuotesPanel
-            quotes={quotes}
-            bestQuoteId={bestQuote?.id}
-            selectedQuoteId={activeQuote?.id}
-            isLoading={quotesLoading}
-            comingSoonSources={comingSoonSources}
-            outputSymbol={toToken.symbol}
-            onSelectQuote={setSelectedRouteId}
-          />
-        )}
+        <QuotesPanel
+          quotes={quotes}
+          bestQuoteId={bestQuote?.id}
+          selectedQuoteId={activeQuote?.id}
+          isLoading={quotesLoading}
+          comingSoonSources={comingSoonSources}
+          outputSymbol={toToken.symbol}
+          onSelectQuote={setSelectedRouteId}
+        />
       </Card>
 
       {/* Transaction Progress Panel */}
@@ -468,30 +468,53 @@ function QuotesPanel({
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold text-coco-dark-text">Route quotes</h3>
-          <p className="text-[11px] text-coco-dark-muted">Compare Coco with available external DEX quotes.</p>
+          <p className="text-[11px] text-coco-dark-muted">Coco route can execute now. External routes are quote-only until execution and approval handling are verified.</p>
         </div>
-        {isLoading && <span className="text-[11px] text-coco-dark-muted">Refreshing…</span>}
+        {isLoading && <span className="text-[11px] text-coco-dark-muted">Refreshing...</span>}
       </div>
 
       <div className="space-y-2">
-        {quotes.length === 0 && !isLoading && (
+        {quotes.length === 0 && (
           <div className="rounded-lg border border-coco-dark-border bg-coco-dark-surface p-3 text-xs text-coco-dark-muted">
-            Enter an amount to load route quotes.
+            No routes available.
           </div>
         )}
 
         {quotes.map((quote) => {
           const isBest = quote.id === bestQuoteId
           const isSelected = quote.id === selectedQuoteId
+          const isAvailable = quote.availabilityStatus === 'available'
+          const isLoadingQuote = quote.availabilityStatus === 'loading'
+          const isUnavailable = quote.availabilityStatus === 'unavailable'
+          const isQuoteOnly = quote.executionStatus === 'non_executable' && isAvailable
+          const isExecutable = quote.executionStatus === 'executable' && isAvailable
+          const routeNotice = isUnavailable
+            ? quote.unavailableReason
+            : isLoadingQuote
+              ? 'Loading quote'
+              : isQuoteOnly
+                ? 'Execution coming soon'
+                : quote.warning
+
           return (
             <button
               key={quote.id}
               type="button"
-              onClick={() => onSelectQuote(quote.id)}
-              className={`w-full rounded-lg border p-3 text-left transition-colors ${
+              aria-disabled={!isAvailable}
+              aria-pressed={isSelected}
+              onClick={() => {
+                if (isAvailable) onSelectQuote(quote.id)
+              }}
+              className={`w-full rounded-lg border p-3 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-coco-green-500/50 ${
                 isSelected
                   ? 'border-coco-green-500/60 bg-coco-green-500/10'
-                  : isBest
+                  : isUnavailable
+                    ? 'border-coco-red-500/20 bg-coco-red-500/5'
+                    : isLoadingQuote
+                      ? 'border-coco-dark-border bg-coco-dark-surface/80 cursor-wait'
+                      : isQuoteOnly
+                        ? 'border-coco-amber-500/25 bg-coco-amber-500/5 hover:border-coco-amber-500/45'
+                        : isBest
                     ? 'border-coco-green-500/30 bg-coco-dark-surface'
                     : 'border-coco-dark-border bg-coco-dark-surface hover:border-coco-green-500/30'
               }`}
@@ -499,21 +522,30 @@ function QuotesPanel({
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-medium text-coco-dark-text">{quote.label}</span>
+                    <span className={`text-sm font-medium ${isUnavailable ? 'text-coco-dark-muted' : 'text-coco-dark-text'}`}>{quote.label}</span>
                     {isBest && <span className="rounded-full bg-coco-green-500/15 px-2 py-0.5 text-[10px] font-medium text-coco-green-500">Best</span>}
-                    {!quote.isExecutable && <span className="rounded-full bg-coco-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-coco-amber-500">Quote only</span>}
+                    {isExecutable && <span className="rounded-full bg-coco-green-500/15 px-2 py-0.5 text-[10px] font-medium text-coco-green-500">Executable</span>}
+                    {isQuoteOnly && <span className="rounded-full bg-coco-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-coco-amber-500">Quote only</span>}
+                    {isLoadingQuote && <span className="rounded-full bg-coco-dark-border/60 px-2 py-0.5 text-[10px] font-medium text-coco-dark-muted">Loading</span>}
+                    {isUnavailable && <span className="rounded-full bg-coco-red-500/15 px-2 py-0.5 text-[10px] font-medium text-coco-red-500">Unavailable</span>}
                   </div>
                   <p className="mt-1 text-[11px] text-coco-dark-muted">{quote.routePath.join(' → ')}</p>
                 </div>
                 <div className="text-right">
                   <p className="font-mono text-sm text-coco-dark-text">{quote.amountOutFormatted} {outputSymbol}</p>
-                  <p className="text-[11px] text-coco-dark-muted">Min {formatTokenAmount(quote.minAmountOut)} {outputSymbol}</p>
+                  <p className="text-[11px] text-coco-dark-muted">
+                    {quote.minAmountOut > BigInt(0) ? `Min ${formatTokenAmount(quote.minAmountOut)} ${outputSymbol}` : 'Quote unavailable'}
+                  </p>
                 </div>
               </div>
-              {quote.warning && (
-                <div className="mt-2 flex items-start gap-2 rounded-lg bg-coco-amber-500/10 px-2.5 py-2 text-[11px] text-coco-amber-500">
+              {routeNotice && (
+                <div className={`mt-2 flex items-start gap-2 rounded-lg px-2.5 py-2 text-[11px] ${
+                  isUnavailable
+                    ? 'bg-coco-red-500/10 text-coco-red-500'
+                    : 'bg-coco-amber-500/10 text-coco-amber-500'
+                }`}>
                   <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                  <span>{quote.warning}</span>
+                  <span>{routeNotice}</span>
                 </div>
               )}
             </button>
@@ -521,12 +553,21 @@ function QuotesPanel({
         })}
 
         {comingSoonSources.map((source) => (
-          <div key={source.source} className="rounded-lg border border-dashed border-coco-dark-border bg-coco-dark-surface/60 p-3">
+          <button
+            key={source.source}
+            type="button"
+            aria-disabled="true"
+            className="w-full rounded-lg border border-dashed border-coco-dark-border bg-coco-dark-surface/60 p-3 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-coco-green-500/50"
+          >
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-coco-dark-muted">{source.label}</span>
               <span className="rounded-full bg-coco-dark-border/50 px-2 py-0.5 text-[10px] font-medium text-coco-dark-muted">Coming soon</span>
             </div>
-          </div>
+            <div className="mt-2 flex items-start gap-2 rounded-lg bg-coco-dark-border/30 px-2.5 py-2 text-[11px] text-coco-dark-muted">
+              <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <span>Route coming soon</span>
+            </div>
+          </button>
         ))}
       </div>
     </div>

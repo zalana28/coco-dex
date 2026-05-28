@@ -3,7 +3,7 @@ import { EURC, USDC } from '@/config/tokens'
 import type { Token } from '@/types/token'
 import { formatTokenAmount } from '@/utils/format'
 import { calculateMinimumReceived } from '@/utils/price'
-import type { RouteQuote } from './types'
+import type { RouteAvailabilityStatus, RouteQuote, RouteUnavailableReason } from './types'
 
 export const XYLONET_ROUTER_ABI = [
   {
@@ -53,6 +53,8 @@ type BuildXyloNetQuoteParams = {
   amountIn: bigint
   amountOut?: bigint
   slippageBps: number
+  isLoading?: boolean
+  error?: unknown
 }
 
 export function buildXyloNetRouteQuote({
@@ -61,25 +63,50 @@ export function buildXyloNetRouteQuote({
   amountIn,
   amountOut,
   slippageBps,
-}: BuildXyloNetQuoteParams): RouteQuote | undefined {
-  if (!amountOut || amountIn <= BigInt(0) || amountOut <= BigInt(0) || !isXyloNetPairSupported(tokenIn, tokenOut)) {
-    return undefined
+  isLoading = false,
+  error,
+}: BuildXyloNetQuoteParams): RouteQuote {
+  const xylonet = EXTERNAL_DEXES.xylonet
+  const isSupportedPair = isXyloNetPairSupported(tokenIn, tokenOut)
+  const hasAmount = amountIn > BigInt(0)
+  const hasQuote = Boolean(amountOut && amountOut > BigInt(0))
+
+  let availabilityStatus: RouteAvailabilityStatus = 'available'
+  let unavailableReason: RouteUnavailableReason | undefined
+
+  if (!hasAmount) {
+    availabilityStatus = 'unavailable'
+    unavailableReason = 'Amount required'
+  } else if (!isSupportedPair) {
+    availabilityStatus = 'unavailable'
+    unavailableReason = 'Unsupported pair'
+  } else if (isLoading && !hasQuote) {
+    availabilityStatus = 'loading'
+  } else if (error) {
+    availabilityStatus = 'unavailable'
+    unavailableReason = 'Contract read failed'
+  } else if (!hasQuote) {
+    availabilityStatus = 'unavailable'
+    unavailableReason = 'No quote returned'
   }
 
-  const xylonet = EXTERNAL_DEXES.xylonet
+  const safeAmountOut = amountOut && amountOut > BigInt(0) ? amountOut : BigInt(0)
 
   return {
     id: 'xylonet-usdc-eurc',
     source: 'xylonet',
     label: xylonet.label,
     amountIn,
-    amountOut,
-    amountOutFormatted: formatTokenAmount(amountOut, tokenOut.decimals),
-    minAmountOut: calculateMinimumReceived(amountOut, slippageBps),
+    amountOut: safeAmountOut,
+    amountOutFormatted: safeAmountOut > BigInt(0) ? formatTokenAmount(safeAmountOut, tokenOut.decimals) : '-',
+    minAmountOut: safeAmountOut > BigInt(0) ? calculateMinimumReceived(safeAmountOut, slippageBps) : BigInt(0),
     routePath: [tokenIn.symbol, tokenOut.symbol],
     routerAddress: xylonet.routerAddress,
     poolAddress: xylonet.usdcEurcPoolAddress,
     isExecutable: false,
-    warning: 'Quote available, execution coming soon.',
+    availabilityStatus,
+    executionStatus: 'non_executable',
+    unavailableReason,
+    warning: availabilityStatus === 'available' ? 'Execution coming soon' : undefined,
   }
 }
