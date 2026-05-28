@@ -36,8 +36,8 @@ export function RemoveLiquidityPage() {
   }
 
   return (
-    <div className="pt-24 pb-12 px-4 flex flex-col items-center">
-      <Card className="relative w-full max-w-[480px] p-6">
+    <div className="pt-28 sm:pt-24 pb-12 px-3 sm:px-4 flex flex-col items-center">
+      <Card className="relative w-full max-w-[480px] p-4 sm:p-6">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <Link to="/pools" className="p-1.5 rounded-lg hover:bg-coco-dark-bg text-coco-dark-muted hover:text-coco-dark-text transition-colors">

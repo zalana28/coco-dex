@@ -17,20 +17,21 @@ export function PoolsPage() {
   const { balance: lpBalance, share } = useLPBalance(address)
 
   return (
-    <div className="pt-24 pb-12 px-4 mx-auto max-w-4xl">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-coco-dark-text">Pools</h1>
+    <div className="pt-28 sm:pt-24 pb-12 px-3 sm:px-4 mx-auto max-w-4xl">
+      <div className="flex items-center justify-between mb-6 gap-3">
+        <h1 className="text-xl sm:text-2xl font-bold text-coco-dark-text">Pools</h1>
         <Link
           to="/pools/add"
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-coco-green-500 text-white text-sm font-medium hover:bg-coco-green-600 transition-colors"
+          className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl bg-coco-green-500 text-white text-sm font-medium hover:bg-coco-green-600 transition-colors shrink-0"
         >
           <Plus className="h-4 w-4" />
-          New Position
+          <span className="hidden sm:inline">New Position</span>
+          <span className="sm:hidden">Add</span>
         </Link>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 p-1 rounded-xl bg-coco-dark-surface border border-coco-dark-border w-fit">
+      <div className="flex gap-1 mb-6 p-1 rounded-xl bg-coco-dark-surface border border-coco-dark-border w-fit overflow-x-auto">
         <TabButton active={activeTab === 'all'} onClick={() => setActiveTab('all')}>All Pools</TabButton>
         <TabButton active={activeTab === 'my'} onClick={() => setActiveTab('my')}>My Positions</TabButton>
       </div>

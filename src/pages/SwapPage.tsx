@@ -275,10 +275,10 @@ export function SwapPage() {
   const formattedToBalance = toBalance !== undefined ? formatTokenAmount(toBalance, toToken.decimals) : '—'
 
   return (
-    <div className="pt-24 pb-12 px-4 flex flex-col items-center">
+    <div className="pt-28 sm:pt-24 pb-12 px-3 sm:px-4 flex flex-col items-center">
       <div className="fixed inset-0 bg-gradient-to-b from-coco-green-500/3 via-transparent to-transparent pointer-events-none" />
 
-      <Card className="relative w-full max-w-[480px] p-6">
+      <Card className="relative w-full max-w-[480px] p-4 sm:p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-semibold text-coco-dark-text">Swap</h2>
@@ -388,15 +388,15 @@ function TokenInput({
   label: string; token: Token; amount: string; onAmountChange: (v: string) => void; balance: string; readOnly?: boolean; onMax?: () => void
 }) {
   return (
-    <div className="rounded-xl bg-coco-dark-bg border border-coco-dark-border p-4 mt-2">
-      <div className="flex items-center justify-between mb-2">
+    <div className="rounded-xl bg-coco-dark-bg border border-coco-dark-border p-3 sm:p-4 mt-2">
+      <div className="flex items-center justify-between mb-2 min-w-0">
         <span className="text-xs text-coco-dark-muted">{label}</span>
-        <button onClick={onMax} className="text-xs text-coco-dark-muted hover:text-coco-green-500 transition-colors">
+        <button onClick={onMax} className="text-xs text-coco-dark-muted hover:text-coco-green-500 transition-colors truncate max-w-[60%] text-right">
           Balance: <span className="font-mono">{balance}</span>
         </button>
       </div>
-      <div className="flex items-center gap-3">
-        <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-coco-dark-surface border border-coco-dark-border hover:border-coco-green-500/50 transition-colors shrink-0">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+        <button className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-lg bg-coco-dark-surface border border-coco-dark-border hover:border-coco-green-500/50 transition-colors shrink-0">
           <TokenIcon symbol={token.symbol} color={token.logoColor} size="sm" />
           <span className="text-sm font-medium text-coco-dark-text">{token.symbol}</span>
           <ChevronDown className="h-3.5 w-3.5 text-coco-dark-muted" />
@@ -407,7 +407,7 @@ function TokenInput({
           onChange={(e) => onAmountChange(e.target.value)}
           placeholder="0.00"
           readOnly={readOnly}
-          className="w-full bg-transparent text-right text-2xl font-mono text-coco-dark-text placeholder:text-coco-dark-border outline-none"
+          className="w-full min-w-0 bg-transparent text-right text-xl sm:text-2xl font-mono text-coco-dark-text placeholder:text-coco-dark-border outline-none"
         />
       </div>
     </div>
@@ -423,7 +423,7 @@ function SwapSettings({ slippage, setSlippage, deadline, setDeadline, approvalMo
           <Info className="h-3.5 w-3.5 text-coco-dark-muted" />
           <span className="text-xs text-coco-dark-muted">Slippage Tolerance</span>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {presets.map((val) => (
             <button
               key={val}
@@ -467,7 +467,7 @@ function SwapSettings({ slippage, setSlippage, deadline, setDeadline, approvalMo
           <Shield className="h-3.5 w-3.5 text-coco-dark-muted" />
           <span className="text-xs text-coco-dark-muted">Approval Mode</span>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setApprovalMode('max')}
             className={`flex-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
