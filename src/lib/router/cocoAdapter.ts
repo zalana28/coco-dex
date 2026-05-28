@@ -43,5 +43,7 @@ export function getCocoRouteQuote({
     routerAddress: ROUTER_ADDRESS,
     poolAddress: USDC_EURC_PAIR_ADDRESS,
     isExecutable: true,
+    availabilityStatus: 'available',
+    executionStatus: 'executable',
   }
 }

@@ -44,16 +44,26 @@ export function useAggregatedQuotes({
   return useMemo(() => {
     const baseQuotes = [
       getCocoRouteQuote({ tokenIn, tokenOut, amountIn, reserveUsdc, reserveEurc, slippageBps }),
-      buildXyloNetRouteQuote({ tokenIn, tokenOut, amountIn, amountOut: xylonetAmountOut, slippageBps }),
+      buildXyloNetRouteQuote({
+        tokenIn,
+        tokenOut,
+        amountIn,
+        amountOut: xylonetAmountOut,
+        slippageBps,
+        isLoading: isXyloNetLoading,
+        error: xylonetError,
+      }),
     ].filter((quote): quote is RouteQuote => Boolean(quote))
 
-    const bestQuote = baseQuotes.reduce<RouteQuote | undefined>((best, quote) => {
+    const selectableQuotes = baseQuotes.filter((quote) => quote.availabilityStatus === 'available' && quote.amountOut > BigInt(0))
+
+    const bestQuote = selectableQuotes.reduce<RouteQuote | undefined>((best, quote) => {
       if (!best || quote.amountOut > best.amountOut) return quote
       return best
     }, undefined)
 
     const quotes = baseQuotes.map((quote) => {
-      if (quote.source !== 'coco' || !bestQuote || bestQuote.source === 'coco' || quote.amountOut <= BigInt(0)) {
+      if (quote.source !== 'coco' || quote.availabilityStatus !== 'available' || !bestQuote || bestQuote.source === 'coco' || quote.amountOut <= BigInt(0)) {
         return quote
       }
 
@@ -69,7 +79,7 @@ export function useAggregatedQuotes({
     return {
       quotes,
       bestQuote,
-      selectedQuote: quotes.find((quote) => quote.source === 'coco') ?? bestQuote,
+      selectedQuote: quotes.find((quote) => quote.source === 'coco' && quote.availabilityStatus === 'available') ?? bestQuote,
       isLoading: isXyloNetLoading,
       xylonetError,
       comingSoonSources: [
