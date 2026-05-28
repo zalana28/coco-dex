@@ -175,7 +175,7 @@ export function AddLiquidityPage() {
         txProgress.markFailed('add_liquidity', msg.slice(0, 80))
       }
     }
-  }, [supplyTxHash, supplySuccess, supplyError])
+  }, [supplyTxHash, supplySuccess, supplyError, txProgress])
 
   // Check status handler — refetch allowances/balances
   const handleCheckStatus = useCallback(() => {
@@ -209,7 +209,7 @@ export function AddLiquidityPage() {
     if (approveEurc.needsApproval) return { text: 'Approve EURC', disabled: false, action: 'approve-1' as const }
     if (isSupplying || isSupplyConfirming) return { text: 'Supplying...', disabled: true, action: 'supplying' as const }
     return { text: 'Supply', disabled: false, action: 'supply' as const }
-  }, [isConnected, amount0, amount1, balance0, balance1, amount0Raw, amount1Raw, approveUsdc, approveEurc, isSupplying, isSupplyConfirming])
+  }, [isConnected, isWrongNetwork, isSwitching, amount0, amount1, balance0, balance1, amount0Raw, amount1Raw, approveUsdc, approveEurc, isSupplying, isSupplyConfirming])
 
   const handleButtonClick = () => {
     if (buttonState.action === 'switch-network') {
@@ -268,8 +268,8 @@ export function AddLiquidityPage() {
     : null
 
   return (
-    <div className="pt-24 pb-12 px-4 flex flex-col items-center">
-      <Card className="relative w-full max-w-[480px] p-6">
+    <div className="pt-28 sm:pt-24 pb-12 px-3 sm:px-4 flex flex-col items-center">
+      <Card className="relative w-full max-w-[480px] p-4 sm:p-6">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <Link to="/pools" className="p-1.5 rounded-lg hover:bg-coco-dark-bg text-coco-dark-muted hover:text-coco-dark-text transition-colors">
@@ -392,7 +392,7 @@ function LiquidityTokenInput({
           value={amount}
           onChange={(e) => onAmountChange(e.target.value)}
           placeholder="0.00"
-          className="w-full bg-transparent text-right text-2xl font-mono text-coco-dark-text placeholder:text-coco-dark-border outline-none"
+          className="w-full min-w-0 bg-transparent text-right text-xl sm:text-2xl font-mono text-coco-dark-text placeholder:text-coco-dark-border outline-none"
         />
       </div>
     </div>

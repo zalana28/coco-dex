@@ -275,10 +275,10 @@ export function SwapPage() {
   const formattedToBalance = toBalance !== undefined ? formatTokenAmount(toBalance, toToken.decimals) : '—'
 
   return (
-    <div className="pt-24 pb-12 px-4 flex flex-col items-center">
+    <div className="pt-28 sm:pt-24 pb-12 px-3 sm:px-4 flex flex-col items-center">
       <div className="fixed inset-0 bg-gradient-to-b from-coco-green-500/3 via-transparent to-transparent pointer-events-none" />
 
-      <Card className="relative w-full max-w-[480px] p-6">
+      <Card className="relative w-full max-w-[480px] p-4 sm:p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-semibold text-coco-dark-text">Swap</h2>
@@ -407,7 +407,7 @@ function TokenInput({
           onChange={(e) => onAmountChange(e.target.value)}
           placeholder="0.00"
           readOnly={readOnly}
-          className="w-full bg-transparent text-right text-2xl font-mono text-coco-dark-text placeholder:text-coco-dark-border outline-none"
+          className="w-full min-w-0 bg-transparent text-right text-xl sm:text-2xl font-mono text-coco-dark-text placeholder:text-coco-dark-border outline-none"
         />
       </div>
     </div>
