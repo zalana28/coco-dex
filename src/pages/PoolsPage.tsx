@@ -17,12 +17,15 @@ export function PoolsPage() {
   const { balance: lpBalance, share } = useLPBalance(address)
 
   return (
-    <div className="pt-28 sm:pt-24 pb-12 px-3 sm:px-4 mx-auto max-w-4xl">
+    <div className="page-fade pt-28 sm:pt-24 pb-12 px-3 sm:px-4 mx-auto max-w-5xl">
       <div className="flex items-center justify-between mb-6 gap-3">
-        <h1 className="text-2xl font-bold text-coco-dark-text">Pools</h1>
+        <div>
+          <p className="text-xs uppercase tracking-[0.22em] text-coco-teal-400">Liquidity made visible</p>
+          <h1 className="mt-1 text-2xl font-bold text-coco-dark-text">Pools</h1>
+        </div>
         <Link
           to="/pools/add"
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-coco-green-500 text-white text-sm font-medium hover:bg-coco-green-600 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-coco-green-500 text-white text-sm font-semibold hover:bg-coco-green-600 transition-all shadow-lg shadow-coco-green-500/25 hover:-translate-y-0.5"
         >
           <Plus className="h-4 w-4" />
           New Position
@@ -30,7 +33,7 @@ export function PoolsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 p-1 rounded-xl bg-coco-dark-surface border border-coco-dark-border w-fit">
+      <div className="flex gap-1 mb-6 p-1 rounded-xl bg-coco-dark-surface/70 border border-coco-dark-border w-fit backdrop-blur-xl">
         <TabButton active={activeTab === 'all'} onClick={() => setActiveTab('all')}>All Pools</TabButton>
         <TabButton active={activeTab === 'my'} onClick={() => setActiveTab('my')}>My Positions</TabButton>
       </div>
@@ -62,7 +65,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
       onClick={onClick}
       className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
         active
-          ? 'bg-coco-dark-bg text-coco-dark-text'
+          ? 'bg-coco-green-500/15 text-coco-dark-text'
           : 'text-coco-dark-muted hover:text-coco-dark-text'
       }`}
     >
@@ -80,7 +83,7 @@ function AllPools({ reserveUsdc, reserveEurc, hasLiquidity, isLoading }: {
 
   return (
     <div className="space-y-4">
-      <Card className="p-5">
+      <Card className="p-5 hover:-translate-y-0.5 hover:border-coco-green-500/25">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex -space-x-2">
@@ -101,7 +104,7 @@ function AllPools({ reserveUsdc, reserveEurc, hasLiquidity, isLoading }: {
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-3 gap-4 pt-4 border-t border-coco-dark-border">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-coco-dark-border">
           <div>
             <p className="text-xs text-coco-dark-muted">TVL</p>
             <p className="text-sm font-mono font-medium text-coco-dark-text">
@@ -220,7 +223,7 @@ function MyPositions({ isConnected, lpBalance, share, reserveUsdc, reserveEurc, 
         </div>
 
         {/* Fee Explanation */}
-        <div className="mt-4 rounded-lg bg-coco-dark-bg border border-coco-dark-border p-3">
+        <div className="mt-4 rounded-lg bg-coco-dark-bg/75 border border-coco-dark-border p-3">
           <p className="text-[11px] text-coco-dark-muted leading-relaxed">
             Fees are included in your withdrawable liquidity. Coco DEX uses a V2-style AMM where 0.3% trading fees stay inside the pool and increase the value of your LP tokens. To collect fees, remove liquidity.
           </p>

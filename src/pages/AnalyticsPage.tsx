@@ -106,13 +106,16 @@ export function AnalyticsPage() {
   }))
 
   return (
-    <div className="pt-28 sm:pt-24 pb-12 px-3 sm:px-4 mx-auto max-w-5xl">
+    <div className="page-fade pt-28 sm:pt-24 pb-12 px-3 sm:px-4 mx-auto max-w-6xl">
       {/* Header with global refresh */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-coco-dark-text">Analytics</h1>
+        <div>
+          <p className="text-xs uppercase tracking-[0.22em] text-coco-teal-400">Real indexed analytics</p>
+          <h1 className="mt-1 text-2xl font-bold text-coco-dark-text">Analytics</h1>
+        </div>
         <button
           onClick={handleRefreshAll}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-coco-dark-surface border border-coco-dark-border text-coco-dark-muted hover:text-coco-dark-text ${refreshing ? 'animate-spin-once' : ''}`}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-coco-dark-surface/80 border border-coco-dark-border text-coco-dark-muted hover:text-coco-dark-text hover:border-coco-green-500/35 ${refreshing ? 'animate-spin-once' : ''}`}
         >
           <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
           Refresh
@@ -120,7 +123,7 @@ export function AnalyticsPage() {
       </div>
 
       {/* Indexer status info */}
-      <div className="mb-6 rounded-xl bg-coco-dark-surface/50 border border-coco-dark-border p-3.5 flex items-start gap-2.5">
+      <div className="mb-6 rounded-xl bg-coco-dark-surface/55 border border-coco-dark-border p-3.5 flex items-start gap-2.5 shadow-coco-1 backdrop-blur-xl">
         <Info className="h-4 w-4 text-coco-dark-muted shrink-0 mt-0.5" />
         <div className="text-xs text-coco-dark-muted space-y-1">
           <p>Analytics updates after the indexer syncs blockchain events. External cron currently runs every 15 minutes.</p>
@@ -156,23 +159,23 @@ export function AnalyticsPage() {
               <AreaChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="tvlGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="#22D3EE" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `$${formatCompact(v)}`} width={60} />
+                <XAxis dataKey="date" tick={{ fill: '#94A3B8', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: '#94A3B8', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `$${formatCompact(v)}`} width={60} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#1a1a2e', border: '1px solid #2d2d44', borderRadius: 8 }}
-                  labelStyle={{ color: '#9ca3af', fontSize: 11 }}
+                  contentStyle={{ backgroundColor: '#07111f', border: '1px solid rgba(148, 163, 184, 0.18)', borderRadius: 12 }}
+                  labelStyle={{ color: '#CBD5E1', fontSize: 11 }}
                   formatter={(value) => [`$${Number(value).toFixed(2)}`, 'TVL']}
                 />
-                <Area type="monotone" dataKey="tvl" stroke="#22c55e" strokeWidth={2} fill="url(#tvlGradient)" />
+                <Area type="monotone" dataKey="tvl" stroke="#3B82F6" strokeWidth={2} fill="url(#tvlGradient)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         ) : (
-          <div className="h-56 rounded-xl bg-coco-dark-bg border border-coco-dark-border flex items-center justify-center">
+          <div className="h-56 rounded-xl bg-coco-dark-bg/75 border border-coco-dark-border flex items-center justify-center">
             <p className="text-sm text-coco-dark-muted">{isEmpty ? 'No data yet' : chartData.length === 1 ? 'Need more data points for chart' : 'Loading chart...'}</p>
           </div>
         )}
@@ -289,9 +292,9 @@ export function AnalyticsPage() {
 
 function MetricCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <Card className="p-4">
+    <Card className="p-4 hover:-translate-y-0.5 hover:border-coco-green-500/25">
       <div className="flex items-center gap-2 mb-2">
-        <div className="text-coco-dark-muted h-4 w-4">{icon}</div>
+        <div className="text-coco-teal-400 h-4 w-4">{icon}</div>
         <span className="text-xs text-coco-dark-muted">{label}</span>
       </div>
       <p className="text-xl font-bold font-mono text-coco-dark-text">{value}</p>

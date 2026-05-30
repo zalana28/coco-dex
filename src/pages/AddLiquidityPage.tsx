@@ -268,19 +268,22 @@ export function AddLiquidityPage() {
     : null
 
   return (
-    <div className="pt-28 sm:pt-24 pb-12 px-3 sm:px-4 flex flex-col items-center">
+    <div className="page-fade pt-28 sm:pt-24 pb-12 px-3 sm:px-4 flex flex-col items-center">
       <Card className="relative w-full max-w-[480px] p-4 sm:p-6">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
-          <Link to="/pools" className="p-1.5 rounded-lg hover:bg-coco-dark-bg text-coco-dark-muted hover:text-coco-dark-text transition-colors">
+          <Link to="/pools" className="p-1.5 rounded-lg border border-transparent hover:border-coco-dark-border hover:bg-coco-dark-bg text-coco-dark-muted hover:text-coco-dark-text transition-colors">
             <ArrowLeft className="h-5 w-5" />
           </Link>
-          <h2 className="text-xl font-semibold text-coco-dark-text">Add Liquidity</h2>
+          <div>
+            <p className="text-xs uppercase tracking-[0.22em] text-coco-teal-400">Liquidity made visible</p>
+            <h2 className="mt-1 text-xl font-semibold text-coco-dark-text">Add Liquidity</h2>
+          </div>
         </div>
 
         {/* Wrong network banner */}
         {isWrongNetwork && (
-          <div className="mb-4 flex items-start gap-2.5 rounded-xl bg-coco-red-500/10 border border-coco-red-500/20 p-3.5">
+          <div className="mb-4 flex items-start gap-2.5 rounded-xl bg-coco-red-500/10 border border-coco-red-500/20 p-3.5 shadow-coco-1">
             <Wifi className="h-4 w-4 text-coco-red-500 shrink-0 mt-0.5" />
             <p className="text-xs text-coco-red-500">Wrong network. Switch to Arc Testnet to use Coco DEX.</p>
           </div>
@@ -288,7 +291,7 @@ export function AddLiquidityPage() {
 
         {/* First liquidity provider notice */}
         {!hasLiquidity && !isWrongNetwork && (
-          <div className="mb-4 flex items-start gap-2.5 rounded-xl bg-coco-teal-400/10 border border-coco-teal-400/20 p-3.5">
+          <div className="mb-4 flex items-start gap-2.5 rounded-xl bg-coco-teal-400/10 border border-coco-teal-400/20 p-3.5 shadow-coco-1">
             <Info className="h-4 w-4 text-coco-teal-400 shrink-0 mt-0.5" />
             <div>
               <p className="text-xs text-coco-teal-400 font-medium">You are the first liquidity provider for this pool.</p>
@@ -308,7 +311,7 @@ export function AddLiquidityPage() {
 
         {/* Plus separator */}
         <div className="flex justify-center -my-2 relative z-10">
-          <div className="p-2 rounded-xl bg-coco-dark-surface border border-coco-dark-border">
+          <div className="p-2 rounded-xl bg-coco-dark-surface/95 border border-coco-dark-border shadow-coco-1">
             <Plus className="h-4 w-4 text-coco-dark-muted" />
           </div>
         </div>
@@ -324,7 +327,7 @@ export function AddLiquidityPage() {
 
         {/* Price and Pool Share */}
         {(amount0 && parseFloat(amount0) > 0) && (
-          <div className="mt-4 rounded-xl bg-coco-dark-bg border border-coco-dark-border p-4">
+          <div className="mt-4 rounded-xl bg-coco-dark-bg/75 border border-coco-dark-border p-4 shadow-inner">
             <div className="flex items-center gap-1.5 mb-3">
               <Info className="h-3.5 w-3.5 text-coco-dark-muted" />
               <span className="text-xs text-coco-dark-muted">Prices and pool share</span>
@@ -350,7 +353,7 @@ export function AddLiquidityPage() {
           className={`mt-6 w-full py-3.5 rounded-xl font-medium text-base transition-all ${
             buttonState.disabled
               ? 'bg-coco-dark-border text-coco-dark-muted cursor-not-allowed'
-              : 'bg-coco-green-500 text-white hover:bg-coco-green-600 active:scale-[0.99] shadow-lg shadow-coco-green-500/20'
+              : 'bg-coco-green-500 text-white hover:bg-coco-green-600 active:scale-[0.99] shadow-lg shadow-coco-green-500/25 hover:-translate-y-0.5'
           }`}
         >
           {buttonState.text}
@@ -374,7 +377,7 @@ function LiquidityTokenInput({
   token: Token; amount: string; onAmountChange: (v: string) => void; balance: string; onMax?: () => void
 }) {
   return (
-    <div className="rounded-xl bg-coco-dark-bg border border-coco-dark-border p-4 mt-2">
+    <div className="rounded-xl bg-coco-dark-bg/80 border border-coco-dark-border p-4 mt-2 transition-colors focus-within:border-coco-green-500/45">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs text-coco-dark-muted">Input</span>
         <button onClick={onMax} className="text-xs text-coco-dark-muted hover:text-coco-green-500 transition-colors">
@@ -382,7 +385,7 @@ function LiquidityTokenInput({
         </button>
       </div>
       <div className="flex items-center gap-3">
-        <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-coco-dark-surface border border-coco-dark-border shrink-0">
+        <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-coco-dark-surface/90 border border-coco-dark-border shrink-0">
           <TokenIcon symbol={token.symbol} color={token.logoColor} size="sm" />
           <span className="text-sm font-medium text-coco-dark-text">{token.symbol}</span>
           <ChevronDown className="h-3.5 w-3.5 text-coco-dark-muted" />
@@ -401,7 +404,7 @@ function LiquidityTokenInput({
 
 function PriceStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="text-center rounded-lg bg-coco-dark-surface border border-coco-dark-border p-2">
+    <div className="text-center rounded-lg bg-coco-dark-surface/80 border border-coco-dark-border p-2">
       <p className="text-sm font-mono font-medium text-coco-dark-text">{value}</p>
       <p className="text-[10px] text-coco-dark-muted mt-0.5">{label}</p>
     </div>
