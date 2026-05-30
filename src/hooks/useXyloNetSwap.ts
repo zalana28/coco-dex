@@ -16,6 +16,11 @@ const ARC_CHAIN_ID = arcTestnet.id
  * Executes simulateContract before writeContract to catch reverts early.
  * If simulation fails, the transaction is NOT sent and a clear error is surfaced.
  *
+ * IMPORTANT: The caller MUST ensure token allowance is sufficient before calling swap().
+ * If allowance is insufficient, the simulation will revert on the router's transferFrom
+ * and surface a misleading "simulation failed" error. The SwapPage button state machine
+ * enforces this by requiring approval before enabling the swap button.
+ *
  * XyloNet swap signature:
  *   swap(address pool, address tokenIn, address tokenOut, uint256 amountIn, uint256 minAmountOut, address to, uint256 deadline)
  *
@@ -23,6 +28,10 @@ const ARC_CHAIN_ID = arcTestnet.id
  *
  * All amounts use ERC-20 decimals (6 for USDC/EURC on Arc).
  * NEVER pass native 18-decimal values.
+ *
+ * Deadline is a Unix timestamp in SECONDS (not milliseconds).
+ * The caller (SwapPage) uses getDeadlineTimestamp() which returns:
+ *   Math.floor(Date.now() / 1000) + deadlineMinutes * 60
  */
 export type XyloNetSwapParams = {
   tokenIn: Token
@@ -30,6 +39,7 @@ export type XyloNetSwapParams = {
   amountIn: bigint
   minAmountOut: bigint
   to: `0x${string}`
+  /** Unix timestamp in seconds. Must NOT be milliseconds. */
   deadline: number
 }
 
@@ -50,11 +60,22 @@ export function useXyloNetSwap() {
   const isReverted = swapReceipt?.status === 'reverted'
 
   /**
+   * Clear simulation error state.
+   * Call this after a successful approval so the user can retry the swap.
+   */
+  const clearSimulationError = useCallback(() => {
+    setSimulationError(undefined)
+  }, [])
+
+  /**
    * Execute XyloNet swap with simulation pre-check.
    * HARD GUARD: Returns 'WRONG_NETWORK' if not on Arc Testnet.
    *
    * Runs simulateContract first — if it fails, the tx is NOT sent
    * and simulationError is set with a user-friendly message.
+   *
+   * PREREQUISITE: Token allowance to XyloNet router must be >= amountIn.
+   * Do NOT call this if needsApproval is true — it will always fail.
    */
   const swap = useCallback(async (
     params: XyloNetSwapParams,
@@ -81,6 +102,22 @@ export function useXyloNetSwap() {
       BigInt(deadline),
     ] as const
 
+    // ─── DEV logging: full swap params before simulation ───
+    if (import.meta.env.DEV) {
+      console.log('[useXyloNetSwap] Simulating swap:', {
+        source: 'xylonet',
+        router: XYLONET_ROUTER_ADDRESS,
+        pool: XYLONET_USDC_EURC_POOL_ADDRESS,
+        tokenIn: tokenIn.address,
+        tokenOut: tokenOut.address,
+        amountIn: amountIn.toString(),
+        minAmountOut: minAmountOut.toString(),
+        recipient: to,
+        deadline,
+        deadlineDate: new Date(deadline * 1000).toISOString(),
+      })
+    }
+
     // ─── Simulate before sending ───
     if (publicClient) {
       try {
@@ -91,11 +128,37 @@ export function useXyloNetSwap() {
           args: swapArgs,
           account: to,
         })
+        if (import.meta.env.DEV) {
+          console.log('[useXyloNetSwap] Simulation passed ✓')
+        }
       } catch (simErr: unknown) {
+        // ─── DEV logging: detailed simulation error ───
+        if (import.meta.env.DEV) {
+          const errObj = simErr as Record<string, unknown>
+          console.error('[useXyloNetSwap] Simulation FAILED:', {
+            name: errObj?.name,
+            shortMessage: errObj?.shortMessage,
+            message: errObj?.message ? String(errObj.message).slice(0, 200) : undefined,
+            details: errObj?.details,
+            cause: errObj?.cause,
+            metaMessages: errObj?.metaMessages,
+          })
+        }
+
+        // Determine a user-friendly reason
         const msg = simErr instanceof Error ? simErr.message : String(simErr)
-        const shortMsg = msg.length > 120 ? msg.slice(0, 120) + '…' : msg
-        console.warn('[useXyloNetSwap] Simulation failed:', shortMsg)
-        setSimulationError('XyloNet swap simulation failed.')
+        let reason = 'XyloNet swap simulation failed.'
+        if (msg.includes('allowance') || msg.includes('insufficient allowance') || msg.includes('ERC20: transfer amount exceeds allowance')) {
+          reason = 'Insufficient allowance — approve the XyloNet router first.'
+        } else if (msg.includes('balance') || msg.includes('exceeds balance')) {
+          reason = 'Insufficient balance.'
+        } else if (msg.includes('EXPIRED') || msg.includes('deadline')) {
+          reason = 'Deadline expired.'
+        } else if (msg.includes('INSUFFICIENT_OUTPUT') || msg.includes('min')) {
+          reason = 'Min received too high — increase slippage tolerance.'
+        }
+
+        setSimulationError(reason)
         return 'SIMULATION_FAILED'
       }
     }
@@ -111,13 +174,19 @@ export function useXyloNetSwap() {
       },
       {
         onSuccess: (hash) => {
+          if (import.meta.env.DEV) {
+            console.log('[useXyloNetSwap] Transaction sent:', hash)
+          }
           setTxHash(hash)
           onHash?.(hash)
         },
         onError: (err) => {
-          const msg = err.message || ''
-          if (msg.includes('revert') || msg.includes('execution reverted')) {
-            setSimulationError('XyloNet swap simulation failed.')
+          if (import.meta.env.DEV) {
+            console.error('[useXyloNetSwap] writeContract error:', err.message?.slice(0, 200))
+          }
+          const errMsg = err.message || ''
+          if (errMsg.includes('revert') || errMsg.includes('execution reverted')) {
+            setSimulationError('XyloNet swap reverted.')
           }
         },
       }
@@ -143,6 +212,7 @@ export function useXyloNetSwap() {
     txHash,
     error,
     simulationError,
+    clearSimulationError,
     reset: resetSwap,
   }
 }
