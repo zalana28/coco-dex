@@ -57,6 +57,7 @@ Create `.env.local` from `.env.example`:
 | Variable | Description | Scope |
 |----------|-------------|-------|
 | `VITE_PUBLIC_APP_ENV` | App environment label | Frontend |
+| `VITE_WALLETCONNECT_PROJECT_ID` | Reown/WalletConnect project ID for mobile browser wallet connection | Frontend |
 | `ARC_TESTNET_RPC_URL` | Arc Testnet RPC endpoint | Server |
 | `SUPABASE_URL` | Supabase project URL | Server |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key | Server |
@@ -64,6 +65,8 @@ Create `.env.local` from `.env.example`:
 | `BACKFILL_FROM_BLOCK` | Start block for backfill (default: 44170190) | Script |
 | `BACKFILL_TO_BLOCK` | End block for backfill (default: latest) | Script |
 | `BACKFILL_CHUNK_SIZE` | Blocks per batch (default: 5000) | Script |
+
+Mobile wallet support in regular mobile browsers requires `VITE_WALLETCONNECT_PROJECT_ID` from the Reown/WalletConnect dashboard. Production Vercel deployments must set this environment variable and redeploy. Without it, injected wallet browsers still work, but WalletConnect is shown as unavailable.
 
 ## Local Setup
 
