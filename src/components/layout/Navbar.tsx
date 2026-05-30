@@ -23,7 +23,7 @@ export function Navbar() {
             <span className="relative grid h-9 w-9 place-items-center overflow-hidden rounded-xl border border-coco-green-500/30 bg-coco-green-500/10 shadow-lg shadow-coco-green-500/15">
               <img src="/coconut.svg" alt="" className="h-7 w-7 transition-transform duration-300 group-hover:rotate-12" />
             </span>
-            <span className="text-base font-semibold tracking-tight text-coco-dark-text sm:text-lg">
+            <span className="text-base font-semibold tracking-tight text-coco-dark-text max-[360px]:hidden sm:text-lg">
               Coco <span className="text-coco-teal-400">DEX</span>
             </span>
           </Link>
@@ -57,15 +57,18 @@ export function Navbar() {
             {showWallet && <ConnectWalletButton />}
           </div>
 
-          <button
-            type="button"
-            onClick={() => setIsOpen((value) => !value)}
-            className="grid h-10 w-10 place-items-center rounded-xl border border-coco-dark-border bg-coco-dark-surface/75 text-coco-dark-muted transition-colors hover:text-coco-dark-text md:hidden"
-            aria-label="Toggle navigation"
-            aria-expanded={isOpen}
-          >
-            {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
+          <div className="flex shrink-0 items-center gap-2 md:hidden">
+            {showWallet && <ConnectWalletButton />}
+            <button
+              type="button"
+              onClick={() => setIsOpen((value) => !value)}
+              className="grid h-11 w-11 place-items-center rounded-xl border border-coco-dark-border bg-coco-dark-surface/75 text-coco-dark-muted transition-colors hover:text-coco-dark-text"
+              aria-label="Toggle navigation"
+              aria-expanded={isOpen}
+            >
+              {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -98,7 +101,6 @@ export function Navbar() {
             >
               Launch App
             </Link>
-            {showWallet && <ConnectWalletButton />}
           </div>
         </div>
       )}

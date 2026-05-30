@@ -4,7 +4,6 @@ import {
   ArrowRight,
   BarChart3,
   CheckCircle2,
-  Code2,
   ExternalLink,
   GitCompareArrows,
   Layers3,
@@ -96,9 +95,9 @@ export function LandingPage() {
               <Link to="/pools" className="inline-flex items-center gap-1.5 hover:text-coco-teal-400">
                 Explore Pools <ArrowRight className="h-3.5 w-3.5" />
               </Link>
-              <a href="https://github.com/zalana28/coco-dex" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 hover:text-coco-teal-400">
-                GitHub <Code2 className="h-3.5 w-3.5" />
-              </a>
+              <span className="inline-flex items-center gap-1.5 text-coco-dark-muted">
+                Docs coming soon
+              </span>
             </div>
           </div>
 
