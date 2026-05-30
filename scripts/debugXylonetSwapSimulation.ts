@@ -1,35 +1,24 @@
 /**
- * Debug script: Simulate XyloNet swap with allowance check.
+ * Debug XyloNet swap simulation with the same account-aware shape as the UI.
  *
  * Usage:
- *   npx tsx scripts/debugXylonetSwapSimulation.ts [amountIn] [direction]
+ *   npx tsx scripts/debugXylonetSwapSimulation.ts [account] [amountIn] [direction]
  *
  * Examples:
- *   npx tsx scripts/debugXylonetSwapSimulation.ts 1000000 usdc-to-eurc
- *   npx tsx scripts/debugXylonetSwapSimulation.ts 1000000 eurc-to-usdc
- *
- * Default: 1 USDC (1000000) → EURC
- *
- * This script:
- * 1. Reads allowance for a test account to the XyloNet router
- * 2. Gets a quote via getAmountOut
- * 3. Simulates swap with the exact args the UI would use
- * 4. Reports success or detailed failure reason
+ *   npx tsx scripts/debugXylonetSwapSimulation.ts 0xYourWallet 1000000 usdc-to-eurc
+ *   XYLONET_SIM_ACCOUNT=0xYourWallet npx tsx scripts/debugXylonetSwapSimulation.ts
  */
 
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { createPublicClient, defineChain, http, type Address } from 'viem'
+import { createPublicClient, defineChain, http, isAddress, type Address } from 'viem'
 
-// ─── Constants ───
 const ARC_TESTNET_CHAIN_ID = 5_042_002
 const ROUTER: Address = '0x73742278c31a76dBb0D2587d03ef92E6E2141023'
 const POOL: Address = '0x3DF3966F5138143dce7a9cFDdC2c0310ce083BB1'
 const USDC: Address = '0x3600000000000000000000000000000000000000'
 const EURC: Address = '0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a'
-
-// Default test account (zero address for simulation — will show allowance=0 scenario)
-const TEST_ACCOUNT: Address = '0x0000000000000000000000000000000000000001'
+const DEFAULT_ACCOUNT: Address = '0x0000000000000000000000000000000000000001'
 
 const XYLONET_ROUTER_ABI = [
   {
@@ -80,28 +69,72 @@ const ERC20_ABI = [
   },
 ] as const
 
-// ─── Load .env.local ───
 function loadEnvLocal() {
   const envPath = resolve(process.cwd(), '.env.local')
   if (!existsSync(envPath)) return
+
   const contents = readFileSync(envPath, 'utf8')
   for (const line of contents.split('\n')) {
     const trimmed = line.trim()
     if (!trimmed || trimmed.startsWith('#')) continue
-    const idx = trimmed.indexOf('=')
-    if (idx === -1) continue
-    const key = trimmed.slice(0, idx).trim()
-    let value = trimmed.slice(idx + 1).trim()
+
+    const separatorIndex = trimmed.indexOf('=')
+    if (separatorIndex === -1) continue
+
+    const key = trimmed.slice(0, separatorIndex).trim()
+    let value = trimmed.slice(separatorIndex + 1).trim()
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
       value = value.slice(1, -1)
     }
+
     process.env[key] ??= value
   }
+}
+
+function asAddress(label: string, value: string | undefined): Address {
+  if (!value || !isAddress(value)) {
+    throw new Error(`${label} is not a valid address: ${value ?? '(missing)'}`)
+  }
+  return value
+}
+
+function getErrorField(error: unknown, field: string): unknown {
+  if (!error || typeof error !== 'object') return undefined
+  return (error as Record<string, unknown>)[field]
+}
+
+function getNestedRevertReason(error: unknown): unknown {
+  const walk = getErrorField(error, 'walk')
+  if (typeof walk !== 'function') return getErrorField(error, 'reason')
+
+  const reasonError = walk.call(error, (value: unknown) => Boolean(getErrorField(value, 'reason')))
+  return getErrorField(reasonError, 'reason')
+}
+
+function printErrorFields(error: unknown) {
+  const cause = getErrorField(error, 'cause')
+  console.log('  name:', getErrorField(error, 'name') ?? '(none)')
+  console.log('  shortMessage:', getErrorField(error, 'shortMessage') ?? '(none)')
+  console.log('  details:', getErrorField(error, 'details') ?? '(none)')
+  console.log('  metaMessages:', getErrorField(error, 'metaMessages') ?? '(none)')
+  console.log('  cause.shortMessage:', getErrorField(cause, 'shortMessage') ?? '(none)')
+  console.log('  cause.reason:', getNestedRevertReason(error) ?? getErrorField(cause, 'reason') ?? '(none)')
+  console.log('  message:', error instanceof Error ? error.message : String(error))
 }
 
 loadEnvLocal()
 
 const rpcUrl = process.env.ARC_TESTNET_RPC_URL || 'https://rpc.testnet.arc.network'
+const account = asAddress('account', process.argv[2] || process.env.XYLONET_SIM_ACCOUNT || DEFAULT_ACCOUNT)
+const amountIn = process.argv[3] ? BigInt(process.argv[3]) : 1_000_000n
+const direction = process.argv[4] || 'usdc-to-eurc'
+const slippageBps = BigInt(process.env.XYLONET_SIM_SLIPPAGE_BPS || '50')
+const safeDeadlineMinutes = Number(process.env.XYLONET_SIM_DEADLINE_MINUTES || '20')
+
+const tokenIn = direction === 'eurc-to-usdc' ? EURC : USDC
+const tokenOut = direction === 'eurc-to-usdc' ? USDC : EURC
+const tokenInSymbol = direction === 'eurc-to-usdc' ? 'EURC' : 'USDC'
+const tokenOutSymbol = direction === 'eurc-to-usdc' ? 'USDC' : 'EURC'
 
 const arcTestnet = defineChain({
   id: ARC_TESTNET_CHAIN_ID,
@@ -116,128 +149,81 @@ const client = createPublicClient({
   transport: http(rpcUrl),
 })
 
-// ─── Parse args ───
-const amountInArg = process.argv[2] ? BigInt(process.argv[2]) : 1_000_000n // 1 USDC
-const directionArg = process.argv[3] || 'usdc-to-eurc'
-
-const tokenIn = directionArg === 'eurc-to-usdc' ? EURC : USDC
-const tokenOut = directionArg === 'eurc-to-usdc' ? USDC : EURC
-const tokenInSymbol = directionArg === 'eurc-to-usdc' ? 'EURC' : 'USDC'
-const tokenOutSymbol = directionArg === 'eurc-to-usdc' ? 'USDC' : 'EURC'
-
-console.log('═══════════════════════════════════════════')
-console.log(' XyloNet Swap Simulation Debug')
-console.log('═══════════════════════════════════════════')
-console.log('')
-console.log(`Direction:  ${tokenInSymbol} → ${tokenOutSymbol}`)
-console.log(`Amount In:  ${amountInArg} (${Number(amountInArg) / 1e6} ${tokenInSymbol})`)
-console.log(`Router:     ${ROUTER}`)
-console.log(`Pool:       ${POOL}`)
-console.log(`Token In:   ${tokenIn}`)
-console.log(`Token Out:  ${tokenOut}`)
-console.log(`RPC:        ${rpcUrl}`)
-console.log(`Account:    ${TEST_ACCOUNT}`)
+console.log('XyloNet swap simulation debug')
+console.log('chainId:', ARC_TESTNET_CHAIN_ID)
+console.log('rpcUrl:', rpcUrl)
+console.log('account:', account)
+console.log('direction:', `${tokenInSymbol} -> ${tokenOutSymbol}`)
+console.log('amountIn:', amountIn.toString(), `(${Number(amountIn) / 1e6} ${tokenInSymbol}, 6 decimals)`)
 console.log('')
 
-// ─── Step 1: Check allowance ───
-console.log('─── Step 1: Check allowance ───')
-try {
-  const currentAllowance = await client.readContract({
-    address: tokenIn,
-    abi: ERC20_ABI,
-    functionName: 'allowance',
-    args: [TEST_ACCOUNT, ROUTER],
-  })
-  console.log(`  Allowance to router: ${currentAllowance}`)
-  console.log(`  Required:            ${amountInArg}`)
-  console.log(`  Sufficient:          ${currentAllowance >= amountInArg}`)
-  if (currentAllowance < amountInArg) {
-    console.log('')
-    console.log('  ⚠️  Allowance insufficient — simulation will likely fail.')
-    console.log('      In the real app, button should show "Approve" first.')
-  }
-} catch (err: unknown) {
-  console.log('  Allowance check failed:', (err as Error).message?.slice(0, 100))
-}
+const latestBlock = await client.getBlock({ blockTag: 'latest' })
+const latestBlockTimestamp = latestBlock.timestamp
+const deadline = latestBlockTimestamp + BigInt(Math.ceil(safeDeadlineMinutes * 60))
 
-// ─── Step 2: Get quote ───
+console.log('latest block:')
+console.log('  number:', latestBlock.number?.toString() ?? '(pending)')
+console.log('  timestamp:', latestBlockTimestamp.toString())
+console.log('  deadline:', deadline.toString())
 console.log('')
-console.log('─── Step 2: Get quote (getAmountOut) ───')
-let amountOut: bigint = 0n
-try {
-  amountOut = await client.readContract({
-    address: ROUTER,
-    abi: XYLONET_ROUTER_ABI,
-    functionName: 'getAmountOut',
-    args: [tokenIn, tokenOut, amountInArg],
-  })
-  console.log(`  amountOut: ${amountOut} (${Number(amountOut) / 1e6} ${tokenOutSymbol})`)
-} catch (err: unknown) {
-  console.log('  getAmountOut FAILED:', (err as Error).message?.slice(0, 150))
-  process.exit(1)
-}
 
-// ─── Step 3: Compute minAmountOut (0.5% slippage) ───
-const slippageBps = 50n // 0.5%
+const allowance = await client.readContract({
+  address: tokenIn,
+  abi: ERC20_ABI,
+  functionName: 'allowance',
+  args: [account, ROUTER],
+})
+
+const balance = await client.readContract({
+  address: tokenIn,
+  abi: ERC20_ABI,
+  functionName: 'balanceOf',
+  args: [account],
+})
+
+console.log('account checks:')
+console.log('  allowance owner:', account)
+console.log('  allowance spender:', ROUTER)
+console.log('  allowance:', allowance.toString())
+console.log('  required allowance:', amountIn.toString())
+console.log('  allowance sufficient:', allowance >= amountIn)
+console.log('  balance:', balance.toString())
+console.log('  balance sufficient:', balance >= amountIn)
+console.log('')
+
+const amountOut = await client.readContract({
+  address: ROUTER,
+  abi: XYLONET_ROUTER_ABI,
+  functionName: 'getAmountOut',
+  args: [tokenIn, tokenOut, amountIn],
+})
+
 const minAmountOut = amountOut - (amountOut * slippageBps) / 10_000n
-const deadlineSeconds = BigInt(Math.floor(Date.now() / 1000) + 20 * 60) // 20 min from now
+const swapArgs = [POOL, tokenIn, tokenOut, amountIn, minAmountOut, account, deadline] as const
 
+console.log('quote and swap args:')
+console.log('  amountOut:', amountOut.toString(), `(${Number(amountOut) / 1e6} ${tokenOutSymbol})`)
+console.log('  minAmountOut:', minAmountOut.toString(), `(${slippageBps.toString()} bps slippage)`)
+console.log('  pool:', POOL)
+console.log('  tokenIn:', tokenIn)
+console.log('  tokenOut:', tokenOut)
+console.log('  to:', account)
 console.log('')
-console.log('─── Step 3: Swap parameters ───')
-console.log(`  amountIn:     ${amountInArg}`)
-console.log(`  amountOut:    ${amountOut}`)
-console.log(`  minAmountOut: ${minAmountOut} (0.5% slippage)`)
-console.log(`  deadline:     ${deadlineSeconds} (${new Date(Number(deadlineSeconds) * 1000).toISOString()})`)
-console.log(`  recipient:    ${TEST_ACCOUNT}`)
 
-// ─── Step 4: Simulate swap ───
-console.log('')
-console.log('─── Step 4: Simulate swap ───')
 try {
   const result = await client.simulateContract({
     address: ROUTER,
     abi: XYLONET_ROUTER_ABI,
     functionName: 'swap',
-    args: [POOL, tokenIn, tokenOut, amountInArg, minAmountOut, TEST_ACCOUNT, deadlineSeconds],
-    account: TEST_ACCOUNT,
+    args: swapArgs,
+    account,
+    chain: arcTestnet,
   })
-  console.log('  ✅ Simulation PASSED')
-  console.log(`  Result: ${result.result}`)
-} catch (simErr: unknown) {
-  console.log('  ❌ Simulation FAILED')
-  const errObj = simErr as Record<string, unknown>
-  console.log('')
-  console.log('  Error details:')
-  console.log('    name:', errObj?.name ?? '(none)')
-  console.log('    shortMessage:', errObj?.shortMessage ?? '(none)')
-  console.log('    details:', errObj?.details ?? '(none)')
 
-  const message = String(errObj?.message ?? '')
-  if (message.length > 300) {
-    console.log('    message (truncated):', message.slice(0, 300) + '…')
-  } else {
-    console.log('    message:', message || '(none)')
-  }
-
-  // Try to identify the cause
-  console.log('')
-  console.log('  Likely cause:')
-  if (message.includes('allowance') || message.includes('ERC20')) {
-    console.log('    → Insufficient token allowance to XyloNet router.')
-    console.log('    → The user must approve the router before swap can execute.')
-  } else if (message.includes('balance')) {
-    console.log('    → Insufficient token balance.')
-  } else if (message.includes('EXPIRED') || message.includes('deadline')) {
-    console.log('    → Deadline expired.')
-  } else if (message.includes('execution reverted')) {
-    console.log('    → Generic revert. If allowance/balance are sufficient,')
-    console.log('      this may be a pool state issue or wrong function signature.')
-  } else {
-    console.log('    → Unknown cause. Check error details above.')
-  }
+  console.log('simulation passed')
+  console.log('  result:', result.result?.toString())
+} catch (error: unknown) {
+  console.log('simulation failed')
+  printErrorFields(error)
+  process.exitCode = 1
 }
-
-console.log('')
-console.log('═══════════════════════════════════════════')
-console.log(' Done')
-console.log('═══════════════════════════════════════════')
