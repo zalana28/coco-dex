@@ -8,13 +8,17 @@ const USDC_EURC_POOL = '0x3DF3966F5138143dce7a9cFDdC2c0310ce083BB1'
 const USDC = '0x3600000000000000000000000000000000000000'
 const EURC = '0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a'
 
+/**
+ * Corrected ABI: getAmountOut takes 3 params (tokenIn, tokenOut, amountIn).
+ * The router resolves the pool internally — no pool address parameter needed.
+ * Selector: 0x4aa06652
+ */
 const XYLONET_ROUTER_ABI = [
   {
     type: 'function',
     name: 'getAmountOut',
     stateMutability: 'view',
     inputs: [
-      { name: 'pool', type: 'address' },
       { name: 'tokenIn', type: 'address' },
       { name: 'tokenOut', type: 'address' },
       { name: 'amountIn', type: 'uint256' },
@@ -200,7 +204,7 @@ for (const quoteCase of quoteCases) {
       address: router,
       abi: XYLONET_ROUTER_ABI,
       functionName: 'getAmountOut',
-      args: [pool, quoteCase.tokenIn, quoteCase.tokenOut, quoteCase.amountIn],
+      args: [quoteCase.tokenIn, quoteCase.tokenOut, quoteCase.amountIn],
     })
 
     console.log(`  amountOut: ${amountOut}`)

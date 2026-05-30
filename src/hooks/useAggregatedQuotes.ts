@@ -33,7 +33,8 @@ export function useAggregatedQuotes({
     address: xylonet.routerAddress,
     abi: XYLONET_ROUTER_ABI,
     functionName: 'getAmountOut',
-    args: [xylonet.usdcEurcPoolAddress, tokenIn.address as `0x${string}`, tokenOut.address as `0x${string}`, amountIn],
+    // Router resolves the pool internally — only tokenIn, tokenOut, amountIn are needed.
+    args: [tokenIn.address as `0x${string}`, tokenOut.address as `0x${string}`, amountIn],
     chainId: arcTestnet.id,
     query: {
       enabled: shouldReadXyloNet,
