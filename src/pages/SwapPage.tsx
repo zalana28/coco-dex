@@ -5,11 +5,13 @@ import { TransactionProgressPanel } from '@/components/transactions/TransactionP
 import { Settings, ArrowDownUp, ChevronDown, Info, AlertTriangle, Wifi, Shield } from 'lucide-react'
 import { USDC, EURC } from '@/config/tokens'
 import { ROUTER_ADDRESS } from '@/config/contracts'
+import { XYLONET_ROUTER_ADDRESS } from '@/config/externalDexes'
 import { useAccount } from 'wagmi'
 import { usePairReserves } from '@/hooks/usePairReserves'
 import { useTokenBalance } from '@/hooks/useTokenBalance'
 import { useApprove } from '@/hooks/useApprove'
 import { useSwap } from '@/hooks/useSwap'
+import { useXyloNetSwap } from '@/hooks/useXyloNetSwap'
 import { useNetworkGuard } from '@/hooks/useNetworkGuard'
 import { useTransactionSettings } from '@/hooks/useSettings'
 import type { ApprovalMode } from '@/hooks/useSettings'
@@ -92,15 +94,35 @@ export function SwapPage() {
     return quote?.availabilityStatus === 'available' ? quote : selectedQuote
   }, [quotes, selectedRouteId, selectedQuote])
 
-  // ─── Approval: targets the fromToken (the token being spent) ───
+  // ─── Route-aware approval spender ───
+  // Coco route → approve Coco router. XyloNet route → approve XyloNet router.
+  // SAFETY: Never approve the wrong router for the selected route.
+  const approvalSpender: `0x${string}` = useMemo(() => {
+    if (activeQuote?.source === 'xylonet') return XYLONET_ROUTER_ADDRESS
+    return ROUTER_ADDRESS
+  }, [activeQuote])
+
+  // ─── Approval: targets the fromToken with the route-aware spender ───
   const {
     needsApproval, approve, isApproving, isWaitingForReceipt: isApprovalConfirming,
     isApproved: approvalConfirmed, isReverted: approvalReverted,
     approvalTxHash, error: approveError, refetchAllowance, resetApproval,
-  } = useApprove(fromToken, ROUTER_ADDRESS, fromAmountRaw, approvalMode)
+  } = useApprove(fromToken, approvalSpender, fromAmountRaw, approvalMode)
 
-  // Swap execution
-  const { swap, isPending: isSwapping, isConfirming: isSwapConfirming, txHash: swapTxHash, isSuccess: swapSuccess, isReverted: swapReverted, error: swapError, reset: resetSwap } = useSwap()
+  // Coco swap execution
+  const { swap: cocoSwap, isPending: isCocoSwapping, isConfirming: isCocoSwapConfirming, txHash: cocoSwapTxHash, isSuccess: cocoSwapSuccess, isReverted: cocoSwapReverted, error: cocoSwapError, reset: resetCocoSwap } = useSwap()
+
+  // XyloNet swap execution
+  const { swap: xyloNetSwap, isPending: isXyloNetSwapping, isConfirming: isXyloNetSwapConfirming, txHash: xyloNetSwapTxHash, isSuccess: xyloNetSwapSuccess, isReverted: xyloNetSwapReverted, error: xyloNetSwapError, simulationError: xyloNetSimulationError, reset: resetXyloNetSwap } = useXyloNetSwap()
+
+  // Unified swap state (route-aware)
+  const isXyloNetRoute = activeQuote?.source === 'xylonet'
+  const isSwapping = isXyloNetRoute ? isXyloNetSwapping : isCocoSwapping
+  const isSwapConfirming = isXyloNetRoute ? isXyloNetSwapConfirming : isCocoSwapConfirming
+  const swapTxHash = isXyloNetRoute ? xyloNetSwapTxHash : cocoSwapTxHash
+  const swapSuccess = isXyloNetRoute ? xyloNetSwapSuccess : cocoSwapSuccess
+  const swapReverted = isXyloNetRoute ? xyloNetSwapReverted : cocoSwapReverted
+  const swapError = isXyloNetRoute ? xyloNetSwapError : cocoSwapError
 
   // Transaction progress tracking (strict sequential)
   const txProgress = useTransactionProgress()
@@ -230,25 +252,27 @@ export function SwapPage() {
     txProgress.clearFlow()
     // Reset approval/swap state for the new direction
     resetApproval()
-    resetSwap()
+    resetCocoSwap()
+    resetXyloNetSwap()
     setSelectedRouteId('coco-usdc-eurc')
-  }, [fromToken, toToken, toAmountDisplay, txProgress, resetApproval, resetSwap])
+  }, [fromToken, toToken, toAmountDisplay, txProgress, resetApproval, resetCocoSwap, resetXyloNetSwap])
 
   // Button state machine
   const buttonState = useMemo(() => {
     if (!isConnected) return { text: 'Connect Wallet', disabled: true, action: 'connect' as const }
     if (isWrongNetwork) return { text: isSwitching ? 'Switching...' : 'Switch to Arc Testnet', disabled: isSwitching, action: 'switch-network' as const }
     if (reservesLoading) return { text: 'Loading...', disabled: true, action: 'loading' as const }
-    if (!hasLiquidity) return { text: 'Pool has no liquidity', disabled: true, action: 'no-liquidity' as const }
+    if (!hasLiquidity && !isXyloNetRoute) return { text: 'Pool has no liquidity', disabled: true, action: 'no-liquidity' as const }
     if (!fromAmount || parseFloat(fromAmount) <= 0) return { text: 'Enter an amount', disabled: true, action: 'enter' as const }
     if (fromBalance !== undefined && fromAmountRaw > fromBalance) return { text: 'Insufficient balance', disabled: true, action: 'insufficient' as const }
     if (!activeQuote) return { text: 'Route unavailable', disabled: true, action: 'route-unavailable' as const }
     if (activeQuote.executionStatus === 'non_executable') return { text: 'Execution coming soon', disabled: true, action: 'route-not-executable' as const }
+    if (xyloNetSimulationError && isXyloNetRoute) return { text: 'XyloNet swap simulation failed', disabled: true, action: 'simulation-failed' as const }
     if (isApproving || isApprovalConfirming) return { text: `Approving ${fromToken.symbol}...`, disabled: true, action: 'approving' as const }
     if (needsApproval) return { text: `Approve ${fromToken.symbol}`, disabled: false, action: 'approve' as const }
-    if (isSwapping || isSwapConfirming) return { text: 'Swapping...', disabled: true, action: 'swapping' as const }
-    return { text: 'Swap', disabled: false, action: 'swap' as const }
-  }, [isConnected, isWrongNetwork, isSwitching, reservesLoading, hasLiquidity, fromAmount, fromBalance, fromAmountRaw, activeQuote, isApproving, isApprovalConfirming, needsApproval, fromToken.symbol, isSwapping, isSwapConfirming])
+    if (isSwapping || isSwapConfirming) return { text: isXyloNetRoute ? 'Swapping via XyloNet...' : 'Swapping...', disabled: true, action: 'swapping' as const }
+    return { text: isXyloNetRoute ? 'Swap via XyloNet' : 'Swap', disabled: false, action: 'swap' as const }
+  }, [isConnected, isWrongNetwork, isSwitching, reservesLoading, hasLiquidity, fromAmount, fromBalance, fromAmountRaw, activeQuote, isApproving, isApprovalConfirming, needsApproval, fromToken.symbol, isSwapping, isSwapConfirming, isXyloNetRoute, xyloNetSimulationError])
 
   const handleButtonClick = () => {
     if (buttonState.action === 'switch-network') {
@@ -261,9 +285,10 @@ export function SwapPage() {
 
     if (buttonState.action === 'approve') {
       // Start flow with approve + swap steps
+      const swapLabel = isXyloNetRoute ? 'Swap via XyloNet' : 'Swap'
       txProgress.startFlow([
         { type: approveType, label: `Approve ${fromToken.symbol}` },
-        { type: 'swap', label: 'Swap' },
+        { type: 'swap', label: swapLabel },
       ])
       txProgress.markWaiting(approveType)
       // Pass onHash callback to capture tx hash immediately
@@ -272,23 +297,44 @@ export function SwapPage() {
       })
     } else if (buttonState.action === 'swap' && address) {
       // Start or continue flow with just swap step
+      const swapLabel = isXyloNetRoute ? 'Swap via XyloNet' : 'Swap'
       if (!txProgress.currentFlow) {
-        txProgress.startFlow([{ type: 'swap', label: 'Swap' }])
+        txProgress.startFlow([{ type: 'swap', label: swapLabel }])
       }
       txProgress.markWaiting('swap')
-      swap(
-        {
-          tokenIn: fromToken,
-          tokenOut: toToken,
-          amountIn: fromAmountRaw,
-          amountOutMin: activeQuote?.minAmountOut ?? minReceivedRaw,
-          to: address,
-          deadline: getDeadlineTimestamp(),
-        },
-        (hash) => {
-          txProgress.markSubmitted('swap', hash)
-        }
-      )
+
+      if (isXyloNetRoute) {
+        // ─── XyloNet route: use XyloNet swap hook ───
+        // SAFETY: never use Coco minAmountOut for XyloNet route
+        xyloNetSwap(
+          {
+            tokenIn: fromToken,
+            tokenOut: toToken,
+            amountIn: fromAmountRaw,
+            minAmountOut: activeQuote?.minAmountOut ?? BigInt(0),
+            to: address,
+            deadline: getDeadlineTimestamp(),
+          },
+          (hash) => {
+            txProgress.markSubmitted('swap', hash)
+          }
+        )
+      } else {
+        // ─── Coco route: use existing Coco swap hook ───
+        cocoSwap(
+          {
+            tokenIn: fromToken,
+            tokenOut: toToken,
+            amountIn: fromAmountRaw,
+            amountOutMin: activeQuote?.minAmountOut ?? minReceivedRaw,
+            to: address,
+            deadline: getDeadlineTimestamp(),
+          },
+          (hash) => {
+            txProgress.markSubmitted('swap', hash)
+          }
+        )
+      }
     }
   }
 
@@ -468,7 +514,7 @@ function QuotesPanel({
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold text-coco-dark-text">Route quotes</h3>
-          <p className="text-[11px] text-coco-dark-muted">Coco route can execute now. External routes are quote-only until execution and approval handling are verified.</p>
+          <p className="text-[11px] text-coco-dark-muted">Compare routes. Both Coco and XyloNet can execute swaps on Arc Testnet.</p>
         </div>
         {isLoading && <span className="text-[11px] text-coco-dark-muted">Refreshing...</span>}
       </div>

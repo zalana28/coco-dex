@@ -8,11 +8,13 @@ import type { RouteAvailabilityStatus, RouteQuote, RouteUnavailableReason } from
 /**
  * XyloNet Router ABI — corrected to match on-chain contract.
  *
- * The router's getAmountOut uses 3 parameters (tokenIn, tokenOut, amountIn).
- * It does NOT take a pool address — the router resolves the pool internally.
- * Previous ABI incorrectly included a leading `pool` address parameter
- * (selector 0xd7176ca9), which caused every quote call to revert.
+ * getAmountOut uses 3 parameters (tokenIn, tokenOut, amountIn).
+ * The router resolves the pool internally for quotes — no pool address needed.
  * Correct selector: 0x4aa06652.
+ *
+ * swap uses 7 parameters (pool, tokenIn, tokenOut, amountIn, minAmountOut, to, deadline).
+ * Unlike getAmountOut, swap requires the explicit pool address.
+ * This matches the XyloNet docs: router.swap(pool, tokenIn, tokenOut, amountIn, minAmountOut, recipient, deadline).
  */
 export const XYLONET_ROUTER_ABI = [
   {
@@ -31,6 +33,7 @@ export const XYLONET_ROUTER_ABI = [
     name: 'swap',
     stateMutability: 'nonpayable',
     inputs: [
+      { name: 'pool', type: 'address' },
       { name: 'tokenIn', type: 'address' },
       { name: 'tokenOut', type: 'address' },
       { name: 'amountIn', type: 'uint256' },
@@ -110,10 +113,12 @@ export function buildXyloNetRouteQuote({
     routePath: [tokenIn.symbol, tokenOut.symbol],
     routerAddress: xylonet.routerAddress,
     poolAddress: xylonet.usdcEurcPoolAddress,
-    isExecutable: false,
+    isExecutable: availabilityStatus === 'available',
     availabilityStatus,
-    executionStatus: 'non_executable',
+    executionStatus: availabilityStatus === 'available' ? 'executable' : 'non_executable',
     unavailableReason,
-    warning: availabilityStatus === 'available' ? 'Execution coming soon' : undefined,
+    warning: availabilityStatus === 'available'
+      ? 'This swap executes through XyloNet router and requires a separate token approval.'
+      : undefined,
   }
 }
