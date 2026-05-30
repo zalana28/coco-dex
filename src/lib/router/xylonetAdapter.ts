@@ -5,13 +5,21 @@ import { formatTokenAmount } from '@/utils/format'
 import { calculateMinimumReceived } from '@/utils/price'
 import type { RouteAvailabilityStatus, RouteQuote, RouteUnavailableReason } from './types'
 
+/**
+ * XyloNet Router ABI — corrected to match on-chain contract.
+ *
+ * The router's getAmountOut uses 3 parameters (tokenIn, tokenOut, amountIn).
+ * It does NOT take a pool address — the router resolves the pool internally.
+ * Previous ABI incorrectly included a leading `pool` address parameter
+ * (selector 0xd7176ca9), which caused every quote call to revert.
+ * Correct selector: 0x4aa06652.
+ */
 export const XYLONET_ROUTER_ABI = [
   {
     type: 'function',
     name: 'getAmountOut',
     stateMutability: 'view',
     inputs: [
-      { name: 'pool', type: 'address' },
       { name: 'tokenIn', type: 'address' },
       { name: 'tokenOut', type: 'address' },
       { name: 'amountIn', type: 'uint256' },
@@ -23,7 +31,6 @@ export const XYLONET_ROUTER_ABI = [
     name: 'swap',
     stateMutability: 'nonpayable',
     inputs: [
-      { name: 'pool', type: 'address' },
       { name: 'tokenIn', type: 'address' },
       { name: 'tokenOut', type: 'address' },
       { name: 'amountIn', type: 'uint256' },
