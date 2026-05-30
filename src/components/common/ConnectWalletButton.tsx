@@ -14,6 +14,7 @@ export function ConnectWalletButton() {
   const { switchChain } = useSwitchChain()
   const [showDropdown, setShowDropdown] = useState(false)
   const [showConnectOptions, setShowConnectOptions] = useState(false)
+  const hasInjectedProvider = typeof window !== 'undefined' && Boolean((window as typeof window & { ethereum?: unknown }).ethereum)
 
   const closeDropdown = useCallback(() => setShowDropdown(false), [])
   const closeConnectOptions = useCallback(() => setShowConnectOptions(false), [])
@@ -89,7 +90,7 @@ export function ConnectWalletButton() {
             <div>
               <h2 className="text-sm font-semibold text-coco-dark-text">Connect wallet</h2>
               <p className="mt-1 text-xs leading-5 text-coco-dark-muted">
-                Open this page in your wallet browser or connect with WalletConnect.
+                Use a wallet browser like MetaMask, Coinbase, or Rabby mobile, or connect with WalletConnect.
               </p>
             </div>
             <button
@@ -107,6 +108,7 @@ export function ConnectWalletButton() {
               <ConnectorButton
                 key={`${connector.id}-${connector.name}`}
                 connector={connector}
+                hasInjectedProvider={hasInjectedProvider}
                 isPending={isPending}
                 onConnect={() => connect({ connector })}
               />
@@ -129,7 +131,10 @@ export function ConnectWalletButton() {
 
           {connectError && (
             <p className="mt-3 rounded-xl border border-coco-red-500/20 bg-coco-red-500/10 px-3 py-2 text-xs leading-5 text-coco-red-500">
-              {connectError.message}
+              Could not connect wallet. Try another wallet option.
+              {import.meta.env.DEV && (
+                <span className="mt-1 block text-coco-red-500/70">{connectError.message}</span>
+              )}
             </p>
           )}
         </div>
@@ -138,10 +143,28 @@ export function ConnectWalletButton() {
   )
 }
 
-function ConnectorButton({ connector, isPending, onConnect }: { connector: Connector; isPending: boolean; onConnect: () => void }) {
+function ConnectorButton({
+  connector,
+  hasInjectedProvider,
+  isPending,
+  onConnect,
+}: {
+  connector: Connector
+  hasInjectedProvider: boolean
+  isPending: boolean
+  onConnect: () => void
+}) {
   const availability = connector as Connector & { ready?: boolean }
-  const isUnavailable = availability.ready === false
+  const isInjected = connector.id.toLowerCase().includes('injected')
+  const isUnavailable = availability.ready === false || (isInjected && !hasInjectedProvider)
   const isWalletConnect = connector.id.toLowerCase().includes('walletconnect')
+  const statusLabel = isInjected && !hasInjectedProvider
+    ? 'Use wallet browser'
+    : isUnavailable
+      ? 'Unavailable'
+      : isPending
+        ? 'Connecting...'
+        : 'Connect'
 
   return (
     <button
@@ -152,10 +175,15 @@ function ConnectorButton({ connector, isPending, onConnect }: { connector: Conne
     >
       <span className="flex items-center gap-2">
         {isWalletConnect ? <WalletCards className="h-4 w-4 text-coco-teal-400" /> : <Smartphone className="h-4 w-4 text-coco-teal-400" />}
-        {connector.name}
+        <span className="flex flex-col">
+          <span>{connector.name}</span>
+          {isInjected && !hasInjectedProvider && (
+            <span className="text-[11px] leading-4 text-coco-dark-muted">Open in a wallet browser</span>
+          )}
+        </span>
       </span>
       <span className="text-[11px] text-coco-dark-muted">
-        {isUnavailable ? 'Unavailable' : isPending ? 'Connecting...' : 'Connect'}
+        {statusLabel}
       </span>
     </button>
   )
