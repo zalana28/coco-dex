@@ -163,6 +163,10 @@ export function SwapPage() {
   const swapReverted = isXyloNetRoute ? xyloNetSwapReverted : cocoSwapReverted
   const swapError = isXyloNetRoute ? xyloNetSwapError : cocoSwapError
 
+  useEffect(() => {
+    clearSimulationError()
+  }, [clearSimulationError, selectedRouteId, fromAmountRaw, activeQuote?.minAmountOut, fromToken.address, toToken.address])
+
   // Transaction progress tracking (strict sequential)
   const txProgress = useTransactionProgress()
   const { checkReceipt } = useCheckReceipt()
@@ -395,7 +399,7 @@ export function SwapPage() {
             minAmountOut: activeQuote.minAmountOut.toString(),
             router: activeQuote.routerAddress,
             recipient: address,
-            deadline: getDeadlineTimestamp(),
+            deadlineMinutes: deadline,
             allowance: allowance.toString(),
             requiredAllowance: fromAmountRaw.toString(),
             allowanceSufficient: allowance >= fromAmountRaw,
@@ -409,17 +413,18 @@ export function SwapPage() {
             tokenOut: toToken,
             amountIn: fromAmountRaw,
             minAmountOut: activeQuote.minAmountOut,
+            account: address,
             to: address,
-            deadline: getDeadlineTimestamp(),
+            deadlineMinutes: deadline,
           },
           (hash) => {
             txProgress.markSubmitted('swap', hash)
           }
         ).then((result) => {
-          if (result === 'SIMULATION_FAILED') {
-            txProgress.markFailed('swap', 'XyloNet swap simulation failed.')
-          } else if (result === 'WRONG_NETWORK') {
-            txProgress.markFailed('swap', 'Wrong network')
+          if (result?.status === 'SIMULATION_FAILED') {
+            txProgress.markFailed('swap', result.reason)
+          } else if (result?.status === 'WRONG_NETWORK') {
+            txProgress.markFailed('swap', result.reason)
           }
         })
       } else {
