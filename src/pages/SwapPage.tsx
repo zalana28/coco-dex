@@ -413,6 +413,7 @@ export function SwapPage() {
             tokenOut: toToken,
             amountIn: fromAmountRaw,
             minAmountOut: activeQuote.minAmountOut,
+            slippageBps,
             account: address,
             to: address,
             deadlineMinutes: deadline,

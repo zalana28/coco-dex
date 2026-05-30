@@ -28,7 +28,7 @@ const DEFAULT_DEADLINE_MINUTES = 5
  * IMPORTANT: The caller MUST ensure token allowance is sufficient before calling swap().
  *
  * XyloNet swap signature:
- *   swap(address pool, address tokenIn, address tokenOut, uint256 amountIn, uint256 minAmountOut, address to, uint256 deadline)
+ *   swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline)
  *
  * All amounts use ERC-20 decimals (6 for USDC/EURC on Arc).
  */
@@ -36,7 +36,12 @@ export type XyloNetSwapParams = {
   tokenIn: Token
   tokenOut: Token
   amountIn: bigint
+  /**
+   * UI quote min-out, used only for dev diagnostics. Execution always refreshes
+   * the XyloNet quote immediately before simulation/write.
+   */
   minAmountOut: bigint
+  slippageBps: number
   account: `0x${string}`
   to: `0x${string}`
   /**
@@ -158,7 +163,7 @@ export function useXyloNetSwap() {
       return { status: 'WRONG_NETWORK', reason: 'Wrong network' }
     }
 
-    const { tokenIn, tokenOut, amountIn, minAmountOut, account, to, deadlineMinutes } = params
+    const { tokenIn, tokenOut, amountIn, minAmountOut: uiMinAmountOut, slippageBps, account, to, deadlineMinutes } = params
 
     setSimulationError(undefined)
 
@@ -174,13 +179,27 @@ export function useXyloNetSwap() {
     const latestBlock = await publicClient.getBlock({ blockTag: 'latest' })
     const latestBlockTimestamp = latestBlock.timestamp
     const deadlineSeconds = latestBlockTimestamp + BigInt(Math.ceil(safeDeadlineMinutes * 60))
+    const path = [tokenIn.address as `0x${string}`, tokenOut.address as `0x${string}`] as const
+
+    const freshAmountOut = await publicClient.readContract({
+      address: XYLONET_ROUTER_ADDRESS,
+      abi: XYLONET_ROUTER_ABI,
+      functionName: 'getAmountOut',
+      args: [path[0], path[1], amountIn],
+    })
+    const safeSlippageBps = BigInt(Math.min(10_000, Math.max(0, Math.trunc(slippageBps))))
+    const freshMinAmountOut = freshAmountOut - (freshAmountOut * safeSlippageBps) / 10_000n
+
+    if (freshAmountOut <= 0n || freshMinAmountOut < 0n) {
+      const reason = 'XyloNet simulation failed: fresh quote returned no output'
+      setSimulationError(reason)
+      return { status: 'SIMULATION_FAILED', reason }
+    }
 
     const swapArgs = [
-      XYLONET_USDC_EURC_POOL_ADDRESS,
-      tokenIn.address as `0x${string}`,
-      tokenOut.address as `0x${string}`,
       amountIn,
-      minAmountOut,
+      freshMinAmountOut,
+      path,
       to,
       deadlineSeconds,
     ] as const
@@ -193,10 +212,12 @@ export function useXyloNetSwap() {
         deadlineMinutes: safeDeadlineMinutes,
         deadlineSeconds: deadlineSeconds.toString(),
         pool: XYLONET_USDC_EURC_POOL_ADDRESS,
-        tokenIn: tokenIn.address,
-        tokenOut: tokenOut.address,
+        path,
         amountIn: amountIn.toString(),
-        minAmountOut: minAmountOut.toString(),
+        uiMinAmountOut: uiMinAmountOut.toString(),
+        freshAmountOut: freshAmountOut.toString(),
+        freshMinAmountOut: freshMinAmountOut.toString(),
+        slippageBps,
         account,
         recipient: to,
       })
@@ -207,7 +228,7 @@ export function useXyloNetSwap() {
       await publicClient.simulateContract({
         address: XYLONET_ROUTER_ADDRESS,
         abi: XYLONET_ROUTER_ABI,
-        functionName: 'swap',
+        functionName: 'swapExactTokensForTokens',
         args: swapArgs,
         account,
         chain: arcTestnet,
@@ -235,7 +256,7 @@ export function useXyloNetSwap() {
       {
         address: XYLONET_ROUTER_ADDRESS,
         abi: XYLONET_ROUTER_ABI,
-        functionName: 'swap',
+        functionName: 'swapExactTokensForTokens',
         args: swapArgs,
         chainId: ARC_CHAIN_ID,
       },

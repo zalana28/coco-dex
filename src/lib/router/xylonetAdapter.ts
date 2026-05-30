@@ -12,9 +12,10 @@ import type { RouteAvailabilityStatus, RouteQuote, RouteUnavailableReason } from
  * The router resolves the pool internally for quotes — no pool address needed.
  * Correct selector: 0x4aa06652.
  *
- * swap uses 7 parameters (pool, tokenIn, tokenOut, amountIn, minAmountOut, to, deadline).
- * Unlike getAmountOut, swap requires the explicit pool address.
- * This matches the XyloNet docs: router.swap(pool, tokenIn, tokenOut, amountIn, minAmountOut, recipient, deadline).
+ * The deployed router does not expose the docs-stated
+ * swap(address,address,address,uint256,uint256,address,uint256) selector.
+ * Its bytecode exposes the standard swapExactTokensForTokens selector (0x38ed1739),
+ * which succeeds in simulation with path [tokenIn, tokenOut].
  */
 export const XYLONET_ROUTER_ABI = [
   {
@@ -30,18 +31,16 @@ export const XYLONET_ROUTER_ABI = [
   },
   {
     type: 'function',
-    name: 'swap',
+    name: 'swapExactTokensForTokens',
     stateMutability: 'nonpayable',
     inputs: [
-      { name: 'pool', type: 'address' },
-      { name: 'tokenIn', type: 'address' },
-      { name: 'tokenOut', type: 'address' },
       { name: 'amountIn', type: 'uint256' },
-      { name: 'minAmountOut', type: 'uint256' },
+      { name: 'amountOutMin', type: 'uint256' },
+      { name: 'path', type: 'address[]' },
       { name: 'to', type: 'address' },
       { name: 'deadline', type: 'uint256' },
     ],
-    outputs: [{ name: '', type: 'uint256' }],
+    outputs: [{ name: 'amounts', type: 'uint256[]' }],
   },
 ] as const
 
