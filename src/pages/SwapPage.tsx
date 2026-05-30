@@ -451,16 +451,19 @@ export function SwapPage() {
   const formattedToBalance = toBalance !== undefined ? formatTokenAmount(toBalance, toToken.decimals) : '—'
 
   return (
-    <div className="pt-28 sm:pt-24 pb-12 px-3 sm:px-4 flex flex-col items-center">
-      <div className="fixed inset-0 bg-gradient-to-b from-coco-green-500/3 via-transparent to-transparent pointer-events-none" />
+    <div className="page-fade px-3 pb-12 pt-28 sm:px-4 sm:pt-24 flex flex-col items-center">
+      <div className="fixed inset-0 bg-[radial-gradient(circle_at_50%_6rem,rgba(59,130,246,0.18),transparent_34%),linear-gradient(180deg,rgba(2,6,23,0),rgba(2,6,23,0.86))] pointer-events-none" />
 
-      <Card className="relative w-full max-w-[480px] p-4 sm:p-6">
+      <Card className="relative w-full max-w-[480px] p-4 sm:p-6 ring-1 ring-coco-green-500/5">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold text-coco-dark-text">Swap</h2>
+          <div>
+            <p className="text-xs uppercase tracking-[0.22em] text-coco-teal-400">Compare routes before you swap</p>
+            <h2 className="mt-1 text-xl font-semibold text-coco-dark-text">Swap</h2>
+          </div>
           <button
             onClick={() => setShowSettings(!showSettings)}
-            className="p-2 rounded-lg hover:bg-coco-dark-bg text-coco-dark-muted hover:text-coco-dark-text transition-colors"
+            className="p-2 rounded-xl border border-coco-dark-border bg-coco-dark-bg/60 text-coco-dark-muted transition-colors hover:border-coco-green-500/40 hover:text-coco-dark-text"
           >
             <Settings className="h-5 w-5" />
           </button>
@@ -473,7 +476,7 @@ export function SwapPage() {
 
         {/* Wrong network banner */}
         {isWrongNetwork && (
-          <div className="mb-4 flex items-start gap-2.5 rounded-xl bg-coco-red-500/10 border border-coco-red-500/20 p-3.5">
+          <div className="mb-4 flex items-start gap-2.5 rounded-xl bg-coco-red-500/10 border border-coco-red-500/20 p-3.5 shadow-coco-1">
             <Wifi className="h-4 w-4 text-coco-red-500 shrink-0 mt-0.5" />
             <p className="text-xs text-coco-red-500">Wrong network. Switch to Arc Testnet to use Coco DEX.</p>
           </div>
@@ -481,7 +484,7 @@ export function SwapPage() {
 
         {/* No liquidity banner */}
         {!isWrongNetwork && !reservesLoading && !hasLiquidity && (
-          <div className="mb-4 flex items-start gap-2.5 rounded-xl bg-coco-amber-500/10 border border-coco-amber-500/20 p-3.5">
+          <div className="mb-4 flex items-start gap-2.5 rounded-xl bg-coco-amber-500/10 border border-coco-amber-500/20 p-3.5 shadow-coco-1">
             <AlertTriangle className="h-4 w-4 text-coco-amber-500 shrink-0 mt-0.5" />
             <p className="text-xs text-coco-amber-500">This pool has no liquidity yet. Add liquidity before swapping.</p>
           </div>
@@ -501,7 +504,7 @@ export function SwapPage() {
         <div className="flex justify-center -my-2 relative z-10">
           <button
             onClick={handleFlip}
-            className="p-2 rounded-xl bg-coco-dark-surface border border-coco-dark-border hover:border-coco-green-500/50 text-coco-dark-muted hover:text-coco-green-500 transition-all hover:rotate-180 duration-300"
+            className="p-2 rounded-xl bg-coco-dark-surface/95 border border-coco-dark-border hover:border-coco-green-500/50 text-coco-dark-muted hover:text-coco-teal-400 transition-all hover:rotate-180 duration-300 shadow-coco-1"
             title="Switch tokens"
           >
             <ArrowDownUp className="h-4 w-4" />
@@ -520,7 +523,7 @@ export function SwapPage() {
 
         {/* Price Info — shown when any route has a valid quote */}
         {fromAmount && parseFloat(fromAmount) > 0 && toAmountRaw > BigInt(0) && (
-          <div className="mt-4 rounded-xl bg-coco-dark-bg border border-coco-dark-border p-3.5 space-y-2">
+          <div className="mt-4 rounded-xl bg-coco-dark-bg/75 border border-coco-dark-border p-3.5 space-y-2 shadow-inner">
             <PriceRow label="Rate" value={`1 ${fromToken.symbol} = ${rate?.toFixed(6) ?? '—'} ${toToken.symbol}`} />
             {priceImpact > 0 && (
               <PriceRow
@@ -542,7 +545,7 @@ export function SwapPage() {
           className={`mt-6 w-full py-3.5 rounded-xl font-medium text-base transition-all ${
             buttonState.disabled
               ? 'bg-coco-dark-border text-coco-dark-muted cursor-not-allowed'
-              : 'bg-coco-green-500 text-white hover:bg-coco-green-600 active:scale-[0.99] shadow-lg shadow-coco-green-500/20'
+              : 'bg-coco-green-500 text-white hover:bg-coco-green-600 active:scale-[0.99] shadow-lg shadow-coco-green-500/25 hover:shadow-coco-green-500/35 hover:-translate-y-0.5'
           }`}
         >
           {buttonState.text}
@@ -577,7 +580,7 @@ function TokenInput({
   label: string; token: Token; amount: string; onAmountChange: (v: string) => void; balance: string; readOnly?: boolean; onMax?: () => void
 }) {
   return (
-    <div className="rounded-xl bg-coco-dark-bg border border-coco-dark-border p-4 mt-2">
+    <div className="rounded-xl bg-coco-dark-bg/80 border border-coco-dark-border p-4 mt-2 transition-colors focus-within:border-coco-green-500/45">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs text-coco-dark-muted">{label}</span>
         <button onClick={onMax} className="text-xs text-coco-dark-muted hover:text-coco-green-500 transition-colors">
@@ -585,7 +588,7 @@ function TokenInput({
         </button>
       </div>
       <div className="flex items-center gap-3">
-        <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-coco-dark-surface border border-coco-dark-border hover:border-coco-green-500/50 transition-colors shrink-0">
+        <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-coco-dark-surface/90 border border-coco-dark-border hover:border-coco-green-500/50 transition-colors shrink-0">
           <TokenIcon symbol={token.symbol} color={token.logoColor} size="sm" />
           <span className="text-sm font-medium text-coco-dark-text">{token.symbol}</span>
           <ChevronDown className="h-3.5 w-3.5 text-coco-dark-muted" />
@@ -621,7 +624,7 @@ function QuotesPanel({
   onSelectQuote: (quoteId: string) => void
 }) {
   return (
-    <div className="mt-4 rounded-xl bg-coco-dark-bg border border-coco-dark-border p-3.5 space-y-3">
+    <div className="mt-4 rounded-xl bg-coco-dark-bg/75 border border-coco-dark-border p-3.5 space-y-3">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold text-coco-dark-text">Route quotes</h3>
@@ -662,9 +665,9 @@ function QuotesPanel({
               onClick={() => {
                 if (isAvailable) onSelectQuote(quote.id)
               }}
-              className={`w-full rounded-lg border p-3 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-coco-green-500/50 ${
+              className={`w-full rounded-lg border p-3 text-left transition-all focus:outline-none focus:ring-2 focus:ring-coco-green-500/50 ${
                 isSelected
-                  ? 'border-coco-green-500/60 bg-coco-green-500/10'
+                  ? 'border-coco-green-500/60 bg-coco-green-500/10 shadow-lg shadow-coco-green-500/10'
                   : isUnavailable
                     ? 'border-coco-red-500/20 bg-coco-red-500/5'
                     : isLoadingQuote
@@ -672,8 +675,8 @@ function QuotesPanel({
                       : isQuoteOnly
                         ? 'border-coco-amber-500/25 bg-coco-amber-500/5 hover:border-coco-amber-500/45'
                         : isBest
-                    ? 'border-coco-green-500/30 bg-coco-dark-surface'
-                    : 'border-coco-dark-border bg-coco-dark-surface hover:border-coco-green-500/30'
+                    ? 'border-coco-green-500/30 bg-coco-dark-surface/85'
+                    : 'border-coco-dark-border bg-coco-dark-surface/85 hover:-translate-y-0.5 hover:border-coco-green-500/30'
               }`}
             >
               <div className="flex items-start justify-between gap-3">
@@ -734,7 +737,7 @@ function QuotesPanel({
 function SwapSettings({ slippage, setSlippage, deadline, setDeadline, approvalMode, setApprovalMode }: { slippage: number; setSlippage: (v: number) => string | null; deadline: number; setDeadline: (v: number) => string | null; approvalMode: ApprovalMode; setApprovalMode: (v: ApprovalMode) => void }) {
   const presets = [0.1, 0.5, 1.0]
   return (
-    <div className="mb-4 rounded-xl bg-coco-dark-bg border border-coco-dark-border p-4 space-y-4">
+    <div className="mb-4 rounded-xl bg-coco-dark-bg/80 border border-coco-dark-border p-4 space-y-4 shadow-inner">
       <div>
         <div className="flex items-center gap-1.5 mb-3">
           <Info className="h-3.5 w-3.5 text-coco-dark-muted" />

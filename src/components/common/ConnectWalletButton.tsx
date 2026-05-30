@@ -20,7 +20,7 @@ export function ConnectWalletButton() {
 
   if (isConnecting) {
     return (
-      <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-coco-dark-surface border border-coco-dark-border text-sm text-coco-dark-muted">
+      <button className="flex items-center gap-2 rounded-xl border border-coco-dark-border bg-coco-dark-surface/80 px-4 py-2 text-sm text-coco-dark-muted shadow-coco-1 backdrop-blur-xl">
         <div className="h-4 w-4 border-2 border-coco-green-500 border-t-transparent rounded-full animate-spin" />
         Connecting...
       </button>
@@ -31,7 +31,7 @@ export function ConnectWalletButton() {
     return (
       <button
         onClick={() => switchChain({ chainId: arcTestnet.id })}
-        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-coco-amber-500/10 border border-coco-amber-500/30 text-sm text-coco-amber-500 hover:bg-coco-amber-500/20 transition-colors"
+        className="flex items-center gap-2 rounded-xl border border-coco-amber-500/30 bg-coco-amber-500/10 px-4 py-2 text-sm font-medium text-coco-amber-500 shadow-coco-1 transition-all hover:bg-coco-amber-500/20"
       >
         <AlertTriangle className="h-4 w-4" />
         Switch Network
@@ -44,7 +44,7 @@ export function ConnectWalletButton() {
       <div className="relative" ref={dropdownRef}>
         <button
           onClick={() => setShowDropdown(!showDropdown)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-coco-dark-surface border border-coco-dark-border text-sm text-coco-dark-text hover:border-coco-green-500/50 transition-colors"
+          className="flex items-center gap-2 rounded-xl border border-coco-dark-border bg-coco-dark-surface/80 px-4 py-2 text-sm text-coco-dark-text shadow-coco-1 backdrop-blur-xl transition-all hover:border-coco-green-500/50 hover:bg-coco-dark-bg/80"
         >
           {isWrongNetwork ? (
             <div className="h-2 w-2 rounded-full bg-coco-red-500" />
@@ -55,7 +55,7 @@ export function ConnectWalletButton() {
         </button>
 
         {showDropdown && (
-          <div className="absolute right-0 top-full mt-2 w-48 rounded-xl bg-coco-dark-surface border border-coco-dark-border shadow-coco-2 py-1">
+          <div className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-coco-dark-border bg-coco-dark-surface/95 py-1 shadow-coco-2 backdrop-blur-xl">
             <div className="px-4 py-2 border-b border-coco-dark-border">
               <p className="text-[10px] text-coco-dark-muted uppercase tracking-wider">Network</p>
               <p className={`text-xs font-medium mt-0.5 ${isWrongNetwork ? 'text-coco-red-500' : 'text-coco-green-500'}`}>
@@ -78,7 +78,7 @@ export function ConnectWalletButton() {
   return (
     <button
       onClick={() => connect({ connector: connectors[0]! })}
-      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-coco-green-500 text-white text-sm font-medium hover:bg-coco-green-600 active:scale-[0.98] transition-all"
+      className="flex items-center gap-2 rounded-xl bg-coco-green-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-coco-green-500/25 transition-all hover:-translate-y-0.5 hover:bg-coco-green-600 hover:shadow-coco-green-500/35 active:scale-[0.98]"
     >
       <Wallet className="h-4 w-4" />
       Connect Wallet

@@ -1,32 +1,34 @@
 @import "tailwindcss";
 
 @theme {
-  /* Coco Green */
-  --color-coco-green-50: #f0fdf4;
-  --color-coco-green-100: #dcfce7;
-  --color-coco-green-200: #bbf7d0;
-  --color-coco-green-500: #22c55e;
-  --color-coco-green-600: #16a34a;
-  --color-coco-green-900: #14532d;
+  /* Coco Blue */
+  --color-coco-green-50: #eff6ff;
+  --color-coco-green-100: #dbeafe;
+  --color-coco-green-200: #bfdbfe;
+  --color-coco-green-500: #3b82f6;
+  --color-coco-green-600: #2563eb;
+  --color-coco-green-900: #1e3a8a;
 
-  /* Coco Sand */
-  --color-coco-sand-50: #fefdfb;
-  --color-coco-sand-100: #fdf9f3;
-  --color-coco-sand-200: #f5efe6;
-  --color-coco-sand-300: #e8dfd3;
-  --color-coco-sand-700: #6b5e50;
-  --color-coco-sand-900: #3d3530;
+  /* Legacy neutral aliases mapped to slate */
+  --color-coco-sand-50: #f8fafc;
+  --color-coco-sand-100: #f1f5f9;
+  --color-coco-sand-200: #e2e8f0;
+  --color-coco-sand-300: #cbd5e1;
+  --color-coco-sand-700: #475569;
+  --color-coco-sand-900: #0f172a;
 
-  /* Coco Teal */
-  --color-coco-teal-400: #2dd4bf;
-  --color-coco-teal-600: #0d9488;
+  /* Coco Cyan */
+  --color-coco-teal-400: #22d3ee;
+  --color-coco-teal-600: #0891b2;
+  --color-coco-violet-500: #8b5cf6;
 
   /* Dark Mode */
-  --color-coco-dark-bg: #1a1814;
-  --color-coco-dark-surface: #252119;
-  --color-coco-dark-border: #3d3530;
-  --color-coco-dark-text: #fdf9f3;
-  --color-coco-dark-muted: #a89b8c;
+  --color-coco-dark-bg: #020617;
+  --color-coco-dark-surface: #07111f;
+  --color-coco-dark-border: rgba(148, 163, 184, 0.14);
+  --color-coco-dark-text: #f8fafc;
+  --color-coco-dark-secondary: #cbd5e1;
+  --color-coco-dark-muted: #94a3b8;
 
   /* Semantic */
   --color-coco-red-500: #ef4444;
@@ -37,9 +39,27 @@
   --font-mono: 'JetBrains Mono', monospace;
 
   /* Shadows */
-  --shadow-coco-1: 0 1px 3px rgba(61, 53, 48, 0.04), 0 1px 2px rgba(61, 53, 48, 0.06);
-  --shadow-coco-2: 0 4px 6px rgba(61, 53, 48, 0.04), 0 2px 4px rgba(61, 53, 48, 0.06);
-  --shadow-coco-3: 0 20px 25px rgba(61, 53, 48, 0.08), 0 8px 10px rgba(61, 53, 48, 0.04);
+  --shadow-coco-1: 0 1px 0 rgba(148, 163, 184, 0.08), 0 18px 60px rgba(2, 6, 23, 0.28);
+  --shadow-coco-2: 0 18px 70px rgba(2, 6, 23, 0.36), 0 0 28px rgba(59, 130, 246, 0.08);
+  --shadow-coco-3: 0 24px 90px rgba(2, 6, 23, 0.48), 0 0 44px rgba(34, 211, 238, 0.1);
+}
+
+html {
+  background: #020617;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 16% 8%, rgba(59, 130, 246, 0.22), transparent 30rem),
+    radial-gradient(circle at 84% 12%, rgba(34, 211, 238, 0.16), transparent 28rem),
+    linear-gradient(135deg, #020617 0%, #07111f 48%, #0b1b33 100%);
+  color: #f8fafc;
+}
+
+::selection {
+  background: rgba(59, 130, 246, 0.36);
+  color: #f8fafc;
 }
 
 /* Scrollbar */
@@ -74,4 +94,19 @@ html, body {
 #root {
   min-width: 0;
   overflow-x: hidden;
+}
+
+.page-fade {
+  animation: page-fade 420ms ease-out both;
+}
+
+@keyframes page-fade {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

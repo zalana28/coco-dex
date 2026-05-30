@@ -36,26 +36,29 @@ export function RemoveLiquidityPage() {
   }
 
   return (
-    <div className="pt-28 sm:pt-24 pb-12 px-3 sm:px-4 flex flex-col items-center">
+    <div className="page-fade pt-28 sm:pt-24 pb-12 px-3 sm:px-4 flex flex-col items-center">
       <Card className="relative w-full max-w-[480px] p-4 sm:p-6">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
-          <Link to="/pools" className="p-1.5 rounded-lg hover:bg-coco-dark-bg text-coco-dark-muted hover:text-coco-dark-text transition-colors">
+          <Link to="/pools" className="p-1.5 rounded-lg border border-transparent hover:border-coco-dark-border hover:bg-coco-dark-bg text-coco-dark-muted hover:text-coco-dark-text transition-colors">
             <ArrowLeft className="h-5 w-5" />
           </Link>
-          <h2 className="text-xl font-semibold text-coco-dark-text">Remove Liquidity</h2>
+          <div>
+            <p className="text-xs uppercase tracking-[0.22em] text-coco-teal-400">LP position controls</p>
+            <h2 className="mt-1 text-xl font-semibold text-coco-dark-text">Remove Liquidity</h2>
+          </div>
         </div>
 
         {/* Wrong network banner */}
         {isWrongNetwork && (
-          <div className="mb-4 flex items-start gap-2.5 rounded-xl bg-coco-red-500/10 border border-coco-red-500/20 p-3.5">
+          <div className="mb-4 flex items-start gap-2.5 rounded-xl bg-coco-red-500/10 border border-coco-red-500/20 p-3.5 shadow-coco-1">
             <Wifi className="h-4 w-4 text-coco-red-500 shrink-0 mt-0.5" />
             <p className="text-xs text-coco-red-500">Wrong network. Switch to Arc Testnet to use Coco DEX.</p>
           </div>
         )}
 
         {/* Amount */}
-        <div className="rounded-xl bg-coco-dark-bg border border-coco-dark-border p-5">
+        <div className="rounded-xl bg-coco-dark-bg/80 border border-coco-dark-border p-5 transition-colors focus-within:border-coco-green-500/45">
           <p className="text-sm text-coco-dark-muted mb-3">Amount to remove</p>
           <p className="text-4xl font-bold font-mono text-coco-dark-text mb-4">{percentage}%</p>
 
@@ -78,7 +81,7 @@ export function RemoveLiquidityPage() {
                 className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
                   percentage === val
                     ? 'bg-coco-green-500/10 text-coco-green-500 border border-coco-green-500/30'
-                    : 'bg-coco-dark-surface border border-coco-dark-border text-coco-dark-muted hover:text-coco-dark-text'
+                    : 'bg-coco-dark-surface/85 border border-coco-dark-border text-coco-dark-muted hover:text-coco-dark-text'
                 }`}
               >
                 {val}%
@@ -93,7 +96,7 @@ export function RemoveLiquidityPage() {
         </div>
 
         {/* You Will Receive */}
-        <div className="rounded-xl bg-coco-dark-bg border border-coco-dark-border p-5">
+        <div className="rounded-xl bg-coco-dark-bg/80 border border-coco-dark-border p-5">
           <p className="text-sm text-coco-dark-muted mb-3">You will receive</p>
 
           <div className="space-y-3">
