@@ -51,10 +51,10 @@ export function SwapPage() {
     return parseTokenAmount(fromAmount, fromToken.decimals)
   }, [fromAmount, fromToken.decimals])
 
-  // Compute output from live reserves — direction-aware
-  const { toAmountRaw, toAmountDisplay, priceImpact, minReceivedRaw, minReceivedDisplay, rate } = useMemo(() => {
+  // Compute Coco output from live reserves — direction-aware (used as fallback for Coco route)
+  const { cocoAmountRaw, cocoPriceImpact, cocoMinReceivedRaw, cocoRate } = useMemo(() => {
     if (!hasLiquidity || fromAmountRaw <= BigInt(0) || !reserveUsdc || !reserveEurc) {
-      return { toAmountRaw: BigInt(0), toAmountDisplay: '', priceImpact: 0, minReceivedRaw: BigInt(0), minReceivedDisplay: '', rate: undefined }
+      return { cocoAmountRaw: BigInt(0), cocoPriceImpact: 0, cocoMinReceivedRaw: BigInt(0), cocoRate: undefined }
     }
 
     // Direction-aware reserves: which is the input reserve, which is output
@@ -70,14 +70,12 @@ export function SwapPage() {
     const computedRate = rIn > BigInt(0) ? Number(rOut) / Number(rIn) : undefined
 
     return {
-      toAmountRaw: out,
-      toAmountDisplay: formatTokenAmount(out, toToken.decimals),
-      priceImpact: impact,
-      minReceivedRaw: minRec,
-      minReceivedDisplay: formatTokenAmount(minRec, toToken.decimals),
-      rate: computedRate,
+      cocoAmountRaw: out,
+      cocoPriceImpact: impact,
+      cocoMinReceivedRaw: minRec,
+      cocoRate: computedRate,
     }
-  }, [hasLiquidity, fromAmountRaw, reserveUsdc, reserveEurc, fromToken, toToken, slippageBps])
+  }, [hasLiquidity, fromAmountRaw, reserveUsdc, reserveEurc, fromToken, slippageBps])
 
 
   const { quotes, bestQuote, selectedQuote, isLoading: quotesLoading, comingSoonSources } = useAggregatedQuotes({
@@ -93,6 +91,47 @@ export function SwapPage() {
     const quote = quotes.find((candidate) => candidate.id === selectedRouteId)
     return quote?.availabilityStatus === 'available' ? quote : selectedQuote
   }, [quotes, selectedRouteId, selectedQuote])
+
+  // ─── Route-aware display values ───
+  // When a route is selected, all displayed swap details come from activeQuote.
+  // This ensures XyloNet quote values are shown when XyloNet is selected,
+  // and Coco quote values are shown when Coco is selected.
+  const { toAmountRaw, toAmountDisplay, priceImpact, minReceivedRaw, minReceivedDisplay, rate, displayRoutePath, displayRouteSource } = useMemo(() => {
+    // If we have an active quote with a valid output, use it as the source of truth
+    if (activeQuote && activeQuote.amountOut > BigInt(0)) {
+      const amountOut = activeQuote.amountOut
+      const minOut = activeQuote.minAmountOut
+      // Compute rate from the quote: amountOut / amountIn (both in 6-decimal token units)
+      const computedRate = fromAmountRaw > BigInt(0)
+        ? Number(amountOut) / Number(fromAmountRaw)
+        : undefined
+      // Price impact: only compute for Coco where we have reserves
+      const impact = activeQuote.source === 'coco' ? cocoPriceImpact : 0
+
+      return {
+        toAmountRaw: amountOut,
+        toAmountDisplay: activeQuote.amountOutFormatted,
+        priceImpact: impact,
+        minReceivedRaw: minOut,
+        minReceivedDisplay: formatTokenAmount(minOut, toToken.decimals),
+        rate: computedRate,
+        displayRoutePath: activeQuote.routePath.join(' → '),
+        displayRouteSource: activeQuote.source === 'xylonet' ? 'XyloNet' : 'Coco',
+      }
+    }
+
+    // Fallback: use Coco reserve-computed values
+    return {
+      toAmountRaw: cocoAmountRaw,
+      toAmountDisplay: cocoAmountRaw > BigInt(0) ? formatTokenAmount(cocoAmountRaw, toToken.decimals) : '',
+      priceImpact: cocoPriceImpact,
+      minReceivedRaw: cocoMinReceivedRaw,
+      minReceivedDisplay: cocoMinReceivedRaw > BigInt(0) ? formatTokenAmount(cocoMinReceivedRaw, toToken.decimals) : '',
+      rate: cocoRate,
+      displayRoutePath: `${fromToken.symbol} → ${toToken.symbol}`,
+      displayRouteSource: 'Coco',
+    }
+  }, [activeQuote, fromAmountRaw, cocoAmountRaw, cocoPriceImpact, cocoMinReceivedRaw, cocoRate, fromToken, toToken])
 
   // ─── Route-aware approval spender ───
   // Coco route → approve Coco router. XyloNet route → approve XyloNet router.
@@ -201,8 +240,11 @@ export function SwapPage() {
     if (!txProgress.currentFlow || !swapReverted) return
     const step = txProgress.currentFlow.steps.find((s) => s.type === 'swap')
     if (!step || step.status === 'success' || step.status === 'idle') return
-    txProgress.markFailed('swap', 'Transaction reverted')
-  }, [swapReverted, txProgress])
+    const revertMsg = isXyloNetRoute
+      ? 'XyloNet swap reverted. Check min received, approval, or pool state.'
+      : 'Transaction reverted'
+    txProgress.markFailed('swap', revertMsg)
+  }, [swapReverted, txProgress, isXyloNetRoute])
 
   // When swap errors
   useEffect(() => {
@@ -247,7 +289,9 @@ export function SwapPage() {
     setFromToken(toToken)
     setToToken(fromToken)
     // Move the computed output to the input field (swap amounts)
-    setFromAmount(toAmountDisplay || '')
+    // Use Coco amount for the flip since it's the baseline reserve output
+    const flipDisplay = cocoAmountRaw > BigInt(0) ? formatTokenAmount(cocoAmountRaw, toToken.decimals) : ''
+    setFromAmount(flipDisplay)
     // Clear any stale transaction progress from previous direction
     txProgress.clearFlow()
     // Reset approval/swap state for the new direction
@@ -255,7 +299,7 @@ export function SwapPage() {
     resetCocoSwap()
     resetXyloNetSwap()
     setSelectedRouteId('coco-usdc-eurc')
-  }, [fromToken, toToken, toAmountDisplay, txProgress, resetApproval, resetCocoSwap, resetXyloNetSwap])
+  }, [fromToken, toToken, cocoAmountRaw, txProgress, resetApproval, resetCocoSwap, resetXyloNetSwap])
 
   // Button state machine
   const buttonState = useMemo(() => {
@@ -304,21 +348,65 @@ export function SwapPage() {
       txProgress.markWaiting('swap')
 
       if (isXyloNetRoute) {
-        // ─── XyloNet route: use XyloNet swap hook ───
+        // ─── XyloNet route: sanity checks before execution ───
+        if (!activeQuote || activeQuote.source !== 'xylonet') {
+          console.warn('[SwapPage] BLOCKED: activeQuote is not XyloNet')
+          txProgress.markFailed('swap', 'Route mismatch — expected XyloNet')
+          return
+        }
+        if (activeQuote.amountOut <= BigInt(0) || activeQuote.minAmountOut <= BigInt(0)) {
+          console.warn('[SwapPage] BLOCKED: XyloNet quote has invalid amounts', { amountOut: activeQuote.amountOut, minAmountOut: activeQuote.minAmountOut })
+          txProgress.markFailed('swap', 'Invalid XyloNet quote amounts')
+          return
+        }
+        if (!activeQuote.poolAddress || !activeQuote.routerAddress) {
+          console.warn('[SwapPage] BLOCKED: XyloNet quote missing pool/router address')
+          txProgress.markFailed('swap', 'Missing XyloNet contract addresses')
+          return
+        }
+        // Guard: minAmountOut must not exceed amountOut (would always revert)
+        if (activeQuote.minAmountOut > activeQuote.amountOut) {
+          console.warn('[SwapPage] BLOCKED: XyloNet minAmountOut > amountOut', { minAmountOut: activeQuote.minAmountOut, amountOut: activeQuote.amountOut })
+          txProgress.markFailed('swap', 'Min received exceeds expected output')
+          return
+        }
+
+        // Debug log (DEV only)
+        if (import.meta.env.DEV) {
+          console.log('[XyloNet Swap]', {
+            route: 'xylonet',
+            pool: activeQuote.poolAddress,
+            tokenIn: fromToken.address,
+            tokenOut: toToken.address,
+            amountIn: fromAmountRaw.toString(),
+            amountOut: activeQuote.amountOut.toString(),
+            minAmountOut: activeQuote.minAmountOut.toString(),
+            router: activeQuote.routerAddress,
+            recipient: address,
+            deadline: getDeadlineTimestamp(),
+          })
+        }
+
         // SAFETY: never use Coco minAmountOut for XyloNet route
         xyloNetSwap(
           {
             tokenIn: fromToken,
             tokenOut: toToken,
             amountIn: fromAmountRaw,
-            minAmountOut: activeQuote?.minAmountOut ?? BigInt(0),
+            minAmountOut: activeQuote.minAmountOut,
             to: address,
             deadline: getDeadlineTimestamp(),
           },
           (hash) => {
             txProgress.markSubmitted('swap', hash)
           }
-        )
+        ).then((result) => {
+          if (result === 'SIMULATION_FAILED') {
+            txProgress.markFailed('swap', 'XyloNet swap simulation failed.')
+          } else if (result === 'WRONG_NETWORK') {
+            txProgress.markFailed('swap', 'Wrong network')
+          }
+        })
       } else {
         // ─── Coco route: use existing Coco swap hook ───
         cocoSwap(
@@ -409,17 +497,19 @@ export function SwapPage() {
           readOnly
         />
 
-        {/* Price Info */}
-        {hasLiquidity && fromAmount && parseFloat(fromAmount) > 0 && toAmountRaw > BigInt(0) && (
+        {/* Price Info — shown when any route has a valid quote */}
+        {fromAmount && parseFloat(fromAmount) > 0 && toAmountRaw > BigInt(0) && (
           <div className="mt-4 rounded-xl bg-coco-dark-bg border border-coco-dark-border p-3.5 space-y-2">
             <PriceRow label="Rate" value={`1 ${fromToken.symbol} = ${rate?.toFixed(6) ?? '—'} ${toToken.symbol}`} />
-            <PriceRow
-              label="Price Impact"
-              value={`${priceImpact.toFixed(3)}%`}
-              valueColor={priceImpact < 1 ? 'text-coco-green-500' : priceImpact < 3 ? 'text-coco-amber-500' : 'text-coco-red-500'}
-            />
+            {priceImpact > 0 && (
+              <PriceRow
+                label="Price Impact"
+                value={`${priceImpact.toFixed(3)}%`}
+                valueColor={priceImpact < 1 ? 'text-coco-green-500' : priceImpact < 3 ? 'text-coco-amber-500' : 'text-coco-red-500'}
+              />
+            )}
             <PriceRow label="Min. Received" value={`${minReceivedDisplay} ${toToken.symbol}`} />
-            <PriceRow label="Route" value={`${fromToken.symbol} → ${toToken.symbol}`} />
+            <PriceRow label="Route" value={`${displayRoutePath} (${displayRouteSource})`} />
             <PriceRow label="Slippage Tolerance" value={`${slippage}%`} />
           </div>
         )}
