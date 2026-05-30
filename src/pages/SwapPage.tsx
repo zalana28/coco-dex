@@ -143,7 +143,7 @@ export function SwapPage() {
 
   // ─── Approval: targets the fromToken with the route-aware spender ───
   const {
-    needsApproval, approve, isApproving, isWaitingForReceipt: isApprovalConfirming,
+    allowance, needsApproval, approve, isApproving, isWaitingForReceipt: isApprovalConfirming,
     isApproved: approvalConfirmed, isReverted: approvalReverted,
     approvalTxHash, error: approveError, refetchAllowance, resetApproval,
   } = useApprove(fromToken, approvalSpender, fromAmountRaw, approvalMode)
@@ -152,7 +152,7 @@ export function SwapPage() {
   const { swap: cocoSwap, isPending: isCocoSwapping, isConfirming: isCocoSwapConfirming, txHash: cocoSwapTxHash, isSuccess: cocoSwapSuccess, isReverted: cocoSwapReverted, error: cocoSwapError, reset: resetCocoSwap } = useSwap()
 
   // XyloNet swap execution
-  const { swap: xyloNetSwap, isPending: isXyloNetSwapping, isConfirming: isXyloNetSwapConfirming, txHash: xyloNetSwapTxHash, isSuccess: xyloNetSwapSuccess, isReverted: xyloNetSwapReverted, error: xyloNetSwapError, simulationError: xyloNetSimulationError, reset: resetXyloNetSwap } = useXyloNetSwap()
+  const { swap: xyloNetSwap, isPending: isXyloNetSwapping, isConfirming: isXyloNetSwapConfirming, txHash: xyloNetSwapTxHash, isSuccess: xyloNetSwapSuccess, isReverted: xyloNetSwapReverted, error: xyloNetSwapError, simulationError: xyloNetSimulationError, clearSimulationError, reset: resetXyloNetSwap } = useXyloNetSwap()
 
   // Unified swap state (route-aware)
   const isXyloNetRoute = activeQuote?.source === 'xylonet'
@@ -190,7 +190,10 @@ export function SwapPage() {
     txProgress.markSuccess(approveType)
     // Refetch allowance so the button state updates
     refetchAllowance()
-  }, [approvalConfirmed, approveType, txProgress, refetchAllowance])
+    // Clear any stale XyloNet simulation error — the approval was the missing prerequisite.
+    // Now the user can proceed to swap and a fresh simulation will run.
+    clearSimulationError()
+  }, [approvalConfirmed, approveType, txProgress, refetchAllowance, clearSimulationError])
 
   // When approval receipt indicates revert, mark step failed
   useEffect(() => {
@@ -311,9 +314,12 @@ export function SwapPage() {
     if (fromBalance !== undefined && fromAmountRaw > fromBalance) return { text: 'Insufficient balance', disabled: true, action: 'insufficient' as const }
     if (!activeQuote) return { text: 'Route unavailable', disabled: true, action: 'route-unavailable' as const }
     if (activeQuote.executionStatus === 'non_executable') return { text: 'Execution coming soon', disabled: true, action: 'route-not-executable' as const }
-    if (xyloNetSimulationError && isXyloNetRoute) return { text: 'XyloNet swap simulation failed', disabled: true, action: 'simulation-failed' as const }
     if (isApproving || isApprovalConfirming) return { text: `Approving ${fromToken.symbol}...`, disabled: true, action: 'approving' as const }
     if (needsApproval) return { text: `Approve ${fromToken.symbol}`, disabled: false, action: 'approve' as const }
+    // IMPORTANT: simulation error check comes AFTER needsApproval.
+    // If allowance is insufficient, the user must approve first — not see a simulation error.
+    // The simulation would always fail without allowance (router's transferFrom reverts).
+    if (xyloNetSimulationError && isXyloNetRoute) return { text: xyloNetSimulationError, disabled: true, action: 'simulation-failed' as const }
     if (isSwapping || isSwapConfirming) return { text: isXyloNetRoute ? 'Swapping via XyloNet...' : 'Swapping...', disabled: true, action: 'swapping' as const }
     return { text: isXyloNetRoute ? 'Swap via XyloNet' : 'Swap', disabled: false, action: 'swap' as const }
   }, [isConnected, isWrongNetwork, isSwitching, reservesLoading, hasLiquidity, fromAmount, fromBalance, fromAmountRaw, activeQuote, isApproving, isApprovalConfirming, needsApproval, fromToken.symbol, isSwapping, isSwapConfirming, isXyloNetRoute, xyloNetSimulationError])
@@ -370,6 +376,12 @@ export function SwapPage() {
           txProgress.markFailed('swap', 'Min received exceeds expected output')
           return
         }
+        // Guard: allowance must be sufficient (should be enforced by buttonState, but double-check)
+        if (allowance < fromAmountRaw) {
+          console.warn('[SwapPage] BLOCKED: XyloNet swap attempted with insufficient allowance', { allowance: allowance.toString(), required: fromAmountRaw.toString() })
+          txProgress.markFailed('swap', 'Insufficient allowance — approve first')
+          return
+        }
 
         // Debug log (DEV only)
         if (import.meta.env.DEV) {
@@ -384,6 +396,9 @@ export function SwapPage() {
             router: activeQuote.routerAddress,
             recipient: address,
             deadline: getDeadlineTimestamp(),
+            allowance: allowance.toString(),
+            requiredAllowance: fromAmountRaw.toString(),
+            allowanceSufficient: allowance >= fromAmountRaw,
           })
         }
 
