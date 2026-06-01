@@ -16,7 +16,7 @@
     "debug:unitflow-exec": "npx tsx scripts/debugUnitFlowExecution.ts",
     "debug:unitflow-ur": "npx tsx scripts/debugUnitFlowUniversalRouter.ts",
     "discover:synthra": "npx tsx scripts/discoverSynthraContracts.ts",
-    "debug:synthra": "npx tsx scripts/debugSynthraQuote.ts",
+    "debug:synthra": "npx tsx scripts/debugSynthraQuoteAndSwap.ts",
     "indexer:backfill": "npx tsx scripts/backfillAnalytics.ts"
   },
   "dependencies": {

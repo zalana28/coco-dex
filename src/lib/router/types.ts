@@ -17,6 +17,7 @@ export type RouteQuote = {
   amountOutFormatted: string
   minAmountOut: bigint
   routePath: string[]
+  feeTier?: number
   routerAddress?: `0x${string}`
   poolAddress?: `0x${string}`
   isExecutable: boolean

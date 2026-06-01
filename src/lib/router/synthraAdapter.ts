@@ -130,11 +130,14 @@ export function buildSynthraRouteQuote({
     amountOutFormatted: safeAmountOut > BigInt(0) ? formatTokenAmount(safeAmountOut, tokenOut.decimals) : '-',
     minAmountOut,
     routePath: [tokenIn.symbol, `Synthra V3 ${formatFeeTier(bestFeeQuote?.fee)}`, tokenOut.symbol],
-    routerAddress: synthra.v3.quoterAddress,
-    isExecutable: false,
+    feeTier: bestFeeQuote?.fee,
+    routerAddress: synthra.v3.swapRouterAddress,
+    isExecutable: availabilityStatus === 'available' && Boolean(bestFeeQuote?.fee),
     availabilityStatus,
-    executionStatus: 'non_executable',
+    executionStatus: availabilityStatus === 'available' && Boolean(bestFeeQuote?.fee) ? 'executable' : 'non_executable',
     unavailableReason,
-    warning: availabilityStatus === 'available' ? 'Execution coming soon' : undefined,
+    warning: availabilityStatus === 'available'
+      ? 'Executes through Synthra V3 swap router and requires token approval.'
+      : undefined,
   }
 }
