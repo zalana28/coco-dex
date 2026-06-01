@@ -6,6 +6,7 @@ import { PoolsPage } from '@/pages/PoolsPage'
 import { AddLiquidityPage } from '@/pages/AddLiquidityPage'
 import { RemoveLiquidityPage } from '@/pages/RemoveLiquidityPage'
 import { AnalyticsPage } from '@/pages/AnalyticsPage'
+import { DocsPage } from '@/pages/DocsPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 
 export default function App() {
@@ -18,6 +19,7 @@ export default function App() {
         <Route path="/pools/add" element={<AddLiquidityPage />} />
         <Route path="/pools/remove" element={<RemoveLiquidityPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/docs" element={<DocsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>
