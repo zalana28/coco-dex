@@ -4,6 +4,7 @@ import { arcTestnet } from '@/config/chains'
 import { EXTERNAL_DEXES } from '@/config/externalDexes'
 import type { Token } from '@/types/token'
 import { getCocoRouteQuote } from '@/lib/router/cocoAdapter'
+import { buildSynthraRouteQuote, getSynthraV3QuoteRequest, isSynthraPairSupported, SYNTHRA_V3_QUOTER_ABI } from '@/lib/router/synthraAdapter'
 import { buildXyloNetRouteQuote, isXyloNetPairSupported, XYLONET_ROUTER_ABI } from '@/lib/router/xylonetAdapter'
 import { buildUnitFlowRouteQuote, getUnitFlowV25QuoteRequest, isUnitFlowPairSupported, UNITFLOW_V25_ROUTER_ABI } from '@/lib/router/unitflowAdapter'
 import type { RouteQuote } from '@/lib/router/types'
@@ -30,8 +31,11 @@ export function useAggregatedQuotes({
   const shouldReadXyloNet = amountIn > BigInt(0) && isXyloNetPairSupported(tokenIn, tokenOut)
   const xylonet = EXTERNAL_DEXES.xylonet
   const unitflow = EXTERNAL_DEXES.unitflow
+  const synthra = EXTERNAL_DEXES.synthra
   const unitflowQuoteRequest = useMemo(() => getUnitFlowV25QuoteRequest(tokenIn, tokenOut, amountIn), [amountIn, tokenIn, tokenOut])
+  const synthraQuoteRequest = useMemo(() => getSynthraV3QuoteRequest(tokenIn, tokenOut, amountIn), [amountIn, tokenIn, tokenOut])
   const shouldReadUnitFlow = amountIn > BigInt(0) && isUnitFlowPairSupported(tokenIn, tokenOut) && Boolean(unitflowQuoteRequest)
+  const shouldReadSynthra = amountIn > BigInt(0) && isSynthraPairSupported(tokenIn, tokenOut) && Boolean(synthraQuoteRequest)
 
   const { data: xylonetAmountOut, isLoading: isXyloNetLoading, error: xylonetError } = useReadContract({
     address: xylonet.routerAddress,
@@ -58,6 +62,55 @@ export function useAggregatedQuotes({
     },
   })
 
+  const synthraQuoteArgs = (fee: 500 | 3_000 | 10_000) => [{
+    tokenIn: synthraQuoteRequest?.tokenIn ?? synthra.supportedTokens.USDC,
+    tokenOut: synthraQuoteRequest?.tokenOut ?? synthra.supportedTokens.EURC,
+    amountIn: synthraQuoteRequest?.amountIn ?? BigInt(0),
+    fee,
+    sqrtPriceLimitX96: BigInt(0),
+  }] as const
+
+  const { data: synthraFee500AmountOut, isLoading: isSynthraFee500Loading, error: synthraFee500Error } = useReadContract({
+    address: synthra.v3.quoterAddress,
+    abi: SYNTHRA_V3_QUOTER_ABI,
+    functionName: 'quoteExactInputSingle',
+    args: synthraQuoteArgs(500),
+    chainId: arcTestnet.id,
+    query: {
+      enabled: shouldReadSynthra,
+      refetchInterval: 15_000,
+    },
+  })
+
+  const { data: synthraFee3000AmountOut, isLoading: isSynthraFee3000Loading, error: synthraFee3000Error } = useReadContract({
+    address: synthra.v3.quoterAddress,
+    abi: SYNTHRA_V3_QUOTER_ABI,
+    functionName: 'quoteExactInputSingle',
+    args: synthraQuoteArgs(3_000),
+    chainId: arcTestnet.id,
+    query: {
+      enabled: shouldReadSynthra,
+      refetchInterval: 15_000,
+    },
+  })
+
+  const { data: synthraFee10000AmountOut, isLoading: isSynthraFee10000Loading, error: synthraFee10000Error } = useReadContract({
+    address: synthra.v3.quoterAddress,
+    abi: SYNTHRA_V3_QUOTER_ABI,
+    functionName: 'quoteExactInputSingle',
+    args: synthraQuoteArgs(10_000),
+    chainId: arcTestnet.id,
+    query: {
+      enabled: shouldReadSynthra,
+      refetchInterval: 15_000,
+    },
+  })
+
+  const isSynthraLoading = isSynthraFee500Loading || isSynthraFee3000Loading || isSynthraFee10000Loading
+  const synthraError = synthraFee500Error && synthraFee3000Error && synthraFee10000Error
+    ? synthraFee500Error
+    : undefined
+
   return useMemo(() => {
     const baseQuotes = [
       getCocoRouteQuote({ tokenIn, tokenOut, amountIn, reserveUsdc, reserveEurc, slippageBps }),
@@ -78,6 +131,19 @@ export function useAggregatedQuotes({
         slippageBps,
         isLoading: isUnitFlowLoading,
         error: unitflowError,
+      }),
+      buildSynthraRouteQuote({
+        tokenIn,
+        tokenOut,
+        amountIn,
+        feeQuotes: [
+          { fee: 500, amountOut: synthraFee500AmountOut },
+          { fee: 3_000, amountOut: synthraFee3000AmountOut },
+          { fee: 10_000, amountOut: synthraFee10000AmountOut },
+        ],
+        slippageBps,
+        isLoading: isSynthraLoading,
+        error: synthraError,
       }),
     ].filter((quote): quote is RouteQuote => Boolean(quote))
 
@@ -106,13 +172,29 @@ export function useAggregatedQuotes({
       quotes,
       bestQuote,
       selectedQuote: quotes.find((quote) => quote.source === 'coco' && quote.availabilityStatus === 'available') ?? bestQuote,
-      isLoading: isXyloNetLoading || isUnitFlowLoading,
+      isLoading: isXyloNetLoading || isUnitFlowLoading || isSynthraLoading,
       xylonetError,
       unitflowError,
-      comingSoonSources: [
-        // Synthra requires verified router/quoter contract details before integration.
-        { source: 'synthra' as const, label: 'Synthra' },
-      ],
+      synthraError,
+      comingSoonSources: [],
     }
-  }, [amountIn, reserveEurc, reserveUsdc, slippageBps, tokenIn, tokenOut, xylonetAmountOut, isXyloNetLoading, xylonetError, unitflowAmountsOut, isUnitFlowLoading, unitflowError])
+  }, [
+    amountIn,
+    reserveEurc,
+    reserveUsdc,
+    slippageBps,
+    tokenIn,
+    tokenOut,
+    xylonetAmountOut,
+    isXyloNetLoading,
+    xylonetError,
+    unitflowAmountsOut,
+    isUnitFlowLoading,
+    unitflowError,
+    synthraFee500AmountOut,
+    synthraFee3000AmountOut,
+    synthraFee10000AmountOut,
+    isSynthraLoading,
+    synthraError,
+  ])
 }
