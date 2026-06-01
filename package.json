@@ -13,6 +13,7 @@
     "debug:xylonet": "npx tsx scripts/debugXylonetQuote.ts",
     "debug:xylonet-sim": "npx tsx scripts/debugXylonetSwapSimulation.ts",
     "debug:unitflow": "npx tsx scripts/debugUnitFlowQuote.ts",
+    "debug:unitflow-exec": "npx tsx scripts/debugUnitFlowExecution.ts",
     "indexer:backfill": "npx tsx scripts/backfillAnalytics.ts"
   },
   "dependencies": {
