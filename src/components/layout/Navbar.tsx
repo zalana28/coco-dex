@@ -14,6 +14,7 @@ export function Navbar() {
   const [isOpen, setIsOpen] = useState(false)
   const { pathname } = useLocation()
   const showWallet = pathname !== '/'
+  const showLaunchApp = pathname === '/'
 
   return (
     <header className="fixed left-0 right-0 top-0 z-50 border-b border-coco-dark-border/70 bg-coco-dark-bg/75 shadow-[0_12px_40px_rgba(2,6,23,0.28)] backdrop-blur-2xl">
@@ -48,12 +49,14 @@ export function Navbar() {
           </nav>
 
           <div className="hidden shrink-0 items-center gap-3 md:flex">
-            <Link
-              to="/swap"
-              className="rounded-xl bg-coco-green-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-coco-green-500/25 transition-all hover:-translate-y-0.5 hover:bg-coco-green-600"
-            >
-              Launch App
-            </Link>
+            {showLaunchApp && (
+              <Link
+                to="/swap"
+                className="rounded-xl bg-coco-green-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-coco-green-500/25 transition-all hover:-translate-y-0.5 hover:bg-coco-green-600"
+              >
+                Launch App
+              </Link>
+            )}
             {showWallet && <ConnectWalletButton />}
           </div>
 
@@ -93,15 +96,17 @@ export function Navbar() {
               </NavLink>
             ))}
           </nav>
-          <div className="mt-3 grid gap-3">
-            <Link
-              to="/swap"
-              onClick={() => setIsOpen(false)}
-              className="rounded-xl bg-coco-green-500 px-4 py-3 text-center text-sm font-semibold text-white shadow-lg shadow-coco-green-500/25 transition-all hover:bg-coco-green-600"
-            >
-              Launch App
-            </Link>
-          </div>
+          {showLaunchApp && (
+            <div className="mt-3 grid gap-3">
+              <Link
+                to="/swap"
+                onClick={() => setIsOpen(false)}
+                className="rounded-xl bg-coco-green-500 px-4 py-3 text-center text-sm font-semibold text-white shadow-lg shadow-coco-green-500/25 transition-all hover:bg-coco-green-600"
+              >
+                Launch App
+              </Link>
+            </div>
+          )}
         </div>
       )}
     </header>
