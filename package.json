@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "debug:xylonet": "npx tsx scripts/debugXylonetQuote.ts",
     "debug:xylonet-sim": "npx tsx scripts/debugXylonetSwapSimulation.ts",
+    "debug:unitflow": "npx tsx scripts/debugUnitFlowQuote.ts",
     "indexer:backfill": "npx tsx scripts/backfillAnalytics.ts"
   },
   "dependencies": {

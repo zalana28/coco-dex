@@ -1,0 +1,50 @@
+import { EURC, USDC } from '@/config/tokens'
+
+export const UNITFLOW_CHAIN_ID = 5_042_002
+
+export const UNITFLOW_V25_FACTORY_ADDRESS: `0x${string}` = '0xd67F63A4F26a497b364d1C82e6747Aec8B5743a5'
+export const UNITFLOW_V25_LIQUIDITY_ROUTER_ADDRESS: `0x${string}` = '0x0ef57CC428c851e9a9b7cD97190EF3D3EFe4B631'
+export const UNITFLOW_V25_SWAP_ROUTER_ADDRESS: `0x${string}` = '0x4AA8c7Ac458479d9A4FA5c1481e03061ac76824A'
+export const UNITFLOW_WUSDC_ADDRESS: `0x${string}` = '0x911b4000D3422F482F4062a913885f7b035382Df'
+
+export const UNITFLOW_V3_FACTORY_ADDRESS: `0x${string}` = '0xAb6A8AAb7d490007634ef59d424b5d89688a1971'
+export const UNITFLOW_V3_ROUTER_ADDRESS: `0x${string}` = '0x23970b3a5AD7211eC4A858a29258F1e288eE2420'
+export const UNITFLOW_V3_QUOTER_ADDRESS: `0x${string}` = '0x121aeB6DEf00F6F67665008CaC1C19805886ed1a'
+
+export const UNITFLOW_V4_POOL_MANAGER_ADDRESS: `0x${string}` = '0x33C02bfb9e39AAAe30F8bE86b850f8ce53d20C0b'
+export const UNITFLOW_V4_QUOTER_ADDRESS: `0x${string}` = '0xf9d5Ae3c08602390ea15A3968f2D25cc3c3A7ced'
+
+export const UNITFLOW_UNIVERSAL_ROUTER_ADDRESS: `0x${string}` = '0xC43cC6A1E0F6EB48Cd4131522C1C73B13f3Da0F1'
+export const UNITFLOW_PERMIT2_ADDRESS: `0x${string}` = '0x4ce562F687d0Ced27b79Ba51d79B63BD978F7F48'
+
+export const UNITFLOW_SUPPORTED_TOKENS = {
+  USDC: USDC.address,
+  EURC: EURC.address,
+} as const
+
+export const UNITFLOW_SUPPORTED_PAIR = [USDC.address, EURC.address] as const
+
+export const UNITFLOW_DEX = {
+  id: 'unitflow',
+  label: 'UnitFlow',
+  chainId: UNITFLOW_CHAIN_ID,
+  v25: {
+    factoryAddress: UNITFLOW_V25_FACTORY_ADDRESS,
+    liquidityRouterAddress: UNITFLOW_V25_LIQUIDITY_ROUTER_ADDRESS,
+    swapRouterAddress: UNITFLOW_V25_SWAP_ROUTER_ADDRESS,
+    wusdcAddress: UNITFLOW_WUSDC_ADDRESS,
+  },
+  v3: {
+    factoryAddress: UNITFLOW_V3_FACTORY_ADDRESS,
+    routerAddress: UNITFLOW_V3_ROUTER_ADDRESS,
+    quoterAddress: UNITFLOW_V3_QUOTER_ADDRESS,
+  },
+  v4: {
+    poolManagerAddress: UNITFLOW_V4_POOL_MANAGER_ADDRESS,
+    quoterAddress: UNITFLOW_V4_QUOTER_ADDRESS,
+  },
+  universalRouterAddress: UNITFLOW_UNIVERSAL_ROUTER_ADDRESS,
+  permit2Address: UNITFLOW_PERMIT2_ADDRESS,
+  supportedTokens: UNITFLOW_SUPPORTED_TOKENS,
+  supportedPair: UNITFLOW_SUPPORTED_PAIR,
+} as const
