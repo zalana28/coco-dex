@@ -76,6 +76,14 @@ function normalizeUnitFlowAmountOut(tokenOut: Token, amountOut?: bigint): bigint
   return amountOut / WUSDC_DECIMAL_SCALE
 }
 
+function isUnitFlowUniversalRouterExecutable(tokenIn: Token, tokenOut: Token, availabilityStatus: RouteAvailabilityStatus): boolean {
+  return (
+    availabilityStatus === 'available' &&
+    tokenIn.address.toLowerCase() === USDC.address.toLowerCase() &&
+    tokenOut.address.toLowerCase() === EURC.address.toLowerCase()
+  )
+}
+
 export function buildUnitFlowRouteQuote({
   tokenIn,
   tokenOut,
@@ -114,6 +122,7 @@ export function buildUnitFlowRouteQuote({
   const minAmountOut = safeAmountOut > BigInt(0)
     ? calculateMinimumReceived(safeAmountOut, slippageBps)
     : BigInt(0)
+  const isExecutable = isUnitFlowUniversalRouterExecutable(tokenIn, tokenOut, availabilityStatus)
 
   return {
     id: 'unitflow-v25-wusdc-eurc',
@@ -125,10 +134,14 @@ export function buildUnitFlowRouteQuote({
     minAmountOut,
     routePath: [tokenIn.symbol, 'WUSDC', tokenOut.symbol],
     routerAddress: unitflow.v25.swapRouterAddress,
-    isExecutable: false,
+    isExecutable,
     availabilityStatus,
-    executionStatus: 'non_executable',
+    executionStatus: isExecutable ? 'executable' : 'non_executable',
     unavailableReason,
-    warning: availabilityStatus === 'available' ? 'Execution coming soon' : undefined,
+    warning: availabilityStatus === 'available'
+      ? isExecutable
+        ? 'Executes through UnitFlow UniversalRouter with native USDC wrapping.'
+        : 'Execution coming soon'
+      : undefined,
   }
 }
