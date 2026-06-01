@@ -34,6 +34,7 @@ export function SwapPage() {
   const [showSettings, setShowSettings] = useState(false)
   const [selectedRouteId, setSelectedRouteId] = useState<string>('coco-usdc-eurc')
   const { slippage, slippageBps, setSlippage, getDeadlineTimestamp, deadline, setDeadline, approvalMode, setApprovalMode } = useTransactionSettings()
+  const hasValidFromAmount = fromAmount.trim() !== '' && Number.isFinite(Number(fromAmount)) && Number(fromAmount) > 0
 
   // Network guard — require Arc Testnet for all DEX operations
   const { isWrongNetwork, switchToArc, isSwitching } = useNetworkGuard()
@@ -552,15 +553,21 @@ export function SwapPage() {
         </button>
 
         {/* Route Quotes */}
-        <QuotesPanel
-          quotes={quotes}
-          bestQuoteId={bestQuote?.id}
-          selectedQuoteId={activeQuote?.id}
-          isLoading={quotesLoading}
-          comingSoonSources={comingSoonSources}
-          outputSymbol={toToken.symbol}
-          onSelectQuote={setSelectedRouteId}
-        />
+        {hasValidFromAmount ? (
+          <QuotesPanel
+            quotes={quotes}
+            bestQuoteId={bestQuote?.id}
+            selectedQuoteId={activeQuote?.id}
+            isLoading={quotesLoading}
+            comingSoonSources={comingSoonSources}
+            outputSymbol={toToken.symbol}
+            onSelectQuote={setSelectedRouteId}
+          />
+        ) : (
+          <p className="mt-3 text-center text-xs text-coco-dark-muted">
+            Enter an amount to compare available routes.
+          </p>
+        )}
       </Card>
 
       {/* Transaction Progress Panel */}
