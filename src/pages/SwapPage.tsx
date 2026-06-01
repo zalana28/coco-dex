@@ -12,6 +12,7 @@ import { useTokenBalance } from '@/hooks/useTokenBalance'
 import { useApprove } from '@/hooks/useApprove'
 import { useSwap } from '@/hooks/useSwap'
 import { useXyloNetSwap } from '@/hooks/useXyloNetSwap'
+import { useUnitFlowSwap } from '@/hooks/useUnitFlowSwap'
 import { useNetworkGuard } from '@/hooks/useNetworkGuard'
 import { useTransactionSettings } from '@/hooks/useSettings'
 import type { ApprovalMode } from '@/hooks/useSettings'
@@ -117,7 +118,7 @@ export function SwapPage() {
         minReceivedDisplay: formatTokenAmount(minOut, toToken.decimals),
         rate: computedRate,
         displayRoutePath: activeQuote.routePath.join(' → '),
-        displayRouteSource: activeQuote.source === 'xylonet' ? 'XyloNet' : 'Coco',
+        displayRouteSource: activeQuote.source === 'xylonet' ? 'XyloNet' : activeQuote.source === 'unitflow' ? 'UnitFlow' : 'Coco',
       }
     }
 
@@ -141,13 +142,15 @@ export function SwapPage() {
     if (activeQuote?.source === 'xylonet') return XYLONET_ROUTER_ADDRESS
     return ROUTER_ADDRESS
   }, [activeQuote])
+  const isUnitFlowRoute = activeQuote?.source === 'unitflow'
+  const approvalAmount = isUnitFlowRoute ? BigInt(0) : fromAmountRaw
 
   // ─── Approval: targets the fromToken with the route-aware spender ───
   const {
     allowance, needsApproval, approve, isApproving, isWaitingForReceipt: isApprovalConfirming,
     isApproved: approvalConfirmed, isReverted: approvalReverted,
     approvalTxHash, error: approveError, refetchAllowance, resetApproval,
-  } = useApprove(fromToken, approvalSpender, fromAmountRaw, approvalMode)
+  } = useApprove(fromToken, approvalSpender, approvalAmount, approvalMode)
 
   // Coco swap execution
   const { swap: cocoSwap, isPending: isCocoSwapping, isConfirming: isCocoSwapConfirming, txHash: cocoSwapTxHash, isSuccess: cocoSwapSuccess, isReverted: cocoSwapReverted, error: cocoSwapError, reset: resetCocoSwap } = useSwap()
@@ -155,18 +158,22 @@ export function SwapPage() {
   // XyloNet swap execution
   const { swap: xyloNetSwap, isPending: isXyloNetSwapping, isConfirming: isXyloNetSwapConfirming, txHash: xyloNetSwapTxHash, isSuccess: xyloNetSwapSuccess, isReverted: xyloNetSwapReverted, error: xyloNetSwapError, simulationError: xyloNetSimulationError, clearSimulationError, reset: resetXyloNetSwap } = useXyloNetSwap()
 
+  // UnitFlow UniversalRouter execution
+  const { swap: unitFlowSwap, isPending: isUnitFlowSwapping, isConfirming: isUnitFlowSwapConfirming, txHash: unitFlowSwapTxHash, isSuccess: unitFlowSwapSuccess, isReverted: unitFlowSwapReverted, error: unitFlowSwapError, simulationError: unitFlowSimulationError, clearSimulationError: clearUnitFlowSimulationError, reset: resetUnitFlowSwap } = useUnitFlowSwap()
+
   // Unified swap state (route-aware)
   const isXyloNetRoute = activeQuote?.source === 'xylonet'
-  const isSwapping = isXyloNetRoute ? isXyloNetSwapping : isCocoSwapping
-  const isSwapConfirming = isXyloNetRoute ? isXyloNetSwapConfirming : isCocoSwapConfirming
-  const swapTxHash = isXyloNetRoute ? xyloNetSwapTxHash : cocoSwapTxHash
-  const swapSuccess = isXyloNetRoute ? xyloNetSwapSuccess : cocoSwapSuccess
-  const swapReverted = isXyloNetRoute ? xyloNetSwapReverted : cocoSwapReverted
-  const swapError = isXyloNetRoute ? xyloNetSwapError : cocoSwapError
+  const isSwapping = isUnitFlowRoute ? isUnitFlowSwapping : isXyloNetRoute ? isXyloNetSwapping : isCocoSwapping
+  const isSwapConfirming = isUnitFlowRoute ? isUnitFlowSwapConfirming : isXyloNetRoute ? isXyloNetSwapConfirming : isCocoSwapConfirming
+  const swapTxHash = isUnitFlowRoute ? unitFlowSwapTxHash : isXyloNetRoute ? xyloNetSwapTxHash : cocoSwapTxHash
+  const swapSuccess = isUnitFlowRoute ? unitFlowSwapSuccess : isXyloNetRoute ? xyloNetSwapSuccess : cocoSwapSuccess
+  const swapReverted = isUnitFlowRoute ? unitFlowSwapReverted : isXyloNetRoute ? xyloNetSwapReverted : cocoSwapReverted
+  const swapError = isUnitFlowRoute ? unitFlowSwapError : isXyloNetRoute ? xyloNetSwapError : cocoSwapError
 
   useEffect(() => {
     clearSimulationError()
-  }, [clearSimulationError, selectedRouteId, fromAmountRaw, activeQuote?.minAmountOut, fromToken.address, toToken.address])
+    clearUnitFlowSimulationError()
+  }, [clearSimulationError, clearUnitFlowSimulationError, selectedRouteId, fromAmountRaw, activeQuote?.minAmountOut, fromToken.address, toToken.address])
 
   // Transaction progress tracking (strict sequential)
   const txProgress = useTransactionProgress()
@@ -198,7 +205,8 @@ export function SwapPage() {
     // Clear any stale XyloNet simulation error — the approval was the missing prerequisite.
     // Now the user can proceed to swap and a fresh simulation will run.
     clearSimulationError()
-  }, [approvalConfirmed, approveType, txProgress, refetchAllowance, clearSimulationError])
+    clearUnitFlowSimulationError()
+  }, [approvalConfirmed, approveType, txProgress, refetchAllowance, clearSimulationError, clearUnitFlowSimulationError])
 
   // When approval receipt indicates revert, mark step failed
   useEffect(() => {
@@ -306,15 +314,16 @@ export function SwapPage() {
     resetApproval()
     resetCocoSwap()
     resetXyloNetSwap()
+    resetUnitFlowSwap()
     setSelectedRouteId('coco-usdc-eurc')
-  }, [fromToken, toToken, cocoAmountRaw, txProgress, resetApproval, resetCocoSwap, resetXyloNetSwap])
+  }, [fromToken, toToken, cocoAmountRaw, txProgress, resetApproval, resetCocoSwap, resetXyloNetSwap, resetUnitFlowSwap])
 
   // Button state machine
   const buttonState = useMemo(() => {
     if (!isConnected) return { text: 'Connect Wallet', disabled: true, action: 'connect' as const }
     if (isWrongNetwork) return { text: isSwitching ? 'Switching...' : 'Switch to Arc Testnet', disabled: isSwitching, action: 'switch-network' as const }
     if (reservesLoading) return { text: 'Loading...', disabled: true, action: 'loading' as const }
-    if (!hasLiquidity && !isXyloNetRoute) return { text: 'Pool has no liquidity', disabled: true, action: 'no-liquidity' as const }
+    if (!hasLiquidity && !isXyloNetRoute && !isUnitFlowRoute) return { text: 'Pool has no liquidity', disabled: true, action: 'no-liquidity' as const }
     if (!fromAmount || parseFloat(fromAmount) <= 0) return { text: 'Enter an amount', disabled: true, action: 'enter' as const }
     if (fromBalance !== undefined && fromAmountRaw > fromBalance) return { text: 'Insufficient balance', disabled: true, action: 'insufficient' as const }
     if (!activeQuote) return { text: 'Route unavailable', disabled: true, action: 'route-unavailable' as const }
@@ -325,9 +334,10 @@ export function SwapPage() {
     // If allowance is insufficient, the user must approve first — not see a simulation error.
     // The simulation would always fail without allowance (router's transferFrom reverts).
     if (xyloNetSimulationError && isXyloNetRoute) return { text: xyloNetSimulationError, disabled: true, action: 'simulation-failed' as const }
-    if (isSwapping || isSwapConfirming) return { text: isXyloNetRoute ? 'Swapping via XyloNet...' : 'Swapping...', disabled: true, action: 'swapping' as const }
-    return { text: isXyloNetRoute ? 'Swap via XyloNet' : 'Swap', disabled: false, action: 'swap' as const }
-  }, [isConnected, isWrongNetwork, isSwitching, reservesLoading, hasLiquidity, fromAmount, fromBalance, fromAmountRaw, activeQuote, isApproving, isApprovalConfirming, needsApproval, fromToken.symbol, isSwapping, isSwapConfirming, isXyloNetRoute, xyloNetSimulationError])
+    if (unitFlowSimulationError && isUnitFlowRoute) return { text: unitFlowSimulationError, disabled: true, action: 'simulation-failed' as const }
+    if (isSwapping || isSwapConfirming) return { text: isUnitFlowRoute ? 'Swapping via UnitFlow...' : isXyloNetRoute ? 'Swapping via XyloNet...' : 'Swapping...', disabled: true, action: 'swapping' as const }
+    return { text: isUnitFlowRoute ? 'Swap via UnitFlow' : isXyloNetRoute ? 'Swap via XyloNet' : 'Swap', disabled: false, action: 'swap' as const }
+  }, [isConnected, isWrongNetwork, isSwitching, reservesLoading, hasLiquidity, fromAmount, fromBalance, fromAmountRaw, activeQuote, isApproving, isApprovalConfirming, needsApproval, fromToken.symbol, isSwapping, isSwapConfirming, isXyloNetRoute, isUnitFlowRoute, xyloNetSimulationError, unitFlowSimulationError])
 
   const handleButtonClick = () => {
     if (buttonState.action === 'switch-network') {
@@ -340,7 +350,7 @@ export function SwapPage() {
 
     if (buttonState.action === 'approve') {
       // Start flow with approve + swap steps
-      const swapLabel = isXyloNetRoute ? 'Swap via XyloNet' : 'Swap'
+      const swapLabel = isUnitFlowRoute ? 'Swap via UnitFlow' : isXyloNetRoute ? 'Swap via XyloNet' : 'Swap'
       txProgress.startFlow([
         { type: approveType, label: `Approve ${fromToken.symbol}` },
         { type: 'swap', label: swapLabel },
@@ -352,13 +362,48 @@ export function SwapPage() {
       })
     } else if (buttonState.action === 'swap' && address) {
       // Start or continue flow with just swap step
-      const swapLabel = isXyloNetRoute ? 'Swap via XyloNet' : 'Swap'
+      const swapLabel = isUnitFlowRoute ? 'Swap via UnitFlow' : isXyloNetRoute ? 'Swap via XyloNet' : 'Swap'
       if (!txProgress.currentFlow) {
         txProgress.startFlow([{ type: 'swap', label: swapLabel }])
       }
       txProgress.markWaiting('swap')
 
-      if (isXyloNetRoute) {
+      if (isUnitFlowRoute) {
+        if (!activeQuote || activeQuote.source !== 'unitflow') {
+          console.warn('[SwapPage] BLOCKED: activeQuote is not UnitFlow')
+          txProgress.markFailed('swap', 'Route mismatch — expected UnitFlow')
+          return
+        }
+        if (fromToken.address.toLowerCase() !== USDC.address.toLowerCase() || toToken.address.toLowerCase() !== EURC.address.toLowerCase()) {
+          console.warn('[SwapPage] BLOCKED: UnitFlow execution is only enabled for USDC -> EURC')
+          txProgress.markFailed('swap', 'UnitFlow execution only supports USDC to EURC')
+          return
+        }
+        if (activeQuote.amountOut <= BigInt(0) || activeQuote.minAmountOut <= BigInt(0)) {
+          console.warn('[SwapPage] BLOCKED: UnitFlow quote has invalid amounts', { amountOut: activeQuote.amountOut, minAmountOut: activeQuote.minAmountOut })
+          txProgress.markFailed('swap', 'Invalid UnitFlow quote amounts')
+          return
+        }
+
+        unitFlowSwap(
+          {
+            amountIn: fromAmountRaw,
+            minAmountOut: activeQuote.minAmountOut,
+            account: address,
+            to: address,
+            deadlineMinutes: deadline,
+          },
+          (hash) => {
+            txProgress.markSubmitted('swap', hash)
+          }
+        ).then((result) => {
+          if (result?.status === 'SIMULATION_FAILED') {
+            txProgress.markFailed('swap', result.reason)
+          } else if (result?.status === 'WRONG_NETWORK') {
+            txProgress.markFailed('swap', result.reason)
+          }
+        })
+      } else if (isXyloNetRoute) {
         // ─── XyloNet route: sanity checks before execution ───
         if (!activeQuote || activeQuote.source !== 'xylonet') {
           console.warn('[SwapPage] BLOCKED: activeQuote is not XyloNet')

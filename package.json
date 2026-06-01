@@ -14,6 +14,7 @@
     "debug:xylonet-sim": "npx tsx scripts/debugXylonetSwapSimulation.ts",
     "debug:unitflow": "npx tsx scripts/debugUnitFlowQuote.ts",
     "debug:unitflow-exec": "npx tsx scripts/debugUnitFlowExecution.ts",
+    "debug:unitflow-ur": "npx tsx scripts/debugUnitFlowUniversalRouter.ts",
     "indexer:backfill": "npx tsx scripts/backfillAnalytics.ts"
   },
   "dependencies": {
