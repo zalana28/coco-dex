@@ -14,7 +14,7 @@ const connectors = [
           projectId: walletConnectProjectId,
           metadata: {
             name: 'Coco DEX',
-            description: 'Testnet-native stablecoin routing on Arc Testnet',
+            description: 'Smart routing for Arc stablecoins on Arc Testnet',
             url: typeof window !== 'undefined' ? window.location.origin : 'https://coco-dex.vercel.app',
             icons: typeof window !== 'undefined' ? [`${window.location.origin}/coconut.svg`] : ['https://coco-dex.vercel.app/coconut.svg'],
           },
