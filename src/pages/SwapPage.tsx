@@ -660,7 +660,9 @@ function QuotesPanel({
             : isLoadingQuote
               ? 'Loading quote'
               : isQuoteOnly
-                ? 'Execution coming soon'
+                ? isBest
+                  ? 'Best quote, execution coming soon'
+                  : 'Execution coming soon'
                 : quote.warning
 
           return (

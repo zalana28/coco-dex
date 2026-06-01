@@ -5,6 +5,7 @@ import { EXTERNAL_DEXES } from '@/config/externalDexes'
 import type { Token } from '@/types/token'
 import { getCocoRouteQuote } from '@/lib/router/cocoAdapter'
 import { buildXyloNetRouteQuote, isXyloNetPairSupported, XYLONET_ROUTER_ABI } from '@/lib/router/xylonetAdapter'
+import { buildUnitFlowRouteQuote, getUnitFlowV25QuoteRequest, isUnitFlowPairSupported, UNITFLOW_V25_ROUTER_ABI } from '@/lib/router/unitflowAdapter'
 import type { RouteQuote } from '@/lib/router/types'
 
 type UseAggregatedQuotesParams = {
@@ -28,6 +29,9 @@ export function useAggregatedQuotes({
 }: UseAggregatedQuotesParams) {
   const shouldReadXyloNet = amountIn > BigInt(0) && isXyloNetPairSupported(tokenIn, tokenOut)
   const xylonet = EXTERNAL_DEXES.xylonet
+  const unitflow = EXTERNAL_DEXES.unitflow
+  const unitflowQuoteRequest = useMemo(() => getUnitFlowV25QuoteRequest(tokenIn, tokenOut, amountIn), [amountIn, tokenIn, tokenOut])
+  const shouldReadUnitFlow = amountIn > BigInt(0) && isUnitFlowPairSupported(tokenIn, tokenOut) && Boolean(unitflowQuoteRequest)
 
   const { data: xylonetAmountOut, isLoading: isXyloNetLoading, error: xylonetError } = useReadContract({
     address: xylonet.routerAddress,
@@ -38,6 +42,18 @@ export function useAggregatedQuotes({
     chainId: arcTestnet.id,
     query: {
       enabled: shouldReadXyloNet,
+      refetchInterval: 15_000,
+    },
+  })
+
+  const { data: unitflowAmountsOut, isLoading: isUnitFlowLoading, error: unitflowError } = useReadContract({
+    address: unitflow.v25.swapRouterAddress,
+    abi: UNITFLOW_V25_ROUTER_ABI,
+    functionName: 'getAmountsOut',
+    args: [unitflowQuoteRequest?.amountIn ?? BigInt(0), unitflowQuoteRequest?.path ?? [unitflow.v25.wusdcAddress, unitflow.v25.wusdcAddress]],
+    chainId: arcTestnet.id,
+    query: {
+      enabled: shouldReadUnitFlow,
       refetchInterval: 15_000,
     },
   })
@@ -53,6 +69,15 @@ export function useAggregatedQuotes({
         slippageBps,
         isLoading: isXyloNetLoading,
         error: xylonetError,
+      }),
+      buildUnitFlowRouteQuote({
+        tokenIn,
+        tokenOut,
+        amountIn,
+        amountsOut: unitflowAmountsOut,
+        slippageBps,
+        isLoading: isUnitFlowLoading,
+        error: unitflowError,
       }),
     ].filter((quote): quote is RouteQuote => Boolean(quote))
 
@@ -81,12 +106,13 @@ export function useAggregatedQuotes({
       quotes,
       bestQuote,
       selectedQuote: quotes.find((quote) => quote.source === 'coco' && quote.availabilityStatus === 'available') ?? bestQuote,
-      isLoading: isXyloNetLoading,
+      isLoading: isXyloNetLoading || isUnitFlowLoading,
       xylonetError,
+      unitflowError,
       comingSoonSources: [
-        { source: 'unitflow' as const, label: 'UnitFlow' },
+        // Synthra requires verified router/quoter contract details before integration.
         { source: 'synthra' as const, label: 'Synthra' },
       ],
     }
-  }, [amountIn, reserveEurc, reserveUsdc, slippageBps, tokenIn, tokenOut, xylonetAmountOut, isXyloNetLoading, xylonetError])
+  }, [amountIn, reserveEurc, reserveUsdc, slippageBps, tokenIn, tokenOut, xylonetAmountOut, isXyloNetLoading, xylonetError, unitflowAmountsOut, isUnitFlowLoading, unitflowError])
 }
