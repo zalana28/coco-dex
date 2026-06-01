@@ -100,7 +100,7 @@ export function SwapPage() {
   // When a route is selected, all displayed swap details come from activeQuote.
   // This ensures XyloNet quote values are shown when XyloNet is selected,
   // and Coco quote values are shown when Coco is selected.
-  const { toAmountRaw, toAmountDisplay, priceImpact, minReceivedRaw, minReceivedDisplay, rate, displayRoutePath, displayRouteSource } = useMemo(() => {
+  const { toAmountRaw, toAmountDisplay, priceImpact, minReceivedRaw, minReceivedDisplay, rate, displayRouteSource } = useMemo(() => {
     // If we have an active quote with a valid output, use it as the source of truth
     if (activeQuote && activeQuote.amountOut > BigInt(0)) {
       const amountOut = activeQuote.amountOut
@@ -119,7 +119,6 @@ export function SwapPage() {
         minReceivedRaw: minOut,
         minReceivedDisplay: formatTokenAmount(minOut, toToken.decimals),
         rate: computedRate,
-        displayRoutePath: activeQuote.routePath.join(' → '),
         displayRouteSource: activeQuote.source === 'xylonet'
           ? 'XyloNet'
           : activeQuote.source === 'unitflow'
@@ -138,10 +137,9 @@ export function SwapPage() {
       minReceivedRaw: cocoMinReceivedRaw,
       minReceivedDisplay: cocoMinReceivedRaw > BigInt(0) ? formatTokenAmount(cocoMinReceivedRaw, toToken.decimals) : '',
       rate: cocoRate,
-      displayRoutePath: `${fromToken.symbol} → ${toToken.symbol}`,
       displayRouteSource: 'Coco',
     }
-  }, [activeQuote, fromAmountRaw, cocoAmountRaw, cocoPriceImpact, cocoMinReceivedRaw, cocoRate, fromToken, toToken])
+  }, [activeQuote, fromAmountRaw, cocoAmountRaw, cocoPriceImpact, cocoMinReceivedRaw, cocoRate, toToken])
 
   // ─── Route-aware approval spender ───
   // Coco route → approve Coco router. XyloNet route → approve XyloNet router.
@@ -376,7 +374,7 @@ export function SwapPage() {
     if (!fromAmount || parseFloat(fromAmount) <= 0) return { text: 'Enter an amount', disabled: true, action: 'enter' as const }
     if (fromBalance !== undefined && fromAmountRaw > fromBalance) return { text: 'Insufficient balance', disabled: true, action: 'insufficient' as const }
     if (!activeQuote) return { text: 'Route unavailable', disabled: true, action: 'route-unavailable' as const }
-    if (activeQuote.executionStatus === 'non_executable') return { text: 'Execution coming soon', disabled: true, action: 'route-not-executable' as const }
+    if (activeQuote.executionStatus === 'non_executable') return { text: 'Route is quote only', disabled: true, action: 'route-not-executable' as const }
     if (isApproving || isApprovalConfirming) return { text: `Approving ${fromToken.symbol}...`, disabled: true, action: 'approving' as const }
     if (needsApproval) return { text: `Approve ${fromToken.symbol}`, disabled: false, action: 'approve' as const }
     // IMPORTANT: simulation error check comes AFTER needsApproval.
@@ -624,133 +622,154 @@ export function SwapPage() {
 
   const formattedFromBalance = fromBalance !== undefined ? formatTokenAmount(fromBalance, fromToken.decimals) : '—'
   const formattedToBalance = toBalance !== undefined ? formatTokenAmount(toBalance, toToken.decimals) : '—'
+  const activeRouteSummary = activeQuote && activeQuote.amountOut > BigInt(0)
+    ? activeQuote.source === 'unitflow'
+      ? `${fromToken.symbol} → WUSDC → ${toToken.symbol} via UnitFlow`
+      : `${fromToken.symbol} → ${toToken.symbol} via ${displayRouteSource}`
+    : `${fromToken.symbol} → ${toToken.symbol} via Coco`
 
   return (
-    <div className="page-fade px-3 pb-12 pt-28 sm:px-4 sm:pt-24 flex flex-col items-center">
+    <div className="page-fade px-3 pb-12 pt-28 sm:px-4 sm:pt-24">
       <div className="fixed inset-0 bg-[radial-gradient(circle_at_50%_6rem,rgba(59,130,246,0.18),transparent_34%),linear-gradient(180deg,rgba(2,6,23,0),rgba(2,6,23,0.86))] pointer-events-none" />
 
-      <Card className="relative w-full max-w-[480px] p-4 sm:p-6 ring-1 ring-coco-green-500/5">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <p className="text-xs uppercase tracking-[0.22em] text-coco-teal-400">Compare routes before you swap</p>
-            <h2 className="mt-1 text-xl font-semibold text-coco-dark-text">Swap</h2>
-          </div>
-          <button
-            onClick={() => setShowSettings(!showSettings)}
-            className="p-2 rounded-xl border border-coco-dark-border bg-coco-dark-bg/60 text-coco-dark-muted transition-colors hover:border-coco-green-500/40 hover:text-coco-dark-text"
-          >
-            <Settings className="h-5 w-5" />
-          </button>
-        </div>
+      <div className="relative mx-auto w-full max-w-[1060px] lg:grid lg:grid-cols-[minmax(420px,520px)_minmax(360px,460px)] lg:items-start lg:gap-6 xl:gap-8">
+        <div className="w-full">
+          <Card className="relative w-full p-4 sm:p-6 ring-1 ring-coco-green-500/5">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] text-coco-teal-400">Compare before swapping</p>
+                <h2 className="mt-1 text-xl font-semibold text-coco-dark-text">Swap</h2>
+              </div>
+              <button
+                onClick={() => setShowSettings(!showSettings)}
+                className="p-2 rounded-xl border border-coco-dark-border bg-coco-dark-bg/60 text-coco-dark-muted transition-colors hover:border-coco-green-500/40 hover:text-coco-dark-text"
+              >
+                <Settings className="h-5 w-5" />
+              </button>
+            </div>
 
-        {/* Settings */}
-        {showSettings && (
-          <SwapSettings slippage={slippage} setSlippage={setSlippage} deadline={deadline} setDeadline={setDeadline} approvalMode={approvalMode} setApprovalMode={setApprovalMode} />
-        )}
-
-        {/* Wrong network banner */}
-        {isWrongNetwork && (
-          <div className="mb-4 flex items-start gap-2.5 rounded-xl bg-coco-red-500/10 border border-coco-red-500/20 p-3.5 shadow-coco-1">
-            <Wifi className="h-4 w-4 text-coco-red-500 shrink-0 mt-0.5" />
-            <p className="text-xs text-coco-red-500">Wrong network. Switch to Arc Testnet to use Coco DEX.</p>
-          </div>
-        )}
-
-        {/* No liquidity banner */}
-        {!isWrongNetwork && !reservesLoading && !hasLiquidity && (
-          <div className="mb-4 flex items-start gap-2.5 rounded-xl bg-coco-amber-500/10 border border-coco-amber-500/20 p-3.5 shadow-coco-1">
-            <AlertTriangle className="h-4 w-4 text-coco-amber-500 shrink-0 mt-0.5" />
-            <p className="text-xs text-coco-amber-500">This pool has no liquidity yet. Add liquidity before swapping.</p>
-          </div>
-        )}
-
-        {/* From */}
-        <TokenInput
-          label="From"
-          token={fromToken}
-          amount={fromAmount}
-          onAmountChange={setFromAmount}
-          balance={formattedFromBalance}
-          onMax={() => fromBalance && setFromAmount(formatTokenAmount(fromBalance, fromToken.decimals))}
-        />
-
-        {/* Direction toggle — Fix 2: wired up with onClick */}
-        <div className="flex justify-center -my-2 relative z-10">
-          <button
-            onClick={handleFlip}
-            className="p-2 rounded-xl bg-coco-dark-surface/95 border border-coco-dark-border hover:border-coco-green-500/50 text-coco-dark-muted hover:text-coco-teal-400 transition-all hover:rotate-180 duration-300 shadow-coco-1"
-            title="Switch tokens"
-          >
-            <ArrowDownUp className="h-4 w-4" />
-          </button>
-        </div>
-
-        {/* To */}
-        <TokenInput
-          label="To"
-          token={toToken}
-          amount={toAmountDisplay}
-          onAmountChange={() => {}}
-          balance={formattedToBalance}
-          readOnly
-        />
-
-        {/* Price Info — shown when any route has a valid quote */}
-        {fromAmount && parseFloat(fromAmount) > 0 && toAmountRaw > BigInt(0) && (
-          <div className="mt-4 rounded-xl bg-coco-dark-bg/75 border border-coco-dark-border p-3.5 space-y-2 shadow-inner">
-            <PriceRow label="Rate" value={`1 ${fromToken.symbol} = ${rate?.toFixed(6) ?? '—'} ${toToken.symbol}`} />
-            {priceImpact > 0 && (
-              <PriceRow
-                label="Price Impact"
-                value={`${priceImpact.toFixed(3)}%`}
-                valueColor={priceImpact < 1 ? 'text-coco-green-500' : priceImpact < 3 ? 'text-coco-amber-500' : 'text-coco-red-500'}
-              />
+            {/* Settings */}
+            {showSettings && (
+              <SwapSettings slippage={slippage} setSlippage={setSlippage} deadline={deadline} setDeadline={setDeadline} approvalMode={approvalMode} setApprovalMode={setApprovalMode} />
             )}
-            <PriceRow label="Min. Received" value={`${minReceivedDisplay} ${toToken.symbol}`} />
-            <PriceRow label="Route" value={`${displayRoutePath} (${displayRouteSource})`} />
-            <PriceRow label="Slippage Tolerance" value={`${slippage}%`} />
+
+            {/* Wrong network banner */}
+            {isWrongNetwork && (
+              <div className="mb-4 flex items-start gap-2.5 rounded-xl bg-coco-red-500/10 border border-coco-red-500/20 p-3.5 shadow-coco-1">
+                <Wifi className="h-4 w-4 text-coco-red-500 shrink-0 mt-0.5" />
+                <p className="text-xs text-coco-red-500">Wrong network. Switch to Arc Testnet to use Coco DEX.</p>
+              </div>
+            )}
+
+            {/* No liquidity banner */}
+            {!isWrongNetwork && !reservesLoading && !hasLiquidity && (
+              <div className="mb-4 flex items-start gap-2.5 rounded-xl bg-coco-amber-500/10 border border-coco-amber-500/20 p-3.5 shadow-coco-1">
+                <AlertTriangle className="h-4 w-4 text-coco-amber-500 shrink-0 mt-0.5" />
+                <p className="text-xs text-coco-amber-500">This pool has no liquidity yet. Add liquidity before swapping.</p>
+              </div>
+            )}
+
+            {/* From */}
+            <TokenInput
+              label="From"
+              token={fromToken}
+              amount={fromAmount}
+              onAmountChange={setFromAmount}
+              balance={formattedFromBalance}
+              onMax={() => fromBalance && setFromAmount(formatTokenAmount(fromBalance, fromToken.decimals))}
+            />
+
+            {/* Direction toggle — Fix 2: wired up with onClick */}
+            <div className="flex justify-center -my-2 relative z-10">
+              <button
+                onClick={handleFlip}
+                className="p-2 rounded-xl bg-coco-dark-surface/95 border border-coco-dark-border hover:border-coco-green-500/50 text-coco-dark-muted hover:text-coco-teal-400 transition-all hover:rotate-180 duration-300 shadow-coco-1"
+                title="Switch tokens"
+              >
+                <ArrowDownUp className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* To */}
+            <TokenInput
+              label="To"
+              token={toToken}
+              amount={toAmountDisplay}
+              onAmountChange={() => {}}
+              balance={formattedToBalance}
+              readOnly
+            />
+
+            {/* Price Info — shown when any route has a valid quote */}
+            {fromAmount && parseFloat(fromAmount) > 0 && toAmountRaw > BigInt(0) && (
+              <div className="mt-4 rounded-xl bg-coco-dark-bg/75 border border-coco-dark-border p-3.5 space-y-2 shadow-inner">
+                <PriceRow label="Rate" value={`1 ${fromToken.symbol} = ${rate?.toFixed(6) ?? '—'} ${toToken.symbol}`} />
+                {priceImpact > 0 && (
+                  <PriceRow
+                    label="Price Impact"
+                    value={`${priceImpact.toFixed(3)}%`}
+                    valueColor={priceImpact < 1 ? 'text-coco-green-500' : priceImpact < 3 ? 'text-coco-amber-500' : 'text-coco-red-500'}
+                  />
+                )}
+                <PriceRow label="Min. Received" value={`${minReceivedDisplay} ${toToken.symbol}`} />
+                <PriceRow label="Route" value={activeRouteSummary} />
+                <PriceRow label="Slippage Tolerance" value={`${slippage}%`} />
+              </div>
+            )}
+
+            {/* Swap Button */}
+            <button
+              disabled={buttonState.disabled}
+              onClick={handleButtonClick}
+              className={`mt-6 w-full py-3.5 rounded-xl font-medium text-base transition-all ${
+                buttonState.disabled
+                  ? 'bg-coco-dark-border text-coco-dark-muted cursor-not-allowed'
+                  : 'bg-coco-green-500 text-white hover:bg-coco-green-600 active:scale-[0.99] shadow-lg shadow-coco-green-500/25 hover:shadow-coco-green-500/35 hover:-translate-y-0.5'
+              }`}
+            >
+              {buttonState.text}
+            </button>
+          </Card>
+
+          <div className="mt-4">
+            <TransactionProgressPanel
+              currentFlow={txProgress.currentFlow}
+              history={txProgress.history}
+              onClear={txProgress.clearFlow}
+              onCheckStatus={handleCheckStatus}
+            />
           </div>
-        )}
+        </div>
 
-        {/* Swap Button */}
-        <button
-          disabled={buttonState.disabled}
-          onClick={handleButtonClick}
-          className={`mt-6 w-full py-3.5 rounded-xl font-medium text-base transition-all ${
-            buttonState.disabled
-              ? 'bg-coco-dark-border text-coco-dark-muted cursor-not-allowed'
-              : 'bg-coco-green-500 text-white hover:bg-coco-green-600 active:scale-[0.99] shadow-lg shadow-coco-green-500/25 hover:shadow-coco-green-500/35 hover:-translate-y-0.5'
-          }`}
-        >
-          {buttonState.text}
-        </button>
+        <div className="mt-4 lg:mt-0 lg:sticky lg:top-24">
+          <div className="lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto lg:pr-1">
+            <div className="mb-3 rounded-xl border border-coco-dark-border bg-coco-dark-surface/70 px-3 py-2.5">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-coco-dark-muted">Arc Testnet</p>
+              <p className="mt-1 text-sm font-medium text-coco-dark-text">Compare before swapping</p>
+              {hasValidFromAmount && activeQuote && (
+                <p className="mt-1 text-[11px] text-coco-dark-muted">Selected route: {activeRouteSummary}</p>
+              )}
+            </div>
 
-        {/* Route Quotes */}
-        {hasValidFromAmount ? (
-          <QuotesPanel
-            quotes={quotes}
-            bestQuoteId={bestQuote?.id}
-            selectedQuoteId={activeQuote?.id}
-            isLoading={quotesLoading}
-            comingSoonSources={comingSoonSources}
-            outputSymbol={toToken.symbol}
-            onSelectQuote={setSelectedRouteId}
-          />
-        ) : (
-          <p className="mt-3 text-center text-xs text-coco-dark-muted">
-            Enter an amount to compare available routes.
-          </p>
-        )}
-      </Card>
-
-      {/* Transaction Progress Panel */}
-      <TransactionProgressPanel
-        currentFlow={txProgress.currentFlow}
-        history={txProgress.history}
-        onClear={txProgress.clearFlow}
-        onCheckStatus={handleCheckStatus}
-      />
+            {hasValidFromAmount ? (
+              <QuotesPanel
+                quotes={quotes}
+                bestQuoteId={bestQuote?.id}
+                selectedQuoteId={activeQuote?.id}
+                isLoading={quotesLoading}
+                comingSoonSources={comingSoonSources}
+                outputSymbol={toToken.symbol}
+                onSelectQuote={setSelectedRouteId}
+              />
+            ) : (
+              <div className="rounded-xl bg-coco-dark-bg/75 border border-coco-dark-border p-4 text-xs text-coco-dark-muted">
+                Enter an amount to compare routes and select the best quote.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -804,12 +823,19 @@ function QuotesPanel({
   outputSymbol: string
   onSelectQuote: (quoteId: string) => void
 }) {
+  const routeDetailBySource: Record<RouteQuote['source'], string> = {
+    coco: 'Direct pool',
+    xylonet: 'External router',
+    unitflow: 'Universal router',
+    synthra: 'V3 route',
+  }
+
   return (
-    <div className="mt-4 rounded-xl bg-coco-dark-bg/75 border border-coco-dark-border p-3.5 space-y-3">
+    <div className="rounded-xl bg-coco-dark-bg/75 border border-coco-dark-border p-3 space-y-2.5">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold text-coco-dark-text">Route quotes</h3>
-          <p className="text-[11px] text-coco-dark-muted">Compare routes. Quote-only sources show pricing without swap execution.</p>
+          <p className="text-[11px] text-coco-dark-muted">Best quote is highlighted. Compare before swapping.</p>
         </div>
         {isLoading && <span className="text-[11px] text-coco-dark-muted">Refreshing...</span>}
       </div>
@@ -829,14 +855,19 @@ function QuotesPanel({
           const isUnavailable = quote.availabilityStatus === 'unavailable'
           const isQuoteOnly = quote.executionStatus === 'non_executable' && isAvailable
           const isExecutable = quote.executionStatus === 'executable' && isAvailable
+          const sourceDetail = routeDetailBySource[quote.source]
+          const routeTypeLabel = quote.source === 'coco' ? 'Live route' : 'External route'
+          const pathStart = quote.routePath[0] ?? ''
+          const pathEnd = quote.routePath[quote.routePath.length - 1] ?? ''
+          const compactPath = quote.source === 'unitflow'
+            ? quote.routePath.join(' → ')
+            : `${pathStart} → ${pathEnd}`
           const routeNotice = isUnavailable
             ? quote.unavailableReason
             : isLoadingQuote
               ? 'Loading quote'
               : isQuoteOnly
-                ? isBest
-                  ? 'Best quote, execution coming soon'
-                  : 'Execution coming soon'
+                ? 'Quote available. Execution is disabled for this route.'
                 : quote.warning
 
           return (
@@ -848,9 +879,9 @@ function QuotesPanel({
               onClick={() => {
                 if (isAvailable) onSelectQuote(quote.id)
               }}
-              className={`w-full rounded-lg border p-3 text-left transition-all focus:outline-none focus:ring-2 focus:ring-coco-green-500/50 ${
+              className={`w-full rounded-lg border p-2.5 text-left transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/40 ${
                 isSelected
-                  ? 'border-coco-green-500/60 bg-coco-green-500/10 shadow-lg shadow-coco-green-500/10'
+                  ? 'border-blue-500/65 bg-blue-500/10 shadow-lg shadow-blue-500/15'
                   : isUnavailable
                     ? 'border-coco-red-500/20 bg-coco-red-500/5'
                     : isLoadingQuote
@@ -858,7 +889,7 @@ function QuotesPanel({
                       : isQuoteOnly
                         ? 'border-coco-amber-500/25 bg-coco-amber-500/5 hover:border-coco-amber-500/45'
                         : isBest
-                    ? 'border-coco-green-500/30 bg-coco-dark-surface/85'
+                    ? 'border-blue-500/35 bg-coco-dark-surface/90'
                     : 'border-coco-dark-border bg-coco-dark-surface/85 hover:-translate-y-0.5 hover:border-coco-green-500/30'
               }`}
             >
@@ -866,28 +897,30 @@ function QuotesPanel({
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`text-sm font-medium ${isUnavailable ? 'text-coco-dark-muted' : 'text-coco-dark-text'}`}>{quote.label}</span>
-                    {isBest && <span className="rounded-full bg-coco-green-500/15 px-2 py-0.5 text-[10px] font-medium text-coco-green-500">Best</span>}
+                    {isBest && <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-medium text-blue-400">Best quote</span>}
+                    <span className="rounded-full bg-coco-dark-border/55 px-2 py-0.5 text-[10px] font-medium text-coco-dark-muted">{routeTypeLabel}</span>
                     {isExecutable && <span className="rounded-full bg-coco-green-500/15 px-2 py-0.5 text-[10px] font-medium text-coco-green-500">Executable</span>}
                     {isQuoteOnly && <span className="rounded-full bg-coco-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-coco-amber-500">Quote only</span>}
                     {isLoadingQuote && <span className="rounded-full bg-coco-dark-border/60 px-2 py-0.5 text-[10px] font-medium text-coco-dark-muted">Loading</span>}
                     {isUnavailable && <span className="rounded-full bg-coco-red-500/15 px-2 py-0.5 text-[10px] font-medium text-coco-red-500">Unavailable</span>}
                   </div>
-                  <p className="mt-1 text-[11px] text-coco-dark-muted">{quote.routePath.join(' → ')}</p>
+                  <p className="mt-1 text-[11px] text-coco-dark-muted">{sourceDetail}</p>
+                  <p className="mt-0.5 text-[11px] text-coco-dark-muted">{compactPath}</p>
                 </div>
                 <div className="text-right">
-                  <p className="font-mono text-sm text-coco-dark-text">{quote.amountOutFormatted} {outputSymbol}</p>
+                  <p className="font-mono text-base text-coco-dark-text">{quote.amountOutFormatted} {outputSymbol}</p>
                   <p className="text-[11px] text-coco-dark-muted">
                     {quote.minAmountOut > BigInt(0) ? `Min ${formatTokenAmount(quote.minAmountOut)} ${outputSymbol}` : 'Quote unavailable'}
                   </p>
                 </div>
               </div>
               {routeNotice && (
-                <div className={`mt-2 flex items-start gap-2 rounded-lg px-2.5 py-2 text-[11px] ${
+                <div className={`mt-2 flex items-start gap-1.5 rounded-md px-2 py-1.5 text-[11px] ${
                   isUnavailable
-                    ? 'bg-coco-red-500/10 text-coco-red-500'
-                    : 'bg-coco-amber-500/10 text-coco-amber-500'
+                    ? 'bg-coco-red-500/8 text-coco-red-500'
+                    : 'bg-coco-amber-500/8 text-coco-amber-500'
                 }`}>
-                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5 opacity-85" />
                   <span>{routeNotice}</span>
                 </div>
               )}
@@ -904,11 +937,11 @@ function QuotesPanel({
           >
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-coco-dark-muted">{source.label}</span>
-              <span className="rounded-full bg-coco-dark-border/50 px-2 py-0.5 text-[10px] font-medium text-coco-dark-muted">Coming soon</span>
+              <span className="rounded-full bg-coco-dark-border/50 px-2 py-0.5 text-[10px] font-medium text-coco-dark-muted">Quote only</span>
             </div>
             <div className="mt-2 flex items-start gap-2 rounded-lg bg-coco-dark-border/30 px-2.5 py-2 text-[11px] text-coco-dark-muted">
               <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-              <span>Route coming soon</span>
+              <span>Quote is visible, execution is disabled.</span>
             </div>
           </button>
         ))}

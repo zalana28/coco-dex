@@ -120,11 +120,11 @@ export function LandingPage() {
         <Section
           eyebrow="Compare routes before you swap"
           title="Smart routing that keeps route quality visible."
-          description="Coco compares available Arc routes, executes Coco pool swaps directly, and can route through XyloNet when selected. UnitFlow and Synthra integrations are prepared as coming soon routes."
+          description="Coco compares available Arc routes and supports executable routing across Coco, XyloNet, UnitFlow, and Synthra on Arc Testnet."
         >
           <FeatureGrid>
             <FeatureCard icon={<GitCompareArrows />} title="Route comparison" description="See expected output, min received, route source, execution status, and slippage before taking action." />
-            <FeatureCard icon={<Sparkles />} title="External liquidity" description="XyloNet routes can execute through the XyloNet router while future integrations stay clearly marked." />
+            <FeatureCard icon={<Sparkles />} title="External liquidity" description="External routes execute through their own routers while route source and execution state stay visible." />
             <FeatureCard icon={<LockKeyhole />} title="Approval clarity" description="External routes may require separate approvals, so route-specific approval context stays visible." />
           </FeatureGrid>
         </Section>
@@ -228,8 +228,8 @@ function HeroSwapMockup() {
       <div className="relative rounded-[2rem] border border-coco-dark-border bg-coco-dark-surface/75 p-4 shadow-[0_24px_90px_rgba(2,6,23,0.55)] backdrop-blur-2xl sm:p-5">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-coco-dark-muted">Best route</p>
-            <h2 className="mt-1 text-lg font-semibold text-coco-dark-text">Swap preview</h2>
+            <p className="text-xs uppercase tracking-[0.24em] text-coco-dark-muted">Compare before swapping</p>
+            <h2 className="mt-1 text-lg font-semibold text-coco-dark-text">Best quote preview</h2>
           </div>
           <span className="rounded-full bg-coco-teal-400/12 px-3 py-1 text-xs font-medium text-coco-teal-400">Arc Testnet</span>
         </div>
@@ -239,14 +239,14 @@ function HeroSwapMockup() {
           <div className="mx-auto grid h-9 w-9 place-items-center rounded-xl border border-coco-dark-border bg-coco-dark-bg text-coco-teal-400">
             <ArrowRight className="h-4 w-4 rotate-90" />
           </div>
-          <MockAmount label="Receive" amount="Best route quote" token="EURC" />
+          <MockAmount label="Receive" amount="Best quote" token="EURC" />
         </div>
 
         <div className="mt-5 space-y-2">
-          <MockRoute name="Coco" detail="Direct pool" output="0.9389 EURC" selected />
-          <MockRoute name="XyloNet" detail="External router" output="0.9391 EURC" />
-          <MockRoute name="UnitFlow" detail="Coming soon" output="Pending" muted />
-          <MockRoute name="Synthra" detail="Coming soon" output="Pending" muted />
+          <MockRoute name="Coco" detail="Direct pool" routeKind="Live route" output="0.9389 EURC" selected />
+          <MockRoute name="XyloNet" detail="External router" routeKind="External route" output="0.9391 EURC" />
+          <MockRoute name="UnitFlow" detail="Universal router" routeKind="External route" output="0.9390 EURC" />
+          <MockRoute name="Synthra" detail="V3 route" routeKind="External route" output="0.9392 EURC" />
         </div>
       </div>
     </div>
@@ -268,21 +268,36 @@ function MockAmount({ label, amount, token }: { label: string; amount: string; t
   )
 }
 
-function MockRoute({ name, detail, output, selected = false, muted = false }: { name: string; detail: string; output: string; selected?: boolean; muted?: boolean }) {
+function MockRoute({
+  name,
+  detail,
+  routeKind,
+  output,
+  selected = false,
+}: {
+  name: string
+  detail: string
+  routeKind: string
+  output: string
+  selected?: boolean
+}) {
   return (
     <div className={`rounded-2xl border p-3 transition-all ${
       selected
-        ? 'border-coco-green-500/55 bg-coco-green-500/12 shadow-lg shadow-coco-green-500/10'
-        : muted
-          ? 'border-dashed border-coco-dark-border bg-coco-dark-bg/35'
-          : 'border-coco-dark-border bg-coco-dark-bg/55'
+        ? 'border-blue-500/55 bg-blue-500/10 shadow-lg shadow-blue-500/15'
+        : 'border-coco-dark-border bg-coco-dark-bg/55'
     }`}>
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className={`text-sm font-semibold ${muted ? 'text-coco-dark-muted' : 'text-coco-dark-text'}`}>{name}</p>
+          <p className="text-sm font-semibold text-coco-dark-text">{name}</p>
           <p className="text-xs text-coco-dark-muted">{detail}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <span className="rounded-full bg-coco-dark-border/60 px-2 py-0.5 text-[10px] font-medium text-coco-dark-muted">{routeKind}</span>
+            <span className="rounded-full bg-coco-green-500/15 px-2 py-0.5 text-[10px] font-medium text-coco-green-500">Executable</span>
+            {selected && <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-medium text-blue-400">Best quote</span>}
+          </div>
         </div>
-        <p className={`text-right font-mono text-xs ${muted ? 'text-coco-dark-muted' : 'text-coco-teal-400'}`}>{output}</p>
+        <p className="text-right font-mono text-xs text-coco-teal-400">{output}</p>
       </div>
     </div>
   )
