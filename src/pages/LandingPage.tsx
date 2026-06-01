@@ -95,9 +95,9 @@ export function LandingPage() {
               <Link to="/pools" className="inline-flex items-center gap-1.5 hover:text-coco-teal-400">
                 Explore Pools <ArrowRight className="h-3.5 w-3.5" />
               </Link>
-              <span className="inline-flex items-center gap-1.5 text-coco-dark-muted">
-                Docs coming soon
-              </span>
+              <Link to="/docs" className="inline-flex items-center gap-1.5 hover:text-coco-teal-400">
+                Read Docs <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
             </div>
           </div>
 
@@ -214,6 +214,7 @@ export function LandingPage() {
             <Link to="/swap" className="hover:text-coco-teal-400">Launch App</Link>
             <Link to="/pools" className="hover:text-coco-teal-400">Explore Pools</Link>
             <Link to="/analytics" className="hover:text-coco-teal-400">View Analytics</Link>
+            <Link to="/docs" className="hover:text-coco-teal-400">Docs</Link>
           </div>
         </div>
       </footer>

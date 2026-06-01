@@ -8,6 +8,7 @@ const navLinks = [
   { to: '/swap', label: 'Swap' },
   { to: '/pools', label: 'Pools' },
   { to: '/analytics', label: 'Analytics' },
+  { to: '/docs', label: 'Docs' },
 ]
 
 export function Navbar() {

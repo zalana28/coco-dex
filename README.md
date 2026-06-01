@@ -2,8 +2,9 @@
 
 A lightweight Arc Testnet AMM for swapping USDC/EURC, providing liquidity, and tracking real indexed analytics.
 
-**Live demo:** https://coco-dex.vercel.app  
-**Repository:** https://github.com/zalana28/coco-dex
+- **Live demo:** https://coco-dex.vercel.app
+- **Docs:** https://coco-dex.vercel.app/docs
+- **Repository:** https://github.com/zalana28/coco-dex
 
 ---
 
@@ -19,6 +20,7 @@ A lightweight Arc Testnet AMM for swapping USDC/EURC, providing liquidity, and t
 - Real analytics powered by Supabase indexer
 - External cron-based analytics sync (every 15 minutes)
 - Max approval mode for streamlined repeat swaps
+- Public `/docs` page and markdown developer docs
 
 ## Tech Stack
 
@@ -57,6 +59,7 @@ Create `.env.local` from `.env.example`:
 | Variable | Description | Scope |
 |----------|-------------|-------|
 | `VITE_PUBLIC_APP_ENV` | App environment label | Frontend |
+| `VITE_WALLETCONNECT_PROJECT_ID` | WalletConnect project ID for mobile wallet connections | Frontend |
 | `ARC_TESTNET_RPC_URL` | Arc Testnet RPC endpoint | Server |
 | `SUPABASE_URL` | Supabase project URL | Server |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key | Server |
