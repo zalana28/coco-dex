@@ -680,7 +680,7 @@ function QuotesPanel({
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold text-coco-dark-text">Route quotes</h3>
-          <p className="text-[11px] text-coco-dark-muted">Compare routes. Both Coco and XyloNet can execute swaps on Arc Testnet.</p>
+          <p className="text-[11px] text-coco-dark-muted">Compare routes. Quote-only sources show pricing without swap execution.</p>
         </div>
         {isLoading && <span className="text-[11px] text-coco-dark-muted">Refreshing...</span>}
       </div>
