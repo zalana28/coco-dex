@@ -6,6 +6,7 @@ import { Settings, ArrowDownUp, ChevronDown, Info, AlertTriangle, Wifi, Shield }
 import { USDC, EURC } from '@/config/tokens'
 import { ROUTER_ADDRESS } from '@/config/contracts'
 import { XYLONET_ROUTER_ADDRESS } from '@/config/externalDexes'
+import { SYNTHRA_V3_SWAP_ROUTER_ADDRESS } from '@/config/synthra'
 import { useAccount } from 'wagmi'
 import { usePairReserves } from '@/hooks/usePairReserves'
 import { useTokenBalance } from '@/hooks/useTokenBalance'
@@ -13,6 +14,7 @@ import { useApprove } from '@/hooks/useApprove'
 import { useSwap } from '@/hooks/useSwap'
 import { useXyloNetSwap } from '@/hooks/useXyloNetSwap'
 import { useUnitFlowSwap } from '@/hooks/useUnitFlowSwap'
+import { useSynthraSwap } from '@/hooks/useSynthraSwap'
 import { useNetworkGuard } from '@/hooks/useNetworkGuard'
 import { useTransactionSettings } from '@/hooks/useSettings'
 import type { ApprovalMode } from '@/hooks/useSettings'
@@ -118,7 +120,13 @@ export function SwapPage() {
         minReceivedDisplay: formatTokenAmount(minOut, toToken.decimals),
         rate: computedRate,
         displayRoutePath: activeQuote.routePath.join(' → '),
-        displayRouteSource: activeQuote.source === 'xylonet' ? 'XyloNet' : activeQuote.source === 'unitflow' ? 'UnitFlow' : 'Coco',
+        displayRouteSource: activeQuote.source === 'xylonet'
+          ? 'XyloNet'
+          : activeQuote.source === 'unitflow'
+            ? 'UnitFlow'
+            : activeQuote.source === 'synthra'
+              ? 'Synthra'
+              : 'Coco',
       }
     }
 
@@ -139,10 +147,12 @@ export function SwapPage() {
   // Coco route → approve Coco router. XyloNet route → approve XyloNet router.
   // SAFETY: Never approve the wrong router for the selected route.
   const approvalSpender: `0x${string}` = useMemo(() => {
+    if (activeQuote?.source === 'synthra') return SYNTHRA_V3_SWAP_ROUTER_ADDRESS
     if (activeQuote?.source === 'xylonet') return XYLONET_ROUTER_ADDRESS
     return ROUTER_ADDRESS
   }, [activeQuote])
   const isUnitFlowRoute = activeQuote?.source === 'unitflow'
+  const isSynthraRoute = activeQuote?.source === 'synthra'
   const approvalAmount = isUnitFlowRoute ? BigInt(0) : fromAmountRaw
 
   // ─── Approval: targets the fromToken with the route-aware spender ───
@@ -160,20 +170,58 @@ export function SwapPage() {
 
   // UnitFlow UniversalRouter execution
   const { swap: unitFlowSwap, isPending: isUnitFlowSwapping, isConfirming: isUnitFlowSwapConfirming, txHash: unitFlowSwapTxHash, isSuccess: unitFlowSwapSuccess, isReverted: unitFlowSwapReverted, error: unitFlowSwapError, simulationError: unitFlowSimulationError, clearSimulationError: clearUnitFlowSimulationError, reset: resetUnitFlowSwap } = useUnitFlowSwap()
+  const { swap: synthraSwap, isPending: isSynthraSwapping, isConfirming: isSynthraSwapConfirming, txHash: synthraSwapTxHash, isSuccess: synthraSwapSuccess, isReverted: isSynthraSwapReverted, error: synthraSwapError, simulationError: synthraSimulationError, clearSimulationError: clearSynthraSimulationError, reset: resetSynthraSwap } = useSynthraSwap()
 
   // Unified swap state (route-aware)
   const isXyloNetRoute = activeQuote?.source === 'xylonet'
-  const isSwapping = isUnitFlowRoute ? isUnitFlowSwapping : isXyloNetRoute ? isXyloNetSwapping : isCocoSwapping
-  const isSwapConfirming = isUnitFlowRoute ? isUnitFlowSwapConfirming : isXyloNetRoute ? isXyloNetSwapConfirming : isCocoSwapConfirming
-  const swapTxHash = isUnitFlowRoute ? unitFlowSwapTxHash : isXyloNetRoute ? xyloNetSwapTxHash : cocoSwapTxHash
-  const swapSuccess = isUnitFlowRoute ? unitFlowSwapSuccess : isXyloNetRoute ? xyloNetSwapSuccess : cocoSwapSuccess
-  const swapReverted = isUnitFlowRoute ? unitFlowSwapReverted : isXyloNetRoute ? xyloNetSwapReverted : cocoSwapReverted
-  const swapError = isUnitFlowRoute ? unitFlowSwapError : isXyloNetRoute ? xyloNetSwapError : cocoSwapError
+  const isSwapping = isUnitFlowRoute
+    ? isUnitFlowSwapping
+    : isXyloNetRoute
+      ? isXyloNetSwapping
+      : isSynthraRoute
+        ? isSynthraSwapping
+        : isCocoSwapping
+  const isSwapConfirming = isUnitFlowRoute
+    ? isUnitFlowSwapConfirming
+    : isXyloNetRoute
+      ? isXyloNetSwapConfirming
+      : isSynthraRoute
+        ? isSynthraSwapConfirming
+        : isCocoSwapConfirming
+  const swapTxHash = isUnitFlowRoute
+    ? unitFlowSwapTxHash
+    : isXyloNetRoute
+      ? xyloNetSwapTxHash
+      : isSynthraRoute
+        ? synthraSwapTxHash
+        : cocoSwapTxHash
+  const swapSuccess = isUnitFlowRoute
+    ? unitFlowSwapSuccess
+    : isXyloNetRoute
+      ? xyloNetSwapSuccess
+      : isSynthraRoute
+        ? synthraSwapSuccess
+        : cocoSwapSuccess
+  const swapReverted = isUnitFlowRoute
+    ? unitFlowSwapReverted
+    : isXyloNetRoute
+      ? xyloNetSwapReverted
+      : isSynthraRoute
+        ? isSynthraSwapReverted
+        : cocoSwapReverted
+  const swapError = isUnitFlowRoute
+    ? unitFlowSwapError
+    : isXyloNetRoute
+      ? xyloNetSwapError
+      : isSynthraRoute
+        ? synthraSwapError
+        : cocoSwapError
 
   useEffect(() => {
     clearSimulationError()
     clearUnitFlowSimulationError()
-  }, [clearSimulationError, clearUnitFlowSimulationError, selectedRouteId, fromAmountRaw, activeQuote?.minAmountOut, fromToken.address, toToken.address])
+    clearSynthraSimulationError()
+  }, [clearSimulationError, clearUnitFlowSimulationError, clearSynthraSimulationError, selectedRouteId, fromAmountRaw, activeQuote?.minAmountOut, fromToken.address, toToken.address])
 
   // Transaction progress tracking (strict sequential)
   const txProgress = useTransactionProgress()
@@ -315,15 +363,16 @@ export function SwapPage() {
     resetCocoSwap()
     resetXyloNetSwap()
     resetUnitFlowSwap()
+    resetSynthraSwap()
     setSelectedRouteId('coco-usdc-eurc')
-  }, [fromToken, toToken, cocoAmountRaw, txProgress, resetApproval, resetCocoSwap, resetXyloNetSwap, resetUnitFlowSwap])
+  }, [fromToken, toToken, cocoAmountRaw, txProgress, resetApproval, resetCocoSwap, resetXyloNetSwap, resetUnitFlowSwap, resetSynthraSwap])
 
   // Button state machine
   const buttonState = useMemo(() => {
     if (!isConnected) return { text: 'Connect Wallet', disabled: true, action: 'connect' as const }
     if (isWrongNetwork) return { text: isSwitching ? 'Switching...' : 'Switch to Arc Testnet', disabled: isSwitching, action: 'switch-network' as const }
     if (reservesLoading) return { text: 'Loading...', disabled: true, action: 'loading' as const }
-    if (!hasLiquidity && !isXyloNetRoute && !isUnitFlowRoute) return { text: 'Pool has no liquidity', disabled: true, action: 'no-liquidity' as const }
+    if (!hasLiquidity && !isXyloNetRoute && !isUnitFlowRoute && !isSynthraRoute) return { text: 'Pool has no liquidity', disabled: true, action: 'no-liquidity' as const }
     if (!fromAmount || parseFloat(fromAmount) <= 0) return { text: 'Enter an amount', disabled: true, action: 'enter' as const }
     if (fromBalance !== undefined && fromAmountRaw > fromBalance) return { text: 'Insufficient balance', disabled: true, action: 'insufficient' as const }
     if (!activeQuote) return { text: 'Route unavailable', disabled: true, action: 'route-unavailable' as const }
@@ -335,9 +384,30 @@ export function SwapPage() {
     // The simulation would always fail without allowance (router's transferFrom reverts).
     if (xyloNetSimulationError && isXyloNetRoute) return { text: xyloNetSimulationError, disabled: true, action: 'simulation-failed' as const }
     if (unitFlowSimulationError && isUnitFlowRoute) return { text: unitFlowSimulationError, disabled: true, action: 'simulation-failed' as const }
-    if (isSwapping || isSwapConfirming) return { text: isUnitFlowRoute ? 'Swapping via UnitFlow...' : isXyloNetRoute ? 'Swapping via XyloNet...' : 'Swapping...', disabled: true, action: 'swapping' as const }
-    return { text: isUnitFlowRoute ? 'Swap via UnitFlow' : isXyloNetRoute ? 'Swap via XyloNet' : 'Swap', disabled: false, action: 'swap' as const }
-  }, [isConnected, isWrongNetwork, isSwitching, reservesLoading, hasLiquidity, fromAmount, fromBalance, fromAmountRaw, activeQuote, isApproving, isApprovalConfirming, needsApproval, fromToken.symbol, isSwapping, isSwapConfirming, isXyloNetRoute, isUnitFlowRoute, xyloNetSimulationError, unitFlowSimulationError])
+    if (synthraSimulationError && isSynthraRoute) return { text: synthraSimulationError, disabled: true, action: 'simulation-failed' as const }
+    if (isSwapping || isSwapConfirming) return {
+      text: isUnitFlowRoute
+        ? 'Swapping via UnitFlow...'
+        : isXyloNetRoute
+          ? 'Swapping via XyloNet...'
+          : isSynthraRoute
+            ? 'Swapping via Synthra...'
+            : 'Swapping...',
+      disabled: true,
+      action: 'swapping' as const,
+    }
+    return {
+      text: isUnitFlowRoute
+        ? 'Swap via UnitFlow'
+        : isXyloNetRoute
+          ? 'Swap via XyloNet'
+          : isSynthraRoute
+            ? 'Swap via Synthra'
+            : 'Swap',
+      disabled: false,
+      action: 'swap' as const,
+    }
+  }, [isConnected, isWrongNetwork, isSwitching, reservesLoading, hasLiquidity, fromAmount, fromBalance, fromAmountRaw, activeQuote, isApproving, isApprovalConfirming, needsApproval, fromToken.symbol, isSwapping, isSwapConfirming, isXyloNetRoute, isUnitFlowRoute, isSynthraRoute, xyloNetSimulationError, unitFlowSimulationError, synthraSimulationError])
 
   const handleButtonClick = () => {
     if (buttonState.action === 'switch-network') {
@@ -350,7 +420,13 @@ export function SwapPage() {
 
     if (buttonState.action === 'approve') {
       // Start flow with approve + swap steps
-      const swapLabel = isUnitFlowRoute ? 'Swap via UnitFlow' : isXyloNetRoute ? 'Swap via XyloNet' : 'Swap'
+      const swapLabel = isUnitFlowRoute
+        ? 'Swap via UnitFlow'
+        : isXyloNetRoute
+          ? 'Swap via XyloNet'
+          : isSynthraRoute
+            ? 'Swap via Synthra'
+            : 'Swap'
       txProgress.startFlow([
         { type: approveType, label: `Approve ${fromToken.symbol}` },
         { type: 'swap', label: swapLabel },
@@ -362,7 +438,13 @@ export function SwapPage() {
       })
     } else if (buttonState.action === 'swap' && address) {
       // Start or continue flow with just swap step
-      const swapLabel = isUnitFlowRoute ? 'Swap via UnitFlow' : isXyloNetRoute ? 'Swap via XyloNet' : 'Swap'
+      const swapLabel = isUnitFlowRoute
+        ? 'Swap via UnitFlow'
+        : isXyloNetRoute
+          ? 'Swap via XyloNet'
+          : isSynthraRoute
+            ? 'Swap via Synthra'
+            : 'Swap'
       if (!txProgress.currentFlow) {
         txProgress.startFlow([{ type: 'swap', label: swapLabel }])
       }
@@ -467,6 +549,53 @@ export function SwapPage() {
           (hash) => {
             txProgress.markSubmitted('swap', hash)
           }
+        ).then((result) => {
+          if (result?.status === 'SIMULATION_FAILED') {
+            txProgress.markFailed('swap', result.reason)
+          } else if (result?.status === 'WRONG_NETWORK') {
+            txProgress.markFailed('swap', result.reason)
+          }
+        })
+      } else if (isSynthraRoute) {
+        if (!activeQuote || activeQuote.source !== 'synthra') {
+          console.warn('[SwapPage] BLOCKED: activeQuote is not Synthra')
+          txProgress.markFailed('swap', 'Route mismatch — expected Synthra')
+          return
+        }
+        if (activeQuote.amountOut <= BigInt(0) || activeQuote.minAmountOut <= BigInt(0)) {
+          console.warn('[SwapPage] BLOCKED: Synthra quote has invalid amounts', { amountOut: activeQuote.amountOut, minAmountOut: activeQuote.minAmountOut })
+          txProgress.markFailed('swap', 'Invalid Synthra quote amounts')
+          return
+        }
+        if (!activeQuote.routerAddress || activeQuote.routerAddress.toLowerCase() !== SYNTHRA_V3_SWAP_ROUTER_ADDRESS.toLowerCase()) {
+          console.warn('[SwapPage] BLOCKED: Synthra quote missing or mismatched router address', { routerAddress: activeQuote.routerAddress })
+          txProgress.markFailed('swap', 'Missing Synthra router address')
+          return
+        }
+        if (!activeQuote.feeTier || !Number.isFinite(activeQuote.feeTier)) {
+          console.warn('[SwapPage] BLOCKED: Synthra quote missing fee tier', { quoteId: activeQuote.id })
+          txProgress.markFailed('swap', 'Missing Synthra fee tier')
+          return
+        }
+        if (allowance < fromAmountRaw) {
+          console.warn('[SwapPage] BLOCKED: Synthra swap attempted with insufficient allowance', { allowance: allowance.toString(), required: fromAmountRaw.toString() })
+          txProgress.markFailed('swap', 'Insufficient allowance — approve first')
+          return
+        }
+
+        synthraSwap(
+          {
+            tokenIn: fromToken,
+            tokenOut: toToken,
+            amountIn: fromAmountRaw,
+            minAmountOut: activeQuote.minAmountOut,
+            feeTier: activeQuote.feeTier,
+            account: address,
+            to: address,
+          },
+          (hash) => {
+            txProgress.markSubmitted('swap', hash)
+          },
         ).then((result) => {
           if (result?.status === 'SIMULATION_FAILED') {
             txProgress.markFailed('swap', result.reason)
