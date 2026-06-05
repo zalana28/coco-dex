@@ -14,6 +14,10 @@ A CocoStablePool V1 contract prototype has been added for local testing. It is t
 
 Fuzz tests and invariant tests have been added for the CocoStablePool V1 prototype. They cover liquidity operations, swaps, round-trip behavior, quote safety, LP accounting, pool balance accounting, fee bounds, and paused-state write blocking. This does not make the prototype audited or production-ready. It is still not deployed, not connected to the frontend or router, and the production math still needs deeper review before any integration.
 
+## Deployment Tooling Status
+
+Local Foundry deployment tooling exists for a future Arc Testnet deployment. No CocoStablePool V1 deployment has happened in this repository, no deployed addresses are committed, and frontend/router integration remains a later phase after deployment validation.
+
 ## Why Coco Needs a Native Stable Pool
 
 Coco DEX already compares routes across Coco, XyloNet, UnitFlow, and Synthra. A native Coco stable pool would let Coco own part of the liquidity layer instead of only routing to external pools.

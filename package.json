@@ -18,7 +18,9 @@
     "debug:unitflow-ur": "npx tsx scripts/debugUnitFlowUniversalRouter.ts",
     "discover:synthra": "npx tsx scripts/discoverSynthraContracts.ts",
     "debug:synthra": "npx tsx scripts/debugSynthraQuoteAndSwap.ts",
-    "indexer:backfill": "npx tsx scripts/backfillAnalytics.ts"
+    "indexer:backfill": "npx tsx scripts/backfillAnalytics.ts",
+    "contracts:test": "cd contracts && forge test",
+    "contracts:deploy:stable:dry": "cd contracts && forge script script/DeployCocoStablePool.s.sol:DeployCocoStablePool --rpc-url $ARC_TESTNET_RPC_URL"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",
