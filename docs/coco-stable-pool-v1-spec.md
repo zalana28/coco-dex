@@ -10,6 +10,10 @@ The goal is to offer lower-slippage stablecoin swaps than a basic constant-produ
 
 A CocoStablePool V1 contract prototype has been added for local testing. It is testnet-only, not deployed, not audited, and not connected to the frontend, router, analytics, or indexer. The prototype uses simplified stable-swap-inspired math and still needs deeper review, fuzzing, invariant testing, and deployment planning before any broader integration.
 
+## Fuzz and Invariant Testing Status
+
+Fuzz tests and invariant tests have been added for the CocoStablePool V1 prototype. They cover liquidity operations, swaps, round-trip behavior, quote safety, LP accounting, pool balance accounting, fee bounds, and paused-state write blocking. This does not make the prototype audited or production-ready. It is still not deployed, not connected to the frontend or router, and the production math still needs deeper review before any integration.
+
 ## Why Coco Needs a Native Stable Pool
 
 Coco DEX already compares routes across Coco, XyloNet, UnitFlow, and Synthra. A native Coco stable pool would let Coco own part of the liquidity layer instead of only routing to external pools.
