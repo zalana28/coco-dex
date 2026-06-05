@@ -11,6 +11,7 @@
     "test": "vitest --run",
     "typecheck": "tsc --noEmit",
     "debug:xylonet": "npx tsx scripts/debugXylonetQuote.ts",
+    "debug:xylonet-pools": "npx tsx scripts/debugXylonetStablePools.ts",
     "debug:xylonet-sim": "npx tsx scripts/debugXylonetSwapSimulation.ts",
     "debug:unitflow": "npx tsx scripts/debugUnitFlowQuote.ts",
     "debug:unitflow-exec": "npx tsx scripts/debugUnitFlowExecution.ts",
