@@ -35,6 +35,7 @@ export function SwapPage() {
   const [toToken, setToToken] = useState<Token>(EURC)
   const [fromAmount, setFromAmount] = useState('')
   const [showSettings, setShowSettings] = useState(false)
+  const [showQuotesMobile, setShowQuotesMobile] = useState(false)
   const [selectedRouteId, setSelectedRouteId] = useState<string>('coco-usdc-eurc')
   const { slippage, slippageBps, setSlippage, getDeadlineTimestamp, deadline, setDeadline, approvalMode, setApprovalMode } = useTransactionSettings()
   const hasValidFromAmount = fromAmount.trim() !== '' && Number.isFinite(Number(fromAmount)) && Number(fromAmount) > 0
@@ -627,9 +628,16 @@ export function SwapPage() {
       ? `${fromToken.symbol} → WUSDC → ${toToken.symbol} via UnitFlow`
       : `${fromToken.symbol} → ${toToken.symbol} via ${displayRouteSource}`
     : `${fromToken.symbol} → ${toToken.symbol} via Coco`
+  const mobileQuotesSummary = hasValidFromAmount && activeQuote && activeQuote.amountOut > BigInt(0)
+    ? `${displayRouteSource}: ${activeQuote.amountOutFormatted} ${toToken.symbol}`
+    : hasValidFromAmount
+      ? quotesLoading
+        ? 'Refreshing quotes'
+        : `${quotes.length} route${quotes.length === 1 ? '' : 's'} available`
+      : 'Enter amount to compare'
 
   return (
-    <div className="page-fade px-3 pb-12 pt-28 sm:px-4 sm:pt-24">
+    <div className="page-fade px-3 pb-12 pt-20 sm:px-4 sm:pt-24">
       <div className="fixed inset-0 bg-[radial-gradient(circle_at_50%_6rem,rgba(59,130,246,0.18),transparent_34%),linear-gradient(180deg,rgba(2,6,23,0),rgba(2,6,23,0.86))] pointer-events-none" />
 
       <div className="relative mx-auto w-full max-w-[1060px] lg:grid lg:grid-cols-[minmax(420px,520px)_minmax(360px,460px)] lg:items-start lg:gap-6 xl:gap-8">
@@ -742,7 +750,22 @@ export function SwapPage() {
           </div>
         </div>
 
-        <div className="mt-4 lg:mt-0 lg:sticky lg:top-24">
+        <div className="mt-4 lg:hidden">
+          <button
+            type="button"
+            onClick={() => setShowQuotesMobile((value) => !value)}
+            className="flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-coco-dark-border bg-coco-dark-surface/80 px-3 py-2.5 text-left shadow-coco-1 backdrop-blur-xl transition-colors hover:border-coco-green-500/35"
+            aria-expanded={showQuotesMobile}
+          >
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold text-coco-dark-text">Route Quotes</span>
+              <span className="block truncate text-[11px] text-coco-dark-muted">{mobileQuotesSummary}</span>
+            </span>
+            <ChevronDown className={`h-4 w-4 shrink-0 text-coco-dark-muted transition-transform ${showQuotesMobile ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
+
+        <div className={`${showQuotesMobile ? 'mt-3 block' : 'hidden'} lg:mt-0 lg:block lg:sticky lg:top-24`}>
           <div className="lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto lg:pr-1">
             <div className="mb-3 rounded-xl border border-coco-dark-border bg-coco-dark-surface/70 px-3 py-2.5">
               <p className="text-[11px] uppercase tracking-[0.2em] text-coco-dark-muted">Arc Testnet</p>

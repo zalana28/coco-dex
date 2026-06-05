@@ -106,16 +106,16 @@ export function AnalyticsPage() {
   }))
 
   return (
-    <div className="page-fade pt-28 sm:pt-24 pb-12 px-3 sm:px-4 mx-auto max-w-6xl">
+    <div className="page-fade pt-20 sm:pt-24 pb-12 px-3 sm:px-4 mx-auto max-w-6xl">
       {/* Header with global refresh */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.22em] text-coco-teal-400">Real indexed analytics</p>
           <h1 className="mt-1 text-2xl font-bold text-coco-dark-text">Analytics</h1>
         </div>
         <button
           onClick={handleRefreshAll}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-coco-dark-surface/80 border border-coco-dark-border text-coco-dark-muted hover:text-coco-dark-text hover:border-coco-green-500/35 ${refreshing ? 'animate-spin-once' : ''}`}
+          className={`flex w-fit items-center gap-1.5 rounded-lg border border-coco-dark-border bg-coco-dark-surface/80 px-3 py-1.5 text-xs font-medium text-coco-dark-muted transition-colors hover:border-coco-green-500/35 hover:text-coco-dark-text ${refreshing ? 'animate-spin-once' : ''}`}
         >
           <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
           Refresh
