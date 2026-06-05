@@ -6,6 +6,10 @@ CocoStablePool V1 is a planned native stablecoin AMM for Coco DEX on Arc Testnet
 
 The goal is to offer lower-slippage stablecoin swaps than a basic constant-product pool when assets are trading close to their expected range. V1 is testnet-only at first. It is not audited and must not be marketed as production-ready or mainnet-ready.
 
+## Prototype Status
+
+A CocoStablePool V1 contract prototype has been added for local testing. It is testnet-only, not deployed, not audited, and not connected to the frontend, router, analytics, or indexer. The prototype uses simplified stable-swap-inspired math and still needs deeper review, fuzzing, invariant testing, and deployment planning before any broader integration.
+
 ## Why Coco Needs a Native Stable Pool
 
 Coco DEX already compares routes across Coco, XyloNet, UnitFlow, and Synthra. A native Coco stable pool would let Coco own part of the liquidity layer instead of only routing to external pools.
@@ -328,4 +332,3 @@ Future phases:
 7. Phase 7: smart router integration.
 8. Phase 8: analytics/indexer integration.
 9. Phase 9: security review.
-
