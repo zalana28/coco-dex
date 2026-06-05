@@ -64,6 +64,9 @@ Create `.env.local` from `.env.example`:
 | `SUPABASE_URL` | Supabase project URL | Server |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key | Server |
 | `CRON_SECRET` | Secret for cron endpoint auth | Server |
+| `CIRCLE_API_KEY` | Circle API key for server-side health checks only | Server |
+| `CIRCLE_BASE_URL` | Circle API base URL, defaults to `https://api.circle.com` | Server |
+| `CIRCLE_ENV` | Circle environment label, e.g. `testnet` | Server |
 | `BACKFILL_FROM_BLOCK` | Start block for backfill (default: 44170190) | Script |
 | `BACKFILL_TO_BLOCK` | End block for backfill (default: latest) | Script |
 | `BACKFILL_CHUNK_SIZE` | Blocks per batch (default: 5000) | Script |
@@ -111,11 +114,28 @@ npm run lint        # eslint
    GET https://coco-dex.vercel.app/api/health
    ```
 
+## Circle API Health
+
+`/api/circle/health` is a server-side readiness endpoint for verifying that a Circle API key is configured. It only checks the Circle Wallets endpoint and does not expose secrets, wallet data, frontend keys, CCTP bridge logic, Wallets integration, Gas Station integration, or swap routing changes.
+
+1. Create an API key in the Circle Console.
+2. Add `CIRCLE_API_KEY` to `.env.local` for local development.
+3. Add `CIRCLE_API_KEY` to Vercel Environment Variables.
+4. Do not use `VITE_CIRCLE_API_KEY`; Circle API keys must stay server-side.
+5. Redeploy after adding or changing Vercel environment variables.
+
+Production check:
+
+```bash
+curl https://coco-dex.vercel.app/api/circle/health
+```
+
 ## Security
 
 - `SUPABASE_SERVICE_ROLE_KEY` is **server-only**. Never expose it to the frontend.
 - Do not prefix server secrets with `VITE_` (Vite exposes those to the browser).
 - `CRON_SECRET` must be kept private and only shared with your cron service.
+- `CIRCLE_API_KEY` is **server-only**. Never expose it to frontend code and never commit real API keys.
 - This project runs on **Arc Testnet** with test tokens only.
 
 ## Roadmap

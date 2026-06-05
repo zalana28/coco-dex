@@ -1,8 +1,8 @@
 # Circle Future Integrations
 
-This document records possible future Circle integrations for Coco DEX. Nothing in this section is implemented by the docs PR.
+This document records possible future Circle integrations for Coco DEX. The only current Circle-related implementation is a server-side `/api/circle/health` readiness endpoint that verifies whether `CIRCLE_API_KEY` can authenticate against the Circle Wallets endpoint.
 
-No Circle API calls, Circle SDKs, CCTP transactions, Circle Wallets flows, Gas Station policies, or Circle Contracts API integrations are added here.
+No Circle SDKs, CCTP transactions, Circle Wallets user flows, Gas Station policies, Circle Contracts API integrations, frontend Circle keys, swap/router changes, or analytics/indexer changes are added here.
 
 ## Public references used
 
@@ -16,17 +16,28 @@ No Circle API calls, Circle SDKs, CCTP transactions, Circle Wallets flows, Gas S
 
 The console overview links can require sign-in. Do not invent console-only behavior when unauthenticated access is unavailable.
 
-## API Keys
+## API Keys And Health
 
-Future backend-only readiness checks could use Circle API keys for server-side API calls, such as a backend `/api/circle/health` endpoint.
+The backend-only readiness check uses `CIRCLE_API_KEY` to call `GET https://api.circle.com/v1/w3s/wallets` from Vercel serverless functions. The response reports only safe health fields such as configuration state, Circle status, endpoint URL, message, and timestamp.
+
+Setup:
+
+- Create an API key in the Circle Console.
+- Add `CIRCLE_API_KEY` to `.env.local` for local development.
+- Add `CIRCLE_API_KEY` to Vercel Environment Variables.
+- Optionally set `CIRCLE_BASE_URL`; it defaults to `https://api.circle.com`.
+- Set `CIRCLE_ENV=testnet` for environment labeling.
+- Redeploy after adding or changing Vercel environment variables.
+- Test production with `curl https://coco-dex.vercel.app/api/circle/health`.
 
 Rules:
 
 - API keys are server-side credentials.
 - Never expose API keys in frontend code.
 - Never commit API keys.
-- Do not use a `VITE_` prefix for a future Circle API key.
-- If later introduced, document it as a backend secret such as `CIRCLE_API_KEY`, not as a frontend env var.
+- Do not use a `VITE_` prefix for a Circle API key.
+- Use `CIRCLE_API_KEY`, not `VITE_CIRCLE_API_KEY`.
+- Do not return API keys, raw authorization headers, full sensitive Circle responses, wallet private data, or secrets from health endpoints.
 
 Circle docs distinguish API keys for server-side REST APIs from client keys and kit keys. Permissionless products like CCTP do not require an API key.
 
@@ -60,4 +71,4 @@ Circle Contracts documentation describes exploring, deploying, interacting with,
 
 ## PR scope lock
 
-Do not add Circle API integration, secrets, SDK dependencies, frontend Circle keys, CCTP calls, Gas Station policy logic, or smart contract API calls in a docs-only PR.
+Do not add secrets, SDK dependencies, frontend Circle keys, CCTP calls, Gas Station policy logic, smart contract API calls, Circle Wallets user flows, swap/router logic changes, or analytics/indexer logic changes in this health endpoint PR.
