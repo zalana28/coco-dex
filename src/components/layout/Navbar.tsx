@@ -19,9 +19,9 @@ export function Navbar() {
 
   return (
     <header className="fixed left-0 right-0 top-0 z-50 border-b border-coco-dark-border/70 bg-coco-dark-bg/75 shadow-[0_12px_40px_rgba(2,6,23,0.28)] backdrop-blur-2xl">
-      <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8">
-        <div className="flex h-16 items-center justify-between gap-3">
-          <Link to="/" className="group flex shrink-0 items-center gap-2" onClick={() => setIsOpen(false)}>
+      <div className="mx-auto max-w-7xl px-2.5 sm:px-6 lg:px-8">
+        <div className="flex h-16 min-w-0 items-center justify-between gap-2 sm:gap-3">
+          <Link to="/" className="group flex min-w-0 shrink-0 items-center gap-2" onClick={() => setIsOpen(false)}>
             <span className="relative grid h-9 w-9 place-items-center overflow-hidden rounded-xl border border-coco-green-500/30 bg-coco-green-500/10 shadow-lg shadow-coco-green-500/15">
               <img src="/coconut.svg" alt="" className="h-7 w-7 transition-transform duration-300 group-hover:rotate-12" />
             </span>
@@ -61,7 +61,7 @@ export function Navbar() {
             {showWallet && <ConnectWalletButton />}
           </div>
 
-          <div className="flex shrink-0 items-center gap-2 md:hidden">
+          <div className="flex min-w-0 shrink-0 items-center gap-1.5 md:hidden">
             {showWallet && <ConnectWalletButton />}
             <button
               type="button"

@@ -16,7 +16,7 @@ const connectors = [
             name: 'Coco DEX',
             description: 'Testnet-native stablecoin routing on Arc Testnet',
             url: typeof window !== 'undefined' ? window.location.origin : 'https://coco-dex.vercel.app',
-            icons: typeof window !== 'undefined' ? [`${window.location.origin}/coconut.svg`] : ['https://coco-dex.vercel.app/coconut.svg'],
+            icons: ['https://coco-dex.vercel.app/coconut.svg'],
           },
           showQrModal: true,
         }),
@@ -28,6 +28,10 @@ export const wagmiConfig = createConfig({
   chains: [arcTestnet],
   connectors,
   transports: {
-    [arcTestnet.id]: http(),
+    [arcTestnet.id]: http('https://rpc.testnet.arc.network', {
+      retryCount: 3,
+      retryDelay: 1500,
+      timeout: 30000,
+    }),
   },
 })
