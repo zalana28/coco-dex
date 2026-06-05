@@ -21,6 +21,7 @@ A lightweight Arc Testnet AMM for swapping USDC/EURC, providing liquidity, and t
 - External cron-based analytics sync (every 15 minutes)
 - Max approval mode for streamlined repeat swaps
 - Public `/docs` page and markdown developer docs
+- CocoStablePool V1 specification in `docs/coco-stable-pool-v1-spec.md`
 
 ## Tech Stack
 

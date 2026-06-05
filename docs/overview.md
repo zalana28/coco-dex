@@ -10,6 +10,10 @@ Coco DEX is a smart-routing DEX interface for Arc Testnet stablecoin swaps. It c
 - Liquidity: users can add and remove liquidity in Coco pools.
 - Analytics: indexed protocol data is exposed through the analytics page and serverless API routes.
 
+## Planned native stable pool
+
+CocoStablePool V1 is planned as a future native Coco stable pool for Arc Testnet. It is not live yet, and no Coco stable pool contract is currently implemented by this specification. The External Stable Pools panel is read-only and does not mean Coco owns or controls external pools.
+
 ## Not mainnet
 
 The current app is testnet software. Documentation, UI labels, and developer setup should use careful Arc Testnet wording unless a future release explicitly adds mainnet support.
@@ -47,4 +51,5 @@ Approvals are route-specific. Coco, XyloNet, UnitFlow, and Synthra can require d
 - `analytics.md`: indexed analytics behavior and lag expectations.
 - `troubleshooting.md`: common wallet, route, and transaction failures.
 - `circle-future-integrations.md`: Circle ideas documented as future integrations only.
+- `coco-stable-pool-v1-spec.md`: planned native Coco stable pool specification.
 - `developer-setup.md`: local setup, env vars, and verification commands.

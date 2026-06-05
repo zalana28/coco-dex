@@ -6,6 +6,8 @@ XyloNet is an external stablecoin DeFi protocol on Arc testnet. Its documentatio
 
 This note covers the read-only integration surface Coco DEX can safely display before deciding whether to build a native Coco StablePool contract.
 
+CocoStablePool V1 is planned as a future native Coco stable pool and is documented separately in `coco-stable-pool-v1-spec.md`. It is not live yet. The External Stable Pools panel is read-only and does not mean Coco owns or controls XyloNet or other external pools.
+
 Sources:
 
 - XyloNet docs: https://www.xylonet.xyz/docs
