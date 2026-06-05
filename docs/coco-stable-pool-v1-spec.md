@@ -8,7 +8,7 @@ The goal is to offer lower-slippage stablecoin swaps than a basic constant-produ
 
 ## Prototype Status
 
-A CocoStablePool V1 contract prototype has been added for local testing. It is testnet-only, not deployed, not audited, and not connected to the frontend, router, analytics, or indexer. The prototype uses simplified stable-swap-inspired math and still needs deeper review, fuzzing, invariant testing, and deployment planning before any broader integration.
+A CocoStablePool V1 contract prototype has been added for local testing and has a prototype deployment on Arc Testnet. It has no liquidity yet, is not live in the Coco DEX UI, is not used by the router, is not indexed by analytics, remains unaudited, and is testnet-only. The prototype uses simplified stable-swap-inspired math and still needs deeper review, fuzzing, invariant testing, and integration planning before any broader use.
 
 ## Fuzz and Invariant Testing Status
 
@@ -16,7 +16,7 @@ Fuzz tests and invariant tests have been added for the CocoStablePool V1 prototy
 
 ## Deployment Tooling Status
 
-Local Foundry deployment tooling exists for a future Arc Testnet deployment. No CocoStablePool V1 deployment has happened in this repository, no deployed addresses are committed, and frontend/router integration remains a later phase after deployment validation.
+Local Foundry deployment tooling exists for Arc Testnet prototype deployment and inspection. Frontend/router integration remains a later phase after deployment validation.
 
 ## Why Coco Needs a Native Stable Pool
 

@@ -2,7 +2,37 @@
 
 ## Status
 
-CocoStablePool V1 is not deployed yet. The current tooling is for a future Arc Testnet deployment only. The prototype is unaudited, testnet-only, and not connected to the frontend, router, analytics, or indexer.
+CocoStablePool V1 has a prototype deployment on Arc Testnet for verification. The prototype is unaudited, testnet-only, has no liquidity yet, and is not connected to the frontend, router, analytics, or indexer.
+
+## Arc Testnet Deployment Record
+
+CocoStablePool V1 was deployed on Arc Testnet for prototype verification. It is not audited, has no liquidity yet, is not connected to the frontend or router, is not connected to analytics or the indexer, and must be treated as testnet-only.
+
+### Deployment
+
+| Field | Value |
+| --- | --- |
+| Deployment status | Deployed on Arc Testnet |
+| Chain ID | `5042002` |
+| Tx hash | `0x6be87f49ae343f4fc36a72408ba84c18dbe6fa670d2ee0712c207a51557385f1` |
+| Block | `45646084` |
+| CocoStablePool address | `0x0EA7A79F8864091ac7F2B8643BaA7598a9d05a83` |
+| CocoStableLP address | `0xfE4A959c689019E09f584F25114Bb5A5e2aA8499` |
+| Token0 USDC | `0x3600000000000000000000000000000000000000` |
+| Token1 EURC | `0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a` |
+| Fee bps | `4` |
+| Amplification parameter | `100` |
+| Owner | `0x42b10b337A5692743D587134c89A725422c3dFFB` |
+| Gas paid | `0.039320113378283604 USDC` |
+
+### Inspection
+
+| Field | Value |
+| --- | --- |
+| Balance0 | `0` |
+| Balance1 | `0` |
+| Total LP supply | `0` |
+| Paused | `false` |
 
 ## Prerequisites
 
@@ -62,7 +92,7 @@ Do not broadcast from a wallet containing mainnet funds. This deployment path is
 
 ## Read-Only Inspection
 
-After a future deployment, inspect a pool without making writes:
+Inspect a deployed pool without making writes:
 
 ```bash
 export COCO_STABLE_POOL=<deployed-pool-address>
