@@ -29,6 +29,9 @@ ARC_TESTNET_RPC_URL=...
 SUPABASE_URL=...
 SUPABASE_SERVICE_ROLE_KEY=...
 CRON_SECRET=...
+CIRCLE_API_KEY=...
+CIRCLE_BASE_URL=https://api.circle.com
+CIRCLE_ENV=testnet
 VITE_WALLETCONNECT_PROJECT_ID=...
 ```
 
@@ -38,8 +41,29 @@ Notes:
 - `SUPABASE_URL` points to the Supabase project.
 - `SUPABASE_SERVICE_ROLE_KEY` is server-only and must never be exposed to the frontend.
 - `CRON_SECRET` protects cron/indexer endpoints.
+- `CIRCLE_API_KEY` is server-only and is used only by `/api/circle/health`.
+- `CIRCLE_BASE_URL` defaults to `https://api.circle.com` when omitted.
+- `CIRCLE_ENV` is a server-side environment label for Circle configuration.
 - `VITE_WALLETCONNECT_PROJECT_ID` is public frontend configuration for WalletConnect.
-- Do not prefix server-only secrets with `VITE_`.
+- Do not prefix server-only secrets with `VITE_`; never use `VITE_CIRCLE_API_KEY`.
+- Do not commit real Circle API keys or other secrets.
+
+## Circle API health
+
+Create an API key in the Circle Console, then add `CIRCLE_API_KEY` to `.env.local` for local development and to Vercel Environment Variables for deployed checks. Redeploy after adding or changing the Vercel environment variable.
+
+The endpoint is server-side only:
+
+```bash
+curl https://coco-dex.vercel.app/api/circle/health
+```
+
+Expected local behavior:
+
+- Without `CIRCLE_API_KEY`, the endpoint returns `configured: false`.
+- With an invalid key, the endpoint returns `configured: true`, `ok: false`, and Circle status `401`.
+- With a valid key in Vercel, the endpoint returns `ok: true`.
+- Responses must not include API keys, authorization headers, raw Circle responses, wallet private data, or secrets.
 
 ## Run locally
 
@@ -67,7 +91,7 @@ npx tsc -p api/tsconfig.json --noEmit
 - Public website does not reintroduce a GitHub link.
 - Swap/router files are unchanged.
 - Analytics/indexer logic is unchanged.
-- No Circle API integration is added.
+- Circle health changes do not add frontend Circle exposure or swap/router logic.
 - No secrets or API keys are committed.
 
 ## Docs-only scope lock
