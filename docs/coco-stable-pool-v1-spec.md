@@ -16,6 +16,8 @@ A CocoStablePool V1 contract prototype has been added for local testing and has 
 - Initial tiny liquidity has been added for verification.
 - Post-liquidity inspection shows `1000000` raw units of USDC, `1000000` raw units of EURC, total LP supply `1000000`, and `paused = false`.
 - Quote checks passed for `100000` raw input in both directions, returning `99860` raw output.
+- A read-only Pools page panel displays the pool for visibility only.
+- There is still no add/remove liquidity UI for this pool.
 - Still unaudited, not production-ready, and not integrated into frontend, router, analytics, or indexer flows.
 
 ## Fuzz and Invariant Testing Status

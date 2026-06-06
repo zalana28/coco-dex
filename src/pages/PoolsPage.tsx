@@ -3,11 +3,12 @@ import { Link } from 'react-router-dom'
 import { Card } from '@/components/common/Card'
 import { TokenIcon } from '@/components/common/TokenIcon'
 import { formatCompact, formatPercentage, formatTokenAmount } from '@/utils/format'
-import { Plus, Minus, Droplets, AlertTriangle, ExternalLink } from 'lucide-react'
+import { Plus, Minus, Droplets, AlertTriangle, ExternalLink, Copy, Check } from 'lucide-react'
 import { useAccount } from 'wagmi'
 import { usePairReserves } from '@/hooks/usePairReserves'
 import { useLPBalance } from '@/hooks/useLPBalance'
 import { useXyloNetStablePool } from '@/hooks/useXyloNetStablePool'
+import { useCocoStablePool } from '@/hooks/useCocoStablePool'
 
 type Tab = 'all' | 'my'
 
@@ -80,6 +81,7 @@ function AllPools({ reserveUsdc, reserveEurc, hasLiquidity, isLoading, address }
   reserveUsdc: bigint | undefined; reserveEurc: bigint | undefined; hasLiquidity: boolean; isLoading: boolean; address: `0x${string}` | undefined
 }) {
   const externalStablePool = useXyloNetStablePool(address)
+  const cocoStablePool = useCocoStablePool(address)
   const tvl = hasLiquidity && reserveUsdc && reserveEurc
     ? (Number(reserveUsdc) / 1e6) + (Number(reserveEurc) / 1e6 * 1.086) // EURC ≈ $1.086
     : 0
@@ -139,6 +141,8 @@ function AllPools({ reserveUsdc, reserveEurc, hasLiquidity, isLoading, address }
         )}
       </Card>
 
+      <CocoNativeStablePoolPanel {...cocoStablePool} />
+
       <ExternalStablePoolsPanel {...externalStablePool} />
     </div>
   )
@@ -149,6 +153,198 @@ function Badge({ children }: { children: React.ReactNode }) {
     <span className="rounded-md border border-coco-teal-400/25 bg-coco-teal-400/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-coco-teal-300">
       {children}
     </span>
+  )
+}
+
+function CopyAddressButton({ address, label }: { address: string; label: string }) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(address)
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1200)
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => void handleCopy()}
+      className="inline-grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-coco-dark-border bg-coco-dark-bg/70 text-coco-dark-muted transition-colors hover:border-coco-teal-400/40 hover:text-coco-teal-300"
+      aria-label={`Copy ${label}`}
+      title={`Copy ${label}`}
+    >
+      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+    </button>
+  )
+}
+
+function AddressRow({ label, address }: { label: string; address: string }) {
+  return (
+    <div className="min-w-0 rounded-xl border border-coco-dark-border bg-coco-dark-bg/55 p-3">
+      <p className="text-xs text-coco-dark-muted">{label}</p>
+      <div className="mt-2 flex min-w-0 items-center gap-2">
+        <p className="min-w-0 flex-1 truncate font-mono text-xs text-coco-dark-text">{address}</p>
+        <CopyAddressButton address={address} label={label} />
+      </div>
+    </div>
+  )
+}
+
+function CocoNativeStablePoolPanel({
+  pool,
+  token0Address,
+  token1Address,
+  lpTokenAddress,
+  reserve0,
+  reserve1,
+  feeBps,
+  amplificationParameter,
+  paused,
+  totalSupply,
+  userLpBalance,
+  quoteInput,
+  quoteUsdcToEurc,
+  quoteEurcToUsdc,
+  isLoading,
+  hasReadError,
+  isWrongNetwork,
+}: ReturnType<typeof useCocoStablePool>) {
+  const [token0, token1] = pool.tokens
+  const feeLabel = `${(Number(feeBps) / 100).toFixed(2)}%`
+
+  return (
+    <section className="pt-2">
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-[0.22em] text-coco-teal-400">Coco liquidity</p>
+          <h2 className="mt-1 text-xl font-semibold text-coco-dark-text">Coco Native Stable Pool</h2>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge>Arc Testnet</Badge>
+          <Badge>{pool.status}</Badge>
+          <Badge>Read-only</Badge>
+          <Badge>Unaudited</Badge>
+          <Badge>Not routed</Badge>
+        </div>
+      </div>
+
+      <Card className="p-5 border-blue-500/20 bg-coco-dark-surface/80">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex -space-x-2">
+              <TokenIcon symbol={token0.symbol} color={token0.logoColor} size="md" />
+              <TokenIcon symbol={token1.symbol} color={token1.logoColor} size="md" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="truncate font-semibold text-coco-dark-text">{pool.pairLabel}</h3>
+              <p className="text-xs text-coco-dark-muted">{pool.typeLabel}</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            <a
+              href={pool.poolArcscanUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-coco-dark-border bg-coco-dark-bg/70 px-3 py-1.5 text-xs font-medium text-coco-dark-text transition-colors hover:border-coco-teal-400/40 hover:text-coco-teal-300"
+            >
+              View contract
+              <ExternalLink className="h-3 w-3" />
+            </a>
+            <a
+              href={pool.lpTokenArcscanUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-coco-dark-border bg-coco-dark-bg/70 px-3 py-1.5 text-xs font-medium text-coco-dark-text transition-colors hover:border-coco-teal-400/40 hover:text-coco-teal-300"
+            >
+              View LP token
+              <ExternalLink className="h-3 w-3" />
+            </a>
+            <Link
+              to={pool.docsPath}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-coco-dark-border bg-coco-dark-bg/70 px-3 py-1.5 text-xs font-medium text-coco-dark-text transition-colors hover:border-coco-teal-400/40 hover:text-coco-teal-300"
+            >
+              View docs
+            </Link>
+          </div>
+        </div>
+
+        {(hasReadError || isWrongNetwork) && (
+          <div className="mt-4 rounded-lg border border-coco-amber-500/20 bg-coco-amber-500/10 p-3">
+            <p className="text-xs leading-relaxed text-coco-amber-500">
+              {hasReadError
+                ? 'On-chain data is temporarily unavailable. Displaying last documented Arc Testnet values.'
+                : 'Your wallet is not on Arc Testnet. The panel still reads Arc Testnet data only.'}
+            </p>
+          </div>
+        )}
+
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <AddressRow label="Pool address" address={pool.poolAddress} />
+          <AddressRow label="LP token address" address={lpTokenAddress} />
+          <AddressRow label={`${token0.symbol} token`} address={token0Address} />
+          <AddressRow label={`${token1.symbol} token`} address={token1Address} />
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-3 border-t border-coco-dark-border pt-4 sm:grid-cols-4">
+          <PoolMetric label="Type" value={pool.typeLabel} />
+          <PoolMetric label="Fee" value={isLoading ? '...' : feeLabel} mono />
+          <PoolMetric label="A" value={isLoading ? '...' : amplificationParameter.toString()} mono />
+          <PoolMetric label="Status" value={paused ? 'Paused' : 'Live read'} />
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-3 rounded-xl border border-coco-dark-border bg-coco-dark-bg/55 p-4 sm:grid-cols-2 lg:grid-cols-4">
+          <PoolMetric
+            label={`${token0.symbol} Reserve`}
+            value={isLoading ? '...' : `${formatTokenAmount(reserve0, token0.decimals)} ${token0.symbol}`}
+            mono
+          />
+          <PoolMetric
+            label={`${token1.symbol} Reserve`}
+            value={isLoading ? '...' : `${formatTokenAmount(reserve1, token1.decimals)} ${token1.symbol}`}
+            mono
+          />
+          <PoolMetric
+            label="Total LP supply"
+            value={isLoading ? '...' : `${formatTokenAmount(totalSupply, 6)} cSLP`}
+            mono
+          />
+          <PoolMetric
+            label="Your cSLP"
+            value={isLoading ? '...' : userLpBalance !== undefined ? `${formatTokenAmount(userLpBalance, 6)} cSLP` : 'Connect wallet to read'}
+            mono
+          />
+        </div>
+
+        <div className="mt-4 rounded-xl border border-coco-dark-border bg-coco-dark-bg/55 p-4">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-coco-dark-muted">Sample quotes</p>
+              <p className="mt-1 text-sm font-medium text-coco-dark-text">Read-only getAmountOut checks</p>
+            </div>
+            <p className="font-mono text-xs text-coco-dark-muted">Input: {formatTokenAmount(quoteInput, 6)}</p>
+          </div>
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <PoolMetric
+              label="0.1 USDC -> EURC"
+              value={isLoading ? '...' : `${formatTokenAmount(quoteUsdcToEurc, token1.decimals)} ${token1.symbol}`}
+              mono
+            />
+            <PoolMetric
+              label="0.1 EURC -> USDC"
+              value={isLoading ? '...' : `${formatTokenAmount(quoteEurcToUsdc, token0.decimals)} ${token0.symbol}`}
+              mono
+            />
+          </div>
+        </div>
+
+        <div className="mt-3 rounded-lg border border-coco-amber-500/20 bg-coco-amber-500/10 p-3">
+          <p className="text-xs leading-relaxed text-coco-amber-500">
+            CocoStablePool V1 is testnet-only, unaudited, and not used by the smart router yet. This panel is read-only and does not provide add, remove, approve, swap, or deposit actions.
+          </p>
+        </div>
+      </Card>
+    </section>
   )
 }
 
