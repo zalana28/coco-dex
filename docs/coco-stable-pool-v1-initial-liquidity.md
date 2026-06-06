@@ -4,6 +4,8 @@
 
 Initial liquidity tooling exists for the deployed CocoStablePool V1 Arc Testnet prototype. Initial liquidity has now been added manually on Arc Testnet. The pool is still unaudited, testnet-only, and not connected to the frontend, router, analytics, or indexer.
 
+A read-only Pools page panel displays CocoStablePool V1 metadata and on-chain state for visibility. It does not include add liquidity, remove liquidity, approve, swap, or deposit actions, and the pool is still not integrated with routing, analytics, or the indexer.
+
 ## Arc Testnet Initial Liquidity Record
 
 Initial liquidity was added to the CocoStablePool V1 Arc Testnet prototype. The seed is intentionally tiny and exists for verification only. The pool remains testnet-only, unaudited, not connected to the frontend or router, and not connected to analytics or the indexer.
