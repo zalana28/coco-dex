@@ -12,7 +12,7 @@ Coco DEX compares supported Arc Testnet routes before the user swaps. The route 
 - Approval context: Coco router spender when approval is needed.
 - Price impact: computed from Coco pool reserves when reserve data is available.
 
-CocoStablePool V1 has a testnet deployment for verification, but it is not yet part of routing or user liquidity flows.
+CocoStablePool V1 has a tiny Arc Testnet liquidity seed for verification, but it is not yet used as a smart router source or user liquidity flow.
 
 ### XyloNet
 

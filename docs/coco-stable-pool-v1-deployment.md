@@ -2,9 +2,9 @@
 
 ## Status
 
-CocoStablePool V1 has a prototype deployment on Arc Testnet for verification. The prototype is unaudited, testnet-only, has no liquidity yet, and is not connected to the frontend, router, analytics, or indexer.
+CocoStablePool V1 has a prototype deployment on Arc Testnet for verification. Initial tiny liquidity has been added after deployment, so the pool is no longer empty. The prototype remains unaudited, testnet-only, and not connected to the frontend, router, analytics, or indexer.
 
-Initial liquidity tooling exists in `contracts/script/AddInitialLiquidityCocoStablePool.s.sol`, but no liquidity has been added yet unless a maintainer manually runs the script with `--broadcast` later. Frontend, router, analytics, and indexer integration remain out of scope.
+Initial liquidity tooling exists in `contracts/script/AddInitialLiquidityCocoStablePool.s.sol`, and the first manual seed transaction is documented in `docs/coco-stable-pool-v1-initial-liquidity.md`. Frontend, router, analytics, and indexer integration remain out of scope.
 
 ## Arc Testnet Deployment Record
 
