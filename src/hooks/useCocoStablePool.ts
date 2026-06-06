@@ -1,3 +1,4 @@
+import { useCallback, useRef } from 'react'
 import { useChainId, useReadContract } from 'wagmi'
 import {
   COCO_STABLE_LP_READ_ABI,
@@ -7,17 +8,23 @@ import {
 } from '@/config/cocoStablePool'
 
 const ARC_CHAIN_ID = COCO_STABLE_POOL.chainId
+const STABLE_POOL_QUERY_OPTIONS = {
+  refetchOnWindowFocus: false,
+  staleTime: 60_000,
+  gcTime: 5 * 60_000,
+} as const
 
 export function useCocoStablePool(address: `0x${string}` | undefined) {
   const chainId = useChainId()
   const [token0, token1] = COCO_STABLE_POOL.tokens
+  const refetchInFlightRef = useRef(false)
 
   const tokens = useReadContract({
     address: COCO_STABLE_POOL.poolAddress,
     abi: COCO_STABLE_POOL_READ_ABI,
     functionName: 'getTokens',
     chainId: ARC_CHAIN_ID,
-    query: { refetchInterval: 15_000 },
+    query: STABLE_POOL_QUERY_OPTIONS,
   })
 
   const balances = useReadContract({
@@ -25,7 +32,7 @@ export function useCocoStablePool(address: `0x${string}` | undefined) {
     abi: COCO_STABLE_POOL_READ_ABI,
     functionName: 'getBalances',
     chainId: ARC_CHAIN_ID,
-    query: { refetchInterval: 15_000 },
+    query: STABLE_POOL_QUERY_OPTIONS,
   })
 
   const lpToken = useReadContract({
@@ -33,7 +40,7 @@ export function useCocoStablePool(address: `0x${string}` | undefined) {
     abi: COCO_STABLE_POOL_READ_ABI,
     functionName: 'lpToken',
     chainId: ARC_CHAIN_ID,
-    query: { refetchInterval: 15_000 },
+    query: STABLE_POOL_QUERY_OPTIONS,
   })
 
   const feeBps = useReadContract({
@@ -41,7 +48,7 @@ export function useCocoStablePool(address: `0x${string}` | undefined) {
     abi: COCO_STABLE_POOL_READ_ABI,
     functionName: 'feeBps',
     chainId: ARC_CHAIN_ID,
-    query: { refetchInterval: 15_000 },
+    query: STABLE_POOL_QUERY_OPTIONS,
   })
 
   const amplificationParameter = useReadContract({
@@ -49,7 +56,7 @@ export function useCocoStablePool(address: `0x${string}` | undefined) {
     abi: COCO_STABLE_POOL_READ_ABI,
     functionName: 'amplificationParameter',
     chainId: ARC_CHAIN_ID,
-    query: { refetchInterval: 15_000 },
+    query: STABLE_POOL_QUERY_OPTIONS,
   })
 
   const paused = useReadContract({
@@ -57,7 +64,7 @@ export function useCocoStablePool(address: `0x${string}` | undefined) {
     abi: COCO_STABLE_POOL_READ_ABI,
     functionName: 'paused',
     chainId: ARC_CHAIN_ID,
-    query: { refetchInterval: 15_000 },
+    query: STABLE_POOL_QUERY_OPTIONS,
   })
 
   const totalSupply = useReadContract({
@@ -65,7 +72,7 @@ export function useCocoStablePool(address: `0x${string}` | undefined) {
     abi: COCO_STABLE_LP_READ_ABI,
     functionName: 'totalSupply',
     chainId: ARC_CHAIN_ID,
-    query: { refetchInterval: 15_000 },
+    query: STABLE_POOL_QUERY_OPTIONS,
   })
 
   const userLpBalance = useReadContract({
@@ -76,7 +83,7 @@ export function useCocoStablePool(address: `0x${string}` | undefined) {
     chainId: ARC_CHAIN_ID,
     query: {
       enabled: !!address,
-      refetchInterval: 15_000,
+      ...STABLE_POOL_QUERY_OPTIONS,
     },
   })
 
@@ -86,7 +93,7 @@ export function useCocoStablePool(address: `0x${string}` | undefined) {
     functionName: 'getAmountOut',
     args: [token0.address as `0x${string}`, COCO_STABLE_POOL_SAMPLE_QUOTE_INPUT],
     chainId: ARC_CHAIN_ID,
-    query: { refetchInterval: 15_000 },
+    query: STABLE_POOL_QUERY_OPTIONS,
   })
 
   const eurcToUsdcQuote = useReadContract({
@@ -95,8 +102,39 @@ export function useCocoStablePool(address: `0x${string}` | undefined) {
     functionName: 'getAmountOut',
     args: [token1.address as `0x${string}`, COCO_STABLE_POOL_SAMPLE_QUOTE_INPUT],
     chainId: ARC_CHAIN_ID,
-    query: { refetchInterval: 15_000 },
+    query: STABLE_POOL_QUERY_OPTIONS,
   })
+
+  const refetch = useCallback(() => {
+    if (refetchInFlightRef.current) return
+
+    refetchInFlightRef.current = true
+    void Promise.allSettled([
+      tokens.refetch(),
+      balances.refetch(),
+      lpToken.refetch(),
+      feeBps.refetch(),
+      amplificationParameter.refetch(),
+      paused.refetch(),
+      totalSupply.refetch(),
+      userLpBalance.refetch(),
+      usdcToEurcQuote.refetch(),
+      eurcToUsdcQuote.refetch(),
+    ]).finally(() => {
+      refetchInFlightRef.current = false
+    })
+  }, [
+    amplificationParameter,
+    balances,
+    eurcToUsdcQuote,
+    feeBps,
+    lpToken,
+    paused,
+    tokens,
+    totalSupply,
+    userLpBalance,
+    usdcToEurcQuote,
+  ])
 
   const poolTokens = tokens.data as readonly [`0x${string}`, `0x${string}`] | undefined
   const poolBalances = balances.data as readonly [bigint, bigint] | undefined
@@ -144,17 +182,6 @@ export function useCocoStablePool(address: `0x${string}` | undefined) {
     isLoading,
     hasReadError,
     isWrongNetwork: !!address && chainId !== ARC_CHAIN_ID,
-    refetch: () => {
-      tokens.refetch()
-      balances.refetch()
-      lpToken.refetch()
-      feeBps.refetch()
-      amplificationParameter.refetch()
-      paused.refetch()
-      totalSupply.refetch()
-      userLpBalance.refetch()
-      usdcToEurcQuote.refetch()
-      eurcToUsdcQuote.refetch()
-    },
+    refetch,
   }
 }

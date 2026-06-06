@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount, useChainId, usePublicClient, useReadContract, useWriteContract } from 'wagmi'
 import { AlertTriangle, Droplets, RefreshCw } from 'lucide-react'
 import { TransactionProgressPanel } from '@/components/transactions/TransactionProgressPanel'
@@ -17,11 +17,18 @@ const ARC_CHAIN_ID = arcTestnet.id
 const DEFAULT_USDC_AMOUNT = '0.1'
 const DEFAULT_EURC_AMOUNT = '0.1'
 const DEFAULT_MIN_LP_OUT = '0.099'
-const RECEIPT_POLL_INTERVAL_MS = 2_000
-const RECEIPT_TIMEOUT_MS = 75_000
-const INITIAL_RECEIPT_WAIT_MS = 15_000
+const RECEIPT_TIMEOUT_MS = 120_000
+const RECEIPT_BACKOFF_MS = [3_000, 5_000, 8_000, 13_000, 15_000] as const
+const RATE_LIMIT_COPY = 'Arc Testnet RPC is rate-limited. Please wait a minute, then click Check status or try again.'
+const RATE_LIMIT_RETRY_COPY = 'Arc Testnet RPC is rate-limited. Waiting before retrying...'
+const MANUAL_RATE_LIMIT_COPY = 'Arc Testnet RPC is rate-limited. Wait a moment and try Check status again.'
+const TOKEN_READ_QUERY_OPTIONS = {
+  refetchOnWindowFocus: false,
+  staleTime: 45_000,
+  gcTime: 5 * 60_000,
+} as const
 
-type ReceiptResult = 'success' | 'reverted' | 'timeout' | 'not_found'
+type ReceiptResult = 'success' | 'reverted' | 'timeout' | 'not_found' | 'rate_limited'
 
 function sqrtBigInt(value: bigint) {
   if (value < BigInt(2)) return value
@@ -74,20 +81,21 @@ function isUserRejected(error: unknown) {
   return message.includes('rejected') || message.includes('denied') || message.includes('cancelled') || message.includes('canceled')
 }
 
+function isRateLimitError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.includes('429') || /rate.?limit/i.test(message) || /too many requests/i.test(message)
+}
+
+function getFriendlyErrorMessage(error: unknown) {
+  if (isUserRejected(error)) return 'Rejected by user'
+  if (isRateLimitError(error)) return RATE_LIMIT_COPY
+  return error instanceof Error ? error.message : String(error)
+}
+
 function delay(ms: number) {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms)
   })
-}
-
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
-  let timeoutId: number | undefined
-  const timeout = new Promise<undefined>((resolve) => {
-    timeoutId = window.setTimeout(() => resolve(undefined), timeoutMs)
-  })
-  const result = await Promise.race([promise, timeout])
-  if (timeoutId !== undefined) window.clearTimeout(timeoutId)
-  return result
 }
 
 type ActionState = {
@@ -122,6 +130,10 @@ export function CocoStableAddLiquidityPanel({
   const [addLiquidityConfirmed, setAddLiquidityConfirmed] = useState(false)
   const [timedOutSteps, setTimedOutSteps] = useState<Partial<Record<TransactionType, boolean>>>({})
   const [isCheckingStatus, setIsCheckingStatus] = useState(false)
+  const tokenRefreshInFlightRef = useRef(false)
+  const poolRefreshInFlightRef = useRef(false)
+  const allowanceReadInFlightRef = useRef<Partial<Record<string, Promise<bigint>>>>({})
+  const receiptPollInFlightRef = useRef<Partial<Record<string, Promise<ReceiptResult>>>>({})
   const txProgress = useTransactionProgress()
   const [token0, token1] = COCO_STABLE_POOL.tokens
 
@@ -133,7 +145,7 @@ export function CocoStableAddLiquidityPanel({
     functionName: 'balanceOf',
     args: address ? [address] : undefined,
     chainId: ARC_CHAIN_ID,
-    query: { enabled: !!address, refetchInterval: 15_000 },
+    query: { enabled: !!address, ...TOKEN_READ_QUERY_OPTIONS },
   })
 
   const token1Balance = useReadContract({
@@ -142,7 +154,7 @@ export function CocoStableAddLiquidityPanel({
     functionName: 'balanceOf',
     args: address ? [address] : undefined,
     chainId: ARC_CHAIN_ID,
-    query: { enabled: !!address, refetchInterval: 15_000 },
+    query: { enabled: !!address, ...TOKEN_READ_QUERY_OPTIONS },
   })
 
   const token0Allowance = useReadContract({
@@ -151,7 +163,7 @@ export function CocoStableAddLiquidityPanel({
     functionName: 'allowance',
     args: address ? [address, COCO_STABLE_POOL.poolAddress] : undefined,
     chainId: ARC_CHAIN_ID,
-    query: { enabled: !!address, refetchInterval: 15_000 },
+    query: { enabled: !!address, ...TOKEN_READ_QUERY_OPTIONS },
   })
 
   const token1Allowance = useReadContract({
@@ -160,7 +172,7 @@ export function CocoStableAddLiquidityPanel({
     functionName: 'allowance',
     args: address ? [address, COCO_STABLE_POOL.poolAddress] : undefined,
     chainId: ARC_CHAIN_ID,
-    query: { enabled: !!address, refetchInterval: 15_000 },
+    query: { enabled: !!address, ...TOKEN_READ_QUERY_OPTIONS },
   })
 
   const amount0Validation = validateTokenAmount(amount0Input, token0.decimals, { allowTrailingDot: false })
@@ -196,30 +208,61 @@ export function CocoStableAddLiquidityPanel({
     }
   }
 
-  const refetchInputs = useCallback(() => {
-    token0Balance.refetch()
-    token1Balance.refetch()
-    token0Allowance.refetch()
-    token1Allowance.refetch()
+  const refetchTokenState = useCallback(async () => {
+    if (tokenRefreshInFlightRef.current) return
+
+    tokenRefreshInFlightRef.current = true
+    try {
+      await Promise.allSettled([
+        token0Balance.refetch(),
+        token1Balance.refetch(),
+        token0Allowance.refetch(),
+        token1Allowance.refetch(),
+      ])
+    } finally {
+      tokenRefreshInFlightRef.current = false
+    }
+  }, [token0Balance, token1Balance, token0Allowance, token1Allowance])
+
+  const refetchPoolState = useCallback(() => {
+    if (poolRefreshInFlightRef.current) return
+
+    poolRefreshInFlightRef.current = true
     onRefreshPool()
-  }, [token0Balance, token1Balance, token0Allowance, token1Allowance, onRefreshPool])
+    window.setTimeout(() => {
+      poolRefreshInFlightRef.current = false
+    }, 1_000)
+  }, [onRefreshPool])
+
+  const refetchAfterReceiptSuccess = useCallback(() => {
+    void refetchTokenState()
+    refetchPoolState()
+  }, [refetchPoolState, refetchTokenState])
 
   const readAllowance = useCallback(async (tokenAddress: `0x${string}`) => {
     if (!publicClient || !address) return BigInt(0)
-    const allowance = await publicClient.readContract({
+    const existing = allowanceReadInFlightRef.current[tokenAddress]
+    if (existing) return existing
+
+    const readPromise = publicClient.readContract({
       address: tokenAddress,
       abi: COCO_STABLE_ERC20_LIQUIDITY_ABI,
       functionName: 'allowance',
       args: [address, COCO_STABLE_POOL.poolAddress],
-    })
-    return allowance as bigint
+    }).then((allowance) => allowance as bigint)
+
+    allowanceReadInFlightRef.current[tokenAddress] = readPromise
+    try {
+      return await readPromise
+    } finally {
+      delete allowanceReadInFlightRef.current[tokenAddress]
+    }
   }, [address, publicClient])
 
   const confirmAllowance = useCallback(async (tokenAddress: `0x${string}`, requiredAmount: bigint) => {
     const allowance = await readAllowance(tokenAddress)
-    refetchInputs()
     return allowance >= requiredAmount
-  }, [readAllowance, refetchInputs])
+  }, [readAllowance])
 
   const getReceiptStatus = useCallback(async (txHash: `0x${string}`): Promise<ReceiptResult> => {
     if (!publicClient) return 'not_found'
@@ -227,7 +270,8 @@ export function CocoStableAddLiquidityPanel({
     try {
       const receipt = await publicClient.getTransactionReceipt({ hash: txHash })
       return receipt.status === 'success' ? 'success' : 'reverted'
-    } catch {
+    } catch (error) {
+      if (isRateLimitError(error)) return 'rate_limited'
       return 'not_found'
     }
   }, [publicClient])
@@ -235,30 +279,51 @@ export function CocoStableAddLiquidityPanel({
   const waitForReceiptWithFallback = useCallback(async (txHash: `0x${string}`): Promise<ReceiptResult> => {
     if (!publicClient) return 'not_found'
 
+    const existing = receiptPollInFlightRef.current[txHash]
+    if (existing) return existing
+
+    const pollPromise = (async () => {
+      const startedAt = Date.now()
+      let attempt = 0
+
+      while (Date.now() - startedAt < RECEIPT_TIMEOUT_MS) {
+        const waitMs = RECEIPT_BACKOFF_MS[Math.min(attempt, RECEIPT_BACKOFF_MS.length - 1)] ?? 15_000
+        await delay(waitMs)
+
+        const status = await getReceiptStatus(txHash)
+        if (status === 'success' || status === 'reverted') return status
+
+        if (status === 'rate_limited') {
+          setTxError(RATE_LIMIT_RETRY_COPY)
+          attempt += 2
+          continue
+        }
+
+        attempt += 1
+      }
+
+      return 'timeout'
+    })()
+
+    receiptPollInFlightRef.current[txHash] = pollPromise
     try {
-      const receipt = await withTimeout(
-        publicClient.waitForTransactionReceipt({ hash: txHash, pollingInterval: RECEIPT_POLL_INTERVAL_MS }),
-        INITIAL_RECEIPT_WAIT_MS
-      )
-      if (receipt) return receipt.status === 'success' ? 'success' : 'reverted'
-    } catch {
-      // Fall through to direct receipt polling. Some RPCs miss wait subscriptions even after Arcscan has indexed the tx.
+      return await pollPromise
+    } finally {
+      delete receiptPollInFlightRef.current[txHash]
     }
-
-    const startedAt = Date.now()
-    while (Date.now() - startedAt < RECEIPT_TIMEOUT_MS) {
-      const status = await getReceiptStatus(txHash)
-      if (status === 'success' || status === 'reverted') return status
-      await delay(RECEIPT_POLL_INTERVAL_MS)
-    }
-
-    return 'timeout'
   }, [getReceiptStatus, publicClient])
 
   const markStepSuccessFromChain = useCallback(async (step: TransactionType, txHash: `0x${string}`, requiredAmount?: bigint) => {
     if (step === 'approve_usdc') {
       if (requiredAmount === undefined) return false
-      const allowanceConfirmed = await confirmAllowance(token0.address as `0x${string}`, requiredAmount)
+      let allowanceConfirmed: boolean
+      try {
+        allowanceConfirmed = await confirmAllowance(token0.address as `0x${string}`, requiredAmount)
+      } catch (error) {
+        if (isRateLimitError(error)) setTxError(RATE_LIMIT_COPY)
+        else setTxError(getFriendlyErrorMessage(error))
+        return false
+      }
       if (!allowanceConfirmed) {
         setTxError('USDC approval confirmed, but allowance is still below the entered amount. Click Check status or approve again.')
         return false
@@ -267,7 +332,14 @@ export function CocoStableAddLiquidityPanel({
 
     if (step === 'approve_eurc') {
       if (requiredAmount === undefined) return false
-      const allowanceConfirmed = await confirmAllowance(token1.address as `0x${string}`, requiredAmount)
+      let allowanceConfirmed: boolean
+      try {
+        allowanceConfirmed = await confirmAllowance(token1.address as `0x${string}`, requiredAmount)
+      } catch (error) {
+        if (isRateLimitError(error)) setTxError(RATE_LIMIT_COPY)
+        else setTxError(getFriendlyErrorMessage(error))
+        return false
+      }
       if (!allowanceConfirmed) {
         setTxError('EURC approval confirmed, but allowance is still below the entered amount. Click Check status or approve again.')
         return false
@@ -277,13 +349,13 @@ export function CocoStableAddLiquidityPanel({
     if (step === 'add_liquidity') {
       setAddLiquidityConfirmed(true)
       setLastSuccessHash(txHash)
-      refetchInputs()
     }
 
+    refetchAfterReceiptSuccess()
     setTimedOutSteps((prev) => ({ ...prev, [step]: false }))
     txProgress.markSuccess(step)
     return true
-  }, [confirmAllowance, refetchInputs, token0.address, token1.address, txProgress])
+  }, [confirmAllowance, refetchAfterReceiptSuccess, token0.address, token1.address, txProgress])
 
   const monitorTransaction = useCallback(async (step: TransactionType, txHash: `0x${string}`, requiredAmount?: bigint) => {
     setTimedOutSteps((prev) => ({ ...prev, [step]: false }))
@@ -298,6 +370,10 @@ export function CocoStableAddLiquidityPanel({
       setTxError('Transaction reverted')
       txProgress.markFailed(step, 'Transaction reverted')
       return
+    }
+
+    if (receiptStatus === 'rate_limited') {
+      setTxError(RATE_LIMIT_COPY)
     }
 
     const recovered = step === 'approve_usdc' || step === 'approve_eurc'
@@ -350,12 +426,13 @@ export function CocoStableAddLiquidityPanel({
           void monitorTransaction(step, hash, amount)
         },
         onError: (error) => {
+          const message = getFriendlyErrorMessage(error)
           if (isUserRejected(error)) {
-            setTxError('Rejected by user')
+            setTxError(message)
             txProgress.markRejected(step)
           } else {
-            setTxError(error.message)
-            txProgress.markFailed(step, error.message)
+            setTxError(message)
+            txProgress.markFailed(step, message)
           }
         },
       }
@@ -389,7 +466,9 @@ export function CocoStableAddLiquidityPanel({
         args: [amount0Raw, amount1Raw, minLpOutRaw, address],
       })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Add liquidity simulation failed'
+      const message = isRateLimitError(error)
+        ? RATE_LIMIT_COPY
+        : error instanceof Error ? error.message : 'Add liquidity simulation failed'
       setTxError(message)
       txProgress.markFailed('add_liquidity', message.slice(0, 80))
       return
@@ -410,12 +489,13 @@ export function CocoStableAddLiquidityPanel({
           void monitorTransaction('add_liquidity', hash)
         },
         onError: (error) => {
+          const message = getFriendlyErrorMessage(error)
           if (isUserRejected(error)) {
-            setTxError('Rejected by user')
+            setTxError(message)
             txProgress.markRejected('add_liquidity')
           } else {
-            setTxError(error.message)
-            txProgress.markFailed('add_liquidity', error.message)
+            setTxError(message)
+            txProgress.markFailed('add_liquidity', message)
           }
         },
       }
@@ -437,45 +517,58 @@ export function CocoStableAddLiquidityPanel({
   }
 
   const handleCheckStatus = useCallback(async () => {
-    if (!txProgress.currentFlow) return
+    if (!txProgress.currentFlow || isCheckingStatus) return
 
     try {
       setIsCheckingStatus(true)
       setTxError(null)
 
-      for (const step of txProgress.currentFlow.steps) {
-        if (!step.txHash || step.status === 'success' || step.status === 'failed' || step.status === 'rejected' || step.status === 'idle') continue
-        const requiredAmount = step.type === 'approve_usdc'
-          ? amount0Raw
-          : step.type === 'approve_eurc'
-            ? amount1Raw
-            : undefined
-        const status = await getReceiptStatus(step.txHash)
+      const step = txProgress.activeStep
+      if (!step?.txHash || step.status === 'success' || step.status === 'failed' || step.status === 'rejected' || step.status === 'idle') return
 
-        if (status === 'success') {
-          await markStepSuccessFromChain(step.type, step.txHash, requiredAmount)
-          continue
-        }
+      const requiredAmount = step.type === 'approve_usdc'
+        ? amount0Raw
+        : step.type === 'approve_eurc'
+          ? amount1Raw
+          : undefined
+      const status = await getReceiptStatus(step.txHash)
 
-        if (status === 'reverted') {
-          setTxError('Transaction reverted')
-          txProgress.markFailed(step.type, 'Transaction reverted')
-          continue
-        }
-
-        if ((step.type === 'approve_usdc' || step.type === 'approve_eurc') && requiredAmount !== undefined) {
-          await markStepSuccessFromChain(step.type, step.txHash, requiredAmount)
-        }
+      if (status === 'rate_limited') {
+        setTxError(MANUAL_RATE_LIMIT_COPY)
+        return
       }
 
-      refetchInputs()
+      if (status === 'success') {
+        await markStepSuccessFromChain(step.type, step.txHash, requiredAmount)
+        return
+      }
+
+      if (status === 'reverted') {
+        setTxError('Transaction reverted')
+        txProgress.markFailed(step.type, 'Transaction reverted')
+        return
+      }
+
+      if ((step.type === 'approve_usdc' || step.type === 'approve_eurc') && requiredAmount !== undefined) {
+        await markStepSuccessFromChain(step.type, step.txHash, requiredAmount)
+      }
     } finally {
       setIsCheckingStatus(false)
     }
-  }, [amount0Raw, amount1Raw, getReceiptStatus, markStepSuccessFromChain, refetchInputs, txProgress])
+  }, [amount0Raw, amount1Raw, getReceiptStatus, isCheckingStatus, markStepSuccessFromChain, txProgress])
 
   const activeStepTimedOut = activeStep?.type ? timedOutSteps[activeStep.type] === true : false
   const showRecovery = !!activeTxHash && isStepConfirming
+
+  useEffect(() => {
+    if (!address || isWalletPending || isStepWaitingForWallet || isStepConfirming) return
+
+    const timeoutId = window.setTimeout(() => {
+      void refetchTokenState()
+    }, 600)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [address, amount0Input, amount1Input, isStepConfirming, isStepWaitingForWallet, isWalletPending, refetchTokenState])
 
   return (
     <div className="mt-4 rounded-xl border border-blue-500/15 bg-coco-dark-bg/55 p-4">
@@ -567,7 +660,7 @@ export function CocoStableAddLiquidityPanel({
               className="inline-flex items-center justify-center gap-2 rounded-lg border border-coco-teal-400/25 bg-coco-teal-400/10 px-3 py-2 text-xs font-semibold text-coco-teal-300 transition-colors hover:bg-coco-teal-400/15 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${isCheckingStatus ? 'animate-spin' : ''}`} />
-              Check status
+              {isCheckingStatus ? 'Checking...' : 'Check status'}
             </button>
           </div>
         </div>
