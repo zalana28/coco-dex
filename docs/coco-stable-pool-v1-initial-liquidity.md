@@ -28,6 +28,8 @@ The CocoStablePool V1 panel includes an Arc Testnet-only Remove Liquidity sectio
 - The UI accepts cSLP amount, minimum USDC out, and minimum EURC out.
 - The UI includes 25%, 50%, 75%, and Max quick amount buttons.
 - The UI previews proportional expected output from the contract-tested formula: `lpAmount * reserve / totalSupply`.
+- The UI auto-fills minimum USDC and EURC outputs from expected output with a default 0.5% slippage buffer.
+- Users can override minimum outputs manually, and impossible minimum outputs are blocked before simulation.
 - The UI simulates `removeLiquidity(lpAmount, minAmount0Out, minAmount1Out, connectedWallet)` before submitting.
 - The remove flow uses resilient transaction progress with receipt polling fallback, slower backoff, rate-limit-friendly copy, and Check status recovery.
 - LP token approval is not required because the pool contract burns cSLP directly from `msg.sender`.

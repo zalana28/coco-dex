@@ -19,11 +19,14 @@ const RECEIPT_BACKOFF_MS = [3_000, 5_000, 8_000, 13_000, 15_000] as const
 const RATE_LIMIT_COPY = 'Arc Testnet RPC is rate-limited. Please wait a minute, then click Check status or try again.'
 const RATE_LIMIT_RETRY_COPY = 'Arc Testnet RPC is rate-limited. Waiting before retrying...'
 const MANUAL_RATE_LIMIT_COPY = 'Arc Testnet RPC is rate-limited. Wait a moment and try Check status again.'
+const REMOVE_SLIPPAGE_BPS = BigInt(50)
+const BPS_DENOMINATOR = BigInt(10_000)
+const REMOVE_SIMULATION_REVERT_COPY = 'Remove liquidity simulation reverted. Check min outputs and pool state.'
 
 type ReceiptResult = 'success' | 'reverted' | 'timeout' | 'not_found' | 'rate_limited'
 
 type ActionState = {
-  action: 'connect' | 'wrong-network' | 'paused' | 'enter' | 'insufficient-lp' | 'remove' | 'pending' | 'success' | 'failed' | 'rejected'
+  action: 'connect' | 'wrong-network' | 'paused' | 'enter' | 'insufficient-lp' | 'min-output-too-high' | 'remove' | 'pending' | 'success' | 'failed' | 'rejected'
   label: string
   disabled: boolean
 }
@@ -78,6 +81,21 @@ function formatInputAmount(rawAmount: bigint, decimals: number) {
   const fraction = rawAmount % divisor
   const fractionStr = fraction.toString().padStart(decimals, '0').replace(/0+$/, '')
   return fractionStr ? `${whole}.${fractionStr}` : whole.toString()
+}
+
+function applyDefaultRemoveSlippage(rawAmount: bigint) {
+  return (rawAmount * (BPS_DENOMINATOR - REMOVE_SLIPPAGE_BPS)) / BPS_DENOMINATOR
+}
+
+function getErrorDetails(error: unknown) {
+  if (error instanceof Error) return error.message
+  return String(error)
+}
+
+function getSimulationErrorSummary(error: unknown) {
+  if (isRateLimitError(error)) return RATE_LIMIT_COPY
+  if (isUserRejected(error)) return 'Rejected by user'
+  return REMOVE_SIMULATION_REVERT_COPY
 }
 
 function RemoveLiquidityBadge({ children }: { children: React.ReactNode }) {
@@ -151,6 +169,8 @@ export function CocoStableRemoveLiquidityPanel({
   const [minAmount0Input, setMinAmount0Input] = useState('')
   const [minAmount1Input, setMinAmount1Input] = useState('')
   const [txError, setTxError] = useState<string | null>(null)
+  const [txErrorDetails, setTxErrorDetails] = useState<string | null>(null)
+  const [minOutputsManuallyEdited, setMinOutputsManuallyEdited] = useState(false)
   const [lastSuccessHash, setLastSuccessHash] = useState<`0x${string}`>()
   const [removeLiquidityConfirmed, setRemoveLiquidityConfirmed] = useState(false)
   const [timedOutSteps, setTimedOutSteps] = useState<Partial<Record<TransactionType, boolean>>>({})
@@ -182,20 +202,80 @@ export function CocoStableRemoveLiquidityPanel({
     reserve1,
     totalSupply,
   }), [lpAmountRaw, reserve0, reserve1, totalSupply])
+  const minAmount0TooHigh = expectedOut.available && minAmount0Validation.valid && minAmount0Raw > expectedOut.amount0
+  const minAmount1TooHigh = expectedOut.available && minAmount1Validation.valid && minAmount1Raw > expectedOut.amount1
+  const minOutputValidationMessage = minAmount0TooHigh
+    ? 'Min USDC out is higher than the expected output.'
+    : minAmount1TooHigh
+      ? 'Min EURC out is higher than the expected output.'
+      : null
+
+  const setAutoMinOutputs = useCallback((amount0: bigint, amount1: bigint) => {
+    if (amount0 <= BigInt(0) || amount1 <= BigInt(0)) return
+
+    setMinAmount0Input(formatInputAmount(applyDefaultRemoveSlippage(amount0), token0.decimals))
+    setMinAmount1Input(formatInputAmount(applyDefaultRemoveSlippage(amount1), token1.decimals))
+  }, [token0.decimals, token1.decimals])
 
   const handleInputChange = (value: string, setter: (nextValue: string) => void, decimals: number) => {
     const sanitized = sanitizeTokenInput(value, decimals)
     if (sanitized !== null) {
       setRemoveLiquidityConfirmed(false)
+      setTxError(null)
+      setTxErrorDetails(null)
       setter(sanitized)
     }
+  }
+
+  const handleLpAmountChange = (value: string) => {
+    const sanitized = sanitizeTokenInput(value, lpDecimals)
+    if (sanitized === null) return
+
+    setRemoveLiquidityConfirmed(false)
+    setTxError(null)
+    setTxErrorDetails(null)
+    setLpAmountInput(sanitized)
+
+    if (minOutputsManuallyEdited) return
+
+    const validation = validateTokenAmount(sanitized, lpDecimals, { allowTrailingDot: false })
+    if (!validation.valid) return
+
+    const rawAmount = parseTokenAmount(sanitized, lpDecimals)
+    const nextExpectedOut = estimateRemoveOut({
+      lpAmount: rawAmount,
+      reserve0,
+      reserve1,
+      totalSupply,
+    })
+    if (nextExpectedOut.available) {
+      setAutoMinOutputs(nextExpectedOut.amount0, nextExpectedOut.amount1)
+    }
+  }
+
+  const handleMinAmountChange = (value: string, setter: (nextValue: string) => void, decimals: number) => {
+    setMinOutputsManuallyEdited(true)
+    handleInputChange(value, setter, decimals)
   }
 
   const setPercentAmount = (numerator: bigint, denominator: bigint) => {
     if (!userLpBalance || userLpBalance <= BigInt(0)) return
     const rawAmount = (userLpBalance * numerator) / denominator
+    const nextExpectedOut = estimateRemoveOut({
+      lpAmount: rawAmount,
+      reserve0,
+      reserve1,
+      totalSupply,
+    })
+
     setRemoveLiquidityConfirmed(false)
+    setTxError(null)
+    setTxErrorDetails(null)
+    setMinOutputsManuallyEdited(false)
     setLpAmountInput(formatInputAmount(rawAmount, lpDecimals))
+    if (nextExpectedOut.available) {
+      setAutoMinOutputs(nextExpectedOut.amount0, nextExpectedOut.amount1)
+    }
   }
 
   const refetchPoolState = useCallback(() => {
@@ -318,11 +398,12 @@ export function CocoStableRemoveLiquidityPanel({
     if (!lpAmountValidation.valid || !minAmount0Validation.valid || !minAmount1Validation.valid) {
       return {
         action: 'enter',
-        label: lpAmountValidation.error ?? minAmount0Validation.error ?? minAmount1Validation.error ?? 'Enter Amounts',
+        label: lpAmountValidation.error ? 'Enter cSLP amount' : minAmount0Validation.error ?? minAmount1Validation.error ?? 'Enter Amounts',
         disabled: true,
       }
     }
     if (userLpBalance !== undefined && lpAmountRaw > userLpBalance) return { action: 'insufficient-lp', label: 'Insufficient cSLP', disabled: true }
+    if (minOutputValidationMessage) return { action: 'min-output-too-high', label: 'Min output too high', disabled: true }
     if (isWalletPending || isStepWaitingForWallet) return { action: 'pending', label: 'Waiting for wallet', disabled: true }
     if (isStepConfirming) return { action: 'pending', label: 'Removing Liquidity', disabled: true }
     if (removeLiquidityConfirmed) return { action: 'success', label: 'Success', disabled: true }
@@ -339,6 +420,7 @@ export function CocoStableRemoveLiquidityPanel({
     minAmount1Validation,
     userLpBalance,
     lpAmountRaw,
+    minOutputValidationMessage,
     isWalletPending,
     isStepWaitingForWallet,
     isStepConfirming,
@@ -354,6 +436,11 @@ export function CocoStableRemoveLiquidityPanel({
     if (!address || chainId !== ARC_CHAIN_ID || paused) return
     if (!lpAmountValidation.valid || !minAmount0Validation.valid || !minAmount1Validation.valid) return
     if (userLpBalance !== undefined && lpAmountRaw > userLpBalance) return
+    if (minOutputValidationMessage) {
+      setTxError(minOutputValidationMessage)
+      setTxErrorDetails(null)
+      return
+    }
 
     ensureFlow()
     txProgress.resetStep('remove_liquidity')
@@ -372,10 +459,9 @@ export function CocoStableRemoveLiquidityPanel({
         args: [lpAmountRaw, minAmount0Raw, minAmount1Raw, address],
       })
     } catch (error) {
-      const message = isRateLimitError(error)
-        ? RATE_LIMIT_COPY
-        : error instanceof Error ? error.message : 'Remove liquidity simulation failed'
+      const message = getSimulationErrorSummary(error)
       setTxError(message)
+      setTxErrorDetails(isRateLimitError(error) || isUserRejected(error) ? null : getErrorDetails(error))
       txProgress.markFailed('remove_liquidity', message.slice(0, 80))
       return
     }
@@ -398,9 +484,11 @@ export function CocoStableRemoveLiquidityPanel({
           const message = getFriendlyErrorMessage(error)
           if (isUserRejected(error)) {
             setTxError(message)
+            setTxErrorDetails(null)
             txProgress.markRejected('remove_liquidity')
           } else {
             setTxError(message)
+            setTxErrorDetails(null)
             txProgress.markFailed('remove_liquidity', message)
           }
         },
@@ -415,6 +503,7 @@ export function CocoStableRemoveLiquidityPanel({
     minAmount1Validation.valid,
     userLpBalance,
     lpAmountRaw,
+    minOutputValidationMessage,
     ensureFlow,
     txProgress,
     publicClient,
@@ -493,25 +582,29 @@ export function CocoStableRemoveLiquidityPanel({
         <RemoveInput
           label="cSLP amount"
           value={lpAmountInput}
-          onChange={(value) => handleInputChange(value, setLpAmountInput, lpDecimals)}
+          onChange={handleLpAmountChange}
           balance={lpBalanceLabel}
           error={lpAmountInput ? lpAmountValidation.error : null}
         />
         <RemoveInput
           label="Min USDC out"
           value={minAmount0Input}
-          onChange={(value) => handleInputChange(value, setMinAmount0Input, token0.decimals)}
+          onChange={(value) => handleMinAmountChange(value, setMinAmount0Input, token0.decimals)}
           balance="Required minimum"
-          error={minAmount0Input ? minAmount0Validation.error : null}
+          error={minAmount0Input ? minAmount0Validation.error ?? (minAmount0TooHigh ? 'Higher than expected output' : null) : null}
         />
         <RemoveInput
           label="Min EURC out"
           value={minAmount1Input}
-          onChange={(value) => handleInputChange(value, setMinAmount1Input, token1.decimals)}
+          onChange={(value) => handleMinAmountChange(value, setMinAmount1Input, token1.decimals)}
           balance="Required minimum"
-          error={minAmount1Input ? minAmount1Validation.error : null}
+          error={minAmount1Input ? minAmount1Validation.error ?? (minAmount1TooHigh ? 'Higher than expected output' : null) : null}
         />
       </div>
+
+      <p className="mt-2 text-[11px] leading-relaxed text-coco-dark-muted">
+        Min outputs auto-fill with 0.5% slippage. You can edit them manually.
+      </p>
 
       <div className="mt-3 grid grid-cols-4 gap-2">
         {[
@@ -549,9 +642,15 @@ export function CocoStableRemoveLiquidityPanel({
       </div>
 
       {txError && (
-        <p className="mt-3 rounded-lg border border-coco-red-500/20 bg-coco-red-500/10 px-3 py-2 text-xs leading-relaxed text-coco-red-500">
-          {txError}
-        </p>
+        <div className="mt-3 rounded-lg border border-coco-red-500/20 bg-coco-red-500/10 px-3 py-2 text-xs leading-relaxed text-coco-red-500">
+          <p>{txError}</p>
+          {txErrorDetails && (
+            <details className="mt-2 text-[11px] text-coco-red-500/80">
+              <summary className="cursor-pointer font-semibold">Debug details</summary>
+              <p className="mt-1 max-h-28 overflow-auto break-words font-mono">{txErrorDetails}</p>
+            </details>
+          )}
+        </div>
       )}
 
       {showRecovery && (
