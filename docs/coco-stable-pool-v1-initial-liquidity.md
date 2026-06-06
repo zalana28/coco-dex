@@ -2,13 +2,28 @@
 
 ## Status
 
-Initial liquidity tooling exists for the deployed CocoStablePool V1 Arc Testnet prototype. Initial liquidity has now been added manually on Arc Testnet. The pool is still unaudited, testnet-only, and not connected to the frontend, router, analytics, or indexer.
+Initial liquidity tooling exists for the deployed CocoStablePool V1 Arc Testnet prototype. Initial liquidity has now been added manually on Arc Testnet. The pool is still unaudited, testnet-only, and not connected to the router, analytics, or indexer.
 
-A read-only Pools page panel displays CocoStablePool V1 metadata and on-chain state for visibility. It does not include add liquidity, remove liquidity, approve, swap, or deposit actions, and the pool is still not integrated with routing, analytics, or the indexer.
+A Pools page panel displays CocoStablePool V1 metadata and on-chain state for visibility. A testnet-only Add Liquidity UI is available for this pool and uses separate exact USDC and EURC approvals before calling `addLiquidity`. It does not include remove liquidity, swap, router, analytics, indexer, or production flows.
+
+## Pools Page Add Liquidity UI
+
+The CocoStablePool V1 panel includes an Arc Testnet-only Add Liquidity section for experimentation with tiny amounts.
+
+- The UI approves exactly the entered USDC amount if the current allowance is insufficient.
+- The UI approves exactly the entered EURC amount if the current allowance is insufficient.
+- The UI then calls `addLiquidity(amount0, amount1, minLpOut, connectedWallet)`.
+- The UI requires nonzero USDC, EURC, and minimum LP output inputs.
+- The UI blocks the action when the wallet is disconnected, on the wrong network, the pool is paused, balances are insufficient, or allowances are still insufficient.
+- There is still no remove liquidity UI.
+- There is still no swap or smart router integration.
+- There is still no analytics or indexer integration.
+
+This UI is for Arc Testnet experimentation only. Start with tiny amounts, do not overfund the prototype, and do not treat the displayed LP preview or quote checks as production readiness.
 
 ## Arc Testnet Initial Liquidity Record
 
-Initial liquidity was added to the CocoStablePool V1 Arc Testnet prototype. The seed is intentionally tiny and exists for verification only. The pool remains testnet-only, unaudited, not connected to the frontend or router, and not connected to analytics or the indexer.
+Initial liquidity was added to the CocoStablePool V1 Arc Testnet prototype. The seed is intentionally tiny and exists for verification only. The pool remains testnet-only, unaudited, not connected to router execution, and not connected to analytics or the indexer.
 
 ### Transaction
 
