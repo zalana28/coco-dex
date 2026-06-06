@@ -17,10 +17,11 @@ A CocoStablePool V1 contract prototype has been added for local testing and has 
 - Post-liquidity inspection shows `1000000` raw units of USDC, `1000000` raw units of EURC, total LP supply `1000000`, and `paused = false`.
 - Quote checks passed for `100000` raw input in both directions, returning `99860` raw output.
 - A read-only Pools page panel displays the pool for visibility.
-- Testnet-only Add Liquidity and Remove Liquidity UI flows have been added for the Pools page beta flow.
+- Testnet-only Add Liquidity and Remove Liquidity UI flows have been added and tested for the Pools page beta flow.
 - Add liquidity uses separate exact USDC and EURC approvals before calling `addLiquidity`.
 - Remove liquidity burns cSLP through `removeLiquidity` and does not require LP approval.
 - Remove liquidity auto-fills minimum outputs from expected proportional output with a default 0.5% slippage buffer; users can override those values manually.
+- The cSLP decimal and min-output Remove Liquidity UX has been fixed.
 - Transaction progress and RPC rate-limit handling have been added for the Add Liquidity and Remove Liquidity flows.
 - The pool remains beta, testnet-only, unaudited, and not production-ready.
 - Router integration remains future work.
