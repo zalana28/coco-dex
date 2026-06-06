@@ -4,6 +4,8 @@
 
 CocoStablePool V1 has a prototype deployment on Arc Testnet for verification. The prototype is unaudited, testnet-only, has no liquidity yet, and is not connected to the frontend, router, analytics, or indexer.
 
+Initial liquidity tooling exists in `contracts/script/AddInitialLiquidityCocoStablePool.s.sol`, but no liquidity has been added yet unless a maintainer manually runs the script with `--broadcast` later. Frontend, router, analytics, and indexer integration remain out of scope.
+
 ## Arc Testnet Deployment Record
 
 CocoStablePool V1 was deployed on Arc Testnet for prototype verification. It is not audited, has no liquidity yet, is not connected to the frontend or router, is not connected to analytics or the indexer, and must be treated as testnet-only.
@@ -110,6 +112,7 @@ The inspector reads token addresses, LP token, balances, fee, amplification para
 - Confirm `token0`, `token1`, `lpToken`, `feeBps`, `amplificationParameter`, balances, and paused state.
 - Do not update frontend config until deployment is validated.
 - Do not add liquidity until contract checks pass.
+- Use `docs/coco-stable-pool-v1-initial-liquidity.md` for dry-run-first initial liquidity guidance.
 - Do not update router, analytics, or indexer until ABI/events and operational checks are finalized.
 - Publish addresses in docs only after validation and review.
 

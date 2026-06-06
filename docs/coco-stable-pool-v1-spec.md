@@ -8,7 +8,7 @@ The goal is to offer lower-slippage stablecoin swaps than a basic constant-produ
 
 ## Prototype Status
 
-A CocoStablePool V1 contract prototype has been added for local testing and has a prototype deployment on Arc Testnet. It has no liquidity yet, is not live in the Coco DEX UI, is not used by the router, is not indexed by analytics, remains unaudited, and is testnet-only. The prototype uses simplified stable-swap-inspired math and still needs deeper review, fuzzing, invariant testing, and integration planning before any broader use.
+A CocoStablePool V1 contract prototype has been added for local testing and has a prototype deployment on Arc Testnet. Initial liquidity tooling exists, but no liquidity has been added yet unless a maintainer manually broadcasts it later. The pool is not live in the Coco DEX UI, is not used by the router, is not indexed by analytics, remains unaudited, and is testnet-only. The prototype uses simplified stable-swap-inspired math and still needs deeper review, fuzzing, invariant testing, and integration planning before any broader use.
 
 ## Fuzz and Invariant Testing Status
 

@@ -1,0 +1,105 @@
+# CocoStablePool V1 Initial Liquidity
+
+## Status
+
+Initial liquidity tooling exists for the deployed CocoStablePool V1 Arc Testnet prototype. No liquidity has been added yet by this repository change. The pool is still unaudited, testnet-only, and not connected to the frontend, router, analytics, or indexer.
+
+## Deployed Contracts
+
+| Field | Value |
+| --- | --- |
+| Chain ID | `5042002` |
+| CocoStablePool | `0x0EA7A79F8864091ac7F2B8643BaA7598a9d05a83` |
+| CocoStableLP | `0xfE4A959c689019E09f584F25114Bb5A5e2aA8499` |
+| Token0 USDC | `0x3600000000000000000000000000000000000000` |
+| Token1 EURC | `0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a` |
+| Fee bps | `4` |
+| Amplification parameter | `100` |
+
+## Prerequisites
+
+- Foundry installed locally.
+- Deployer wallet has Arc Testnet gas token.
+- Deployer wallet has testnet USDC and EURC.
+- `.env.local` or local shell environment is configured.
+- `COCO_DEPLOYER_PRIVATE_KEY` is stored only in local secret handling and never committed.
+
+## Environment
+
+Amounts are raw token units. USDC and EURC use 6 decimals, so `1 USDC = 1000000`.
+
+```bash
+export ARC_TESTNET_RPC_URL=https://rpc.testnet.arc.network
+export COCO_DEPLOYER_PRIVATE_KEY=<local-testnet-private-key>
+export COCO_STABLE_POOL=0x0EA7A79F8864091ac7F2B8643BaA7598a9d05a83
+export COCO_STABLE_TOKEN0=0x3600000000000000000000000000000000000000
+export COCO_STABLE_TOKEN1=0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a
+export COCO_STABLE_INITIAL_AMOUNT0=<raw-usdc-amount>
+export COCO_STABLE_INITIAL_AMOUNT1=<raw-eurc-amount>
+export COCO_STABLE_MIN_LP_OUT=<raw-min-lp-out>
+export COCO_STABLE_LP_RECIPIENT=<recipient-address>
+```
+
+`COCO_STABLE_LP_RECIPIENT` may be omitted for dry-run checks. If it is missing or zero, the script defaults the LP recipient to the deployer and prints that choice clearly.
+
+## Dry Run
+
+Run without `--broadcast` first. This simulates approvals and initial liquidity without sending transactions:
+
+```bash
+cd contracts
+forge script script/AddInitialLiquidityCocoStablePool.s.sol:AddInitialLiquidityCocoStablePool --rpc-url $ARC_TESTNET_RPC_URL
+```
+
+From the repo root:
+
+```bash
+npm run contracts:stable:add-liquidity:dry
+```
+
+The dry-run validates chain id, pool address, token addresses, paused state, token balances, allowances, nonzero amounts, and a nonzero `COCO_STABLE_MIN_LP_OUT`.
+
+## Broadcast
+
+Only when ready, and only after reviewing the dry-run output:
+
+```bash
+cd contracts
+forge script script/AddInitialLiquidityCocoStablePool.s.sol:AddInitialLiquidityCocoStablePool \
+  --rpc-url $ARC_TESTNET_RPC_URL \
+  --broadcast
+```
+
+There is intentionally no package broadcast alias to reduce accidental on-chain execution.
+
+## Post-Liquidity Inspection
+
+After a manual broadcast, inspect the pool without making writes:
+
+```bash
+export COCO_STABLE_POOL=0x0EA7A79F8864091ac7F2B8643BaA7598a9d05a83
+cd contracts
+forge script script/InspectCocoStablePool.s.sol:InspectCocoStablePool --rpc-url $ARC_TESTNET_RPC_URL
+```
+
+Do not connect the pool to frontend, router, analytics, or indexer before inspection confirms the resulting balances, LP supply, paused state, token addresses, fee, and amplification parameter.
+
+## Initial Amount Guidance
+
+- Use very small testnet amounts first.
+- USDC and EURC are not guaranteed to trade exactly 1:1.
+- Initial liquidity effectively sets the first pool price.
+- Adding imbalanced or wrong-ratio liquidity can make the pool price wrong.
+- Start with tiny amounts only and inspect immediately after broadcast.
+- Do not overfund this unaudited prototype.
+- Do not claim yield or production readiness.
+
+## Risk Notes
+
+- Testnet only.
+- Unaudited prototype.
+- Do not use mainnet funds.
+- Do not commit private keys or `.env.local`.
+- Do not commit broadcast artifacts as deployment proof.
+- Do not connect frontend/router before inspection.
+- Do not connect analytics/indexer before event and operational checks are finalized.
