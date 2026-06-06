@@ -10,6 +10,7 @@ import { useLPBalance } from '@/hooks/useLPBalance'
 import { useXyloNetStablePool } from '@/hooks/useXyloNetStablePool'
 import { useCocoStablePool } from '@/hooks/useCocoStablePool'
 import { CocoStableAddLiquidityPanel } from '@/components/pools/CocoStableAddLiquidityPanel'
+import { CocoStableRemoveLiquidityPanel } from '@/components/pools/CocoStableRemoveLiquidityPanel'
 
 type Tab = 'all' | 'my'
 
@@ -202,6 +203,7 @@ function CocoNativeStablePoolPanel({
   amplificationParameter,
   paused,
   totalSupply,
+  lpDecimals,
   userLpBalance,
   quoteInput,
   quoteUsdcToEurc,
@@ -308,12 +310,12 @@ function CocoNativeStablePoolPanel({
           />
           <PoolMetric
             label="Total LP supply"
-            value={isLoading ? '...' : `${formatTokenAmount(totalSupply, 6)} cSLP`}
+            value={isLoading ? '...' : `${formatTokenAmount(totalSupply, lpDecimals)} cSLP`}
             mono
           />
           <PoolMetric
             label="Your cSLP"
-            value={isLoading ? '...' : userLpBalance !== undefined ? `${formatTokenAmount(userLpBalance, 6)} cSLP` : 'Connect wallet to read'}
+            value={isLoading ? '...' : userLpBalance !== undefined ? `${formatTokenAmount(userLpBalance, lpDecimals)} cSLP` : 'Connect wallet to read'}
             mono
           />
         </div>
@@ -342,7 +344,7 @@ function CocoNativeStablePoolPanel({
 
         <div className="mt-3 rounded-lg border border-coco-amber-500/20 bg-coco-amber-500/10 p-3">
           <p className="text-xs leading-relaxed text-coco-amber-500">
-            CocoStablePool V1 is testnet-only, unaudited, and not used by the smart router yet. The pool state above is read-only; the scoped action below only supports testnet add liquidity with exact approvals.
+            CocoStablePool V1 is testnet-only, unaudited, and not used by the smart router yet. The scoped actions below only support testnet add liquidity and remove liquidity for this prototype pool.
           </p>
         </div>
 
@@ -351,6 +353,16 @@ function CocoNativeStablePoolPanel({
           reserve1={reserve1}
           totalSupply={totalSupply}
           amplificationParameter={amplificationParameter}
+          paused={paused}
+          onRefreshPool={refetch}
+        />
+
+        <CocoStableRemoveLiquidityPanel
+          reserve0={reserve0}
+          reserve1={reserve1}
+          totalSupply={totalSupply}
+          userLpBalance={userLpBalance}
+          lpDecimals={lpDecimals}
           paused={paused}
           onRefreshPool={refetch}
         />
