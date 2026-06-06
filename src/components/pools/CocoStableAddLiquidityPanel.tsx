@@ -577,15 +577,15 @@ export function CocoStableAddLiquidityPanel({
           <p className="text-xs uppercase tracking-[0.18em] text-coco-teal-400">Arc Testnet only</p>
           <h4 className="mt-1 flex items-center gap-2 text-base font-semibold text-coco-dark-text">
             <Droplets className="h-4 w-4 text-coco-teal-400" />
-            Add Liquidity
+            Add testnet liquidity
           </h4>
           <p className="mt-1 text-xs leading-relaxed text-coco-dark-muted">
             Uses exact approvals for the entered USDC and EURC amounts before calling CocoStablePool V1.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <LiquidityBadge>Arc Testnet only</LiquidityBadge>
-          <LiquidityBadge>Prototype</LiquidityBadge>
+          <LiquidityBadge>Arc Testnet</LiquidityBadge>
+          <LiquidityBadge>LP Beta</LiquidityBadge>
           <LiquidityBadge>Unaudited</LiquidityBadge>
           <LiquidityBadge>Not routed</LiquidityBadge>
         </div>
@@ -626,7 +626,7 @@ export function CocoStableAddLiquidityPanel({
         <div className="flex items-start gap-2">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-coco-amber-500" />
           <p className="text-xs leading-relaxed text-coco-amber-500">
-            CocoStablePool V1 is a testnet-only unaudited prototype. Start with tiny amounts. Initial liquidity and current pool size are tiny, USDC/EURC has FX/depeg risk, and this pool is not used by the smart router yet.
+            CocoStablePool V1 is an unaudited Arc Testnet LP Beta. Start with tiny amounts. USDC/EURC has FX/depeg risk, and this pool is not used by the smart router yet.
           </p>
         </div>
       </div>

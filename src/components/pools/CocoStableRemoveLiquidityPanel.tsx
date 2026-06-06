@@ -572,7 +572,7 @@ export function CocoStableRemoveLiquidityPanel({
         </div>
         <div className="flex flex-wrap gap-2">
           <RemoveLiquidityBadge>Arc Testnet</RemoveLiquidityBadge>
-          <RemoveLiquidityBadge>Prototype</RemoveLiquidityBadge>
+          <RemoveLiquidityBadge>LP Beta</RemoveLiquidityBadge>
           <RemoveLiquidityBadge>Unaudited</RemoveLiquidityBadge>
           <RemoveLiquidityBadge>Not routed</RemoveLiquidityBadge>
         </div>
@@ -603,7 +603,7 @@ export function CocoStableRemoveLiquidityPanel({
       </div>
 
       <p className="mt-2 text-[11px] leading-relaxed text-coco-dark-muted">
-        Min outputs auto-fill with 0.5% slippage. You can edit them manually.
+        Percent buttons auto-fill cSLP and min outputs with default slippage. You can edit min outputs manually.
       </p>
 
       <div className="mt-3 grid grid-cols-4 gap-2">
@@ -636,7 +636,7 @@ export function CocoStableRemoveLiquidityPanel({
         <div className="flex items-start gap-2">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-coco-amber-500" />
           <p className="text-xs leading-relaxed text-coco-amber-500">
-            CocoStablePool V1 is a testnet-only unaudited prototype. Start with tiny amounts. This pool is not used by the smart router yet.
+            CocoStablePool V1 is an unaudited Arc Testnet LP Beta. Start with tiny amounts. Check min outputs before confirming; this pool is not used by the smart router yet.
           </p>
         </div>
       </div>

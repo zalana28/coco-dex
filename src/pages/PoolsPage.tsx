@@ -158,6 +158,15 @@ function Badge({ children }: { children: React.ReactNode }) {
   )
 }
 
+function BetaStatusItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-lg border border-coco-dark-border bg-coco-dark-bg/60 p-3">
+      <p className="text-[11px] text-coco-dark-muted">{label}</p>
+      <p className="mt-1 truncate text-xs font-semibold text-coco-dark-text">{value}</p>
+    </div>
+  )
+}
+
 function CopyAddressButton({ address, label }: { address: string; label: string }) {
   const [copied, setCopied] = useState(false)
 
@@ -226,7 +235,6 @@ function CocoNativeStablePoolPanel({
         <div className="flex flex-wrap gap-2">
           <Badge>Arc Testnet</Badge>
           <Badge>{pool.status}</Badge>
-          <Badge>Read-only</Badge>
           <Badge>Unaudited</Badge>
           <Badge>Not routed</Badge>
         </div>
@@ -282,6 +290,26 @@ function CocoNativeStablePoolPanel({
             </p>
           </div>
         )}
+
+        <div className="mt-4 rounded-xl border border-blue-400/20 bg-blue-400/5 p-4">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-blue-300">LP Beta status</p>
+              <p className="mt-1 text-sm text-coco-dark-text">
+                Add/remove liquidity enabled on Arc Testnet. Smart router usage is still disabled.
+              </p>
+            </div>
+            <p className="text-xs font-semibold text-blue-300">Not production-ready</p>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+            <BetaStatusItem label="Add liquidity" value="Enabled" />
+            <BetaStatusItem label="Remove liquidity" value="Enabled" />
+            <BetaStatusItem label="Router usage" value="Disabled" />
+            <BetaStatusItem label="Analytics/indexer" value="Not enabled" />
+            <BetaStatusItem label="Network" value="Arc Testnet" />
+            <BetaStatusItem label="Audit" value="Not audited" />
+          </div>
+        </div>
 
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <AddressRow label="Pool address" address={pool.poolAddress} />
@@ -344,7 +372,7 @@ function CocoNativeStablePoolPanel({
 
         <div className="mt-3 rounded-lg border border-coco-amber-500/20 bg-coco-amber-500/10 p-3">
           <p className="text-xs leading-relaxed text-coco-amber-500">
-            CocoStablePool V1 is testnet-only, unaudited, and not used by the smart router yet. The scoped actions below only support testnet add liquidity and remove liquidity for this prototype pool.
+            CocoStablePool V1 is live as an Arc Testnet LP Beta. You can add and remove testnet liquidity, but this pool is not used by the smart router yet.
           </p>
         </div>
 
