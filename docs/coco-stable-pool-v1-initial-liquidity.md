@@ -4,7 +4,7 @@
 
 Initial liquidity tooling exists for the deployed CocoStablePool V1 Arc Testnet prototype. Initial liquidity has now been added manually on Arc Testnet. The pool is still unaudited, testnet-only, and not connected to the router, analytics, or indexer.
 
-A Pools page panel displays CocoStablePool V1 metadata and on-chain state for visibility. A testnet-only Add Liquidity UI is available for this pool and uses separate exact USDC and EURC approvals before calling `addLiquidity`. It does not include remove liquidity, swap, router, analytics, indexer, or production flows.
+A Pools page panel displays CocoStablePool V1 metadata and on-chain state for visibility. Testnet-only Add Liquidity and Remove Liquidity UI flows are available for this pool. Add Liquidity uses separate exact USDC and EURC approvals before calling `addLiquidity`; Remove Liquidity burns cSLP directly through the pool contract and does not require LP token approval. These flows do not include swap, router, analytics, indexer, or production support.
 
 ## Pools Page Add Liquidity UI
 
@@ -15,17 +15,32 @@ The CocoStablePool V1 panel includes an Arc Testnet-only Add Liquidity section f
 - The UI then calls `addLiquidity(amount0, amount1, minLpOut, connectedWallet)`.
 - The UI requires nonzero USDC, EURC, and minimum LP output inputs.
 - The UI blocks the action when the wallet is disconnected, on the wrong network, the pool is paused, balances are insufficient, or allowances are still insufficient.
-- There is still no remove liquidity UI.
 - There is still no swap or smart router integration.
 - There is still no analytics or indexer integration.
 
 This UI is for Arc Testnet experimentation only. Start with tiny amounts, do not overfund the prototype, and do not treat the displayed LP preview or quote checks as production readiness.
 
+## Pools Page Remove Liquidity UI
+
+The CocoStablePool V1 panel includes an Arc Testnet-only Remove Liquidity section for tiny prototype withdrawals.
+
+- The UI reads connected-wallet cSLP balance and current pool reserves.
+- The UI accepts cSLP amount, minimum USDC out, and minimum EURC out.
+- The UI includes 25%, 50%, 75%, and Max quick amount buttons.
+- The UI previews proportional expected output from the contract-tested formula: `lpAmount * reserve / totalSupply`.
+- The UI simulates `removeLiquidity(lpAmount, minAmount0Out, minAmount1Out, connectedWallet)` before submitting.
+- The remove flow uses resilient transaction progress with receipt polling fallback, slower backoff, rate-limit-friendly copy, and Check status recovery.
+- LP token approval is not required because the pool contract burns cSLP directly from `msg.sender`.
+- There is still no swap or smart router integration.
+- There is still no analytics or indexer integration.
+
+This UI remains testnet-only, unaudited, beta functionality. Start with tiny amounts and set minimum outputs carefully.
+
 ## Add Liquidity UI Test
 
 The Add Liquidity UI has been tested successfully on Arc Testnet after the transaction progress and RPC rate-limit hotfixes. The UI uses exact approvals for USDC and EURC before calling `addLiquidity`, and transaction progress has been hardened with receipt polling fallback and RPC rate-limit backoff.
 
-The UI remains testnet-only and unaudited. CocoStablePool V1 is still not used by smart router routing. Remove Liquidity UI is not added yet, and router integration is not added yet.
+The UI remains testnet-only and unaudited. CocoStablePool V1 is still not used by smart router routing. Remove Liquidity UI is now added for the Pools page beta flow, and router integration is not added yet.
 
 Tx hash: not recorded in this docs update.
 
@@ -36,7 +51,7 @@ Tx hash: not recorded in this docs update.
 - Add Liquidity succeeded.
 - Pool reserves refreshed after success.
 - LP balance refreshed after success.
-- No remove-liquidity action yet.
+- Remove Liquidity UI added separately for cSLP burns.
 - No router integration yet.
 
 ## Arc Testnet Initial Liquidity Record

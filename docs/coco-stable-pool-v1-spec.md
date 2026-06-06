@@ -8,7 +8,7 @@ The goal is to offer lower-slippage stablecoin swaps than a basic constant-produ
 
 ## Prototype Status
 
-A CocoStablePool V1 contract prototype has been added for local testing and has a prototype deployment on Arc Testnet. Initial tiny liquidity has been added, and basic quote checks passed for both USDC -> EURC and EURC -> USDC. The pool is visible in the Coco DEX Pools page with a testnet-only Add Liquidity UI, but it is not used by the router, is not indexed by analytics, remains unaudited, is not production-ready, and is testnet-only. The prototype uses simplified stable-swap-inspired math and still needs deeper review, fuzzing, invariant testing, and integration planning before any broader use.
+A CocoStablePool V1 contract prototype has been added for local testing and has a prototype deployment on Arc Testnet. Initial tiny liquidity has been added, and basic quote checks passed for both USDC -> EURC and EURC -> USDC. The pool is visible in the Coco DEX Pools page with testnet-only Add Liquidity and Remove Liquidity UI flows, but it is not used by the router, is not indexed by analytics, remains unaudited, is not production-ready, and is testnet-only. The prototype uses simplified stable-swap-inspired math and still needs deeper review, fuzzing, invariant testing, and integration planning before any broader use.
 
 ## Current On-Chain Status
 
@@ -17,11 +17,12 @@ A CocoStablePool V1 contract prototype has been added for local testing and has 
 - Post-liquidity inspection shows `1000000` raw units of USDC, `1000000` raw units of EURC, total LP supply `1000000`, and `paused = false`.
 - Quote checks passed for `100000` raw input in both directions, returning `99860` raw output.
 - A read-only Pools page panel displays the pool for visibility.
-- A testnet-only Add Liquidity UI has been added and tested successfully on Arc Testnet.
+- Testnet-only Add Liquidity and Remove Liquidity UI flows have been added for the Pools page beta flow.
 - Add liquidity uses separate exact USDC and EURC approvals before calling `addLiquidity`.
-- Transaction progress and RPC rate-limit handling have been added for the Add Liquidity flow.
+- Remove liquidity burns cSLP through `removeLiquidity` and does not require LP approval.
+- Transaction progress and RPC rate-limit handling have been added for the Add Liquidity and Remove Liquidity flows.
 - The pool remains beta, testnet-only, unaudited, and not production-ready.
-- Remove Liquidity UI and router integration remain future work.
+- Router integration remains future work.
 - The pool is not integrated into router, swap execution, analytics, or indexer flows.
 
 ## Fuzz and Invariant Testing Status

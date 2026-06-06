@@ -84,6 +84,41 @@ export const COCO_STABLE_POOL_ADD_LIQUIDITY_ABI = [
   },
 ] as const
 
+export const COCO_STABLE_POOL_REMOVE_LIQUIDITY_ABI = [
+  {
+    type: 'function',
+    name: 'getBalances',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [
+      { name: 'balance0', type: 'uint256' },
+      { name: 'balance1', type: 'uint256' },
+    ],
+  },
+  {
+    type: 'function',
+    name: 'paused',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+  {
+    type: 'function',
+    name: 'removeLiquidity',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'lpAmount', type: 'uint256' },
+      { name: 'minAmount0Out', type: 'uint256' },
+      { name: 'minAmount1Out', type: 'uint256' },
+      { name: 'to', type: 'address' },
+    ],
+    outputs: [
+      { name: 'amount0', type: 'uint256' },
+      { name: 'amount1', type: 'uint256' },
+    ],
+  },
+] as const
+
 export const COCO_STABLE_ERC20_LIQUIDITY_ABI = [
   {
     type: 'function',
@@ -142,6 +177,13 @@ export const COCO_STABLE_LP_READ_ABI = [
     stateMutability: 'view',
     inputs: [{ name: 'account', type: 'address' }],
     outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'decimals',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint8' }],
   },
 ] as const
 
