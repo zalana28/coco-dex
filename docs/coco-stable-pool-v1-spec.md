@@ -8,7 +8,15 @@ The goal is to offer lower-slippage stablecoin swaps than a basic constant-produ
 
 ## Prototype Status
 
-A CocoStablePool V1 contract prototype has been added for local testing and has a prototype deployment on Arc Testnet. Initial liquidity tooling exists, but no liquidity has been added yet unless a maintainer manually broadcasts it later. The pool is not live in the Coco DEX UI, is not used by the router, is not indexed by analytics, remains unaudited, and is testnet-only. The prototype uses simplified stable-swap-inspired math and still needs deeper review, fuzzing, invariant testing, and integration planning before any broader use.
+A CocoStablePool V1 contract prototype has been added for local testing and has a prototype deployment on Arc Testnet. Initial tiny liquidity has been added, and basic quote checks passed for both USDC -> EURC and EURC -> USDC. The pool is not live in the Coco DEX UI, is not used by the router, is not indexed by analytics, remains unaudited, is not production-ready, and is testnet-only. The prototype uses simplified stable-swap-inspired math and still needs deeper review, fuzzing, invariant testing, and integration planning before any broader use.
+
+## Current On-Chain Status
+
+- Deployed on Arc Testnet at `0x0EA7A79F8864091ac7F2B8643BaA7598a9d05a83`.
+- Initial tiny liquidity has been added for verification.
+- Post-liquidity inspection shows `1000000` raw units of USDC, `1000000` raw units of EURC, total LP supply `1000000`, and `paused = false`.
+- Quote checks passed for `100000` raw input in both directions, returning `99860` raw output.
+- Still unaudited, not production-ready, and not integrated into frontend, router, analytics, or indexer flows.
 
 ## Fuzz and Invariant Testing Status
 

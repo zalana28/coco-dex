@@ -2,7 +2,46 @@
 
 ## Status
 
-Initial liquidity tooling exists for the deployed CocoStablePool V1 Arc Testnet prototype. No liquidity has been added yet by this repository change. The pool is still unaudited, testnet-only, and not connected to the frontend, router, analytics, or indexer.
+Initial liquidity tooling exists for the deployed CocoStablePool V1 Arc Testnet prototype. Initial liquidity has now been added manually on Arc Testnet. The pool is still unaudited, testnet-only, and not connected to the frontend, router, analytics, or indexer.
+
+## Arc Testnet Initial Liquidity Record
+
+Initial liquidity was added to the CocoStablePool V1 Arc Testnet prototype. The seed is intentionally tiny and exists for verification only. The pool remains testnet-only, unaudited, not connected to the frontend or router, and not connected to analytics or the indexer.
+
+### Transaction
+
+| Field | Value |
+| --- | --- |
+| Tx hash | `0x42baad68e50936d5befff7cd70f694b9feb99b3219d026eff7d39b2b4c6d242c` |
+| Block | `45742380` |
+| CocoStablePool | `0x0EA7A79F8864091ac7F2B8643BaA7598a9d05a83` |
+| CocoStableLP | `0xfE4A959c689019E09f584F25114Bb5A5e2aA8499` |
+| Token0 USDC | `0x3600000000000000000000000000000000000000` |
+| Token1 EURC | `0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a` |
+| Amount0 added | `1000000` raw units, `1 USDC` |
+| Amount1 added | `1000000` raw units, `1 EURC` |
+| LP minted | `1000000` raw units |
+| LP recipient | `0x42b10b337A5692743D587134c89A725422c3dFFB` |
+
+### Post-Liquidity Inspection
+
+| Field | Value |
+| --- | --- |
+| Balance0 | `1000000` |
+| Balance1 | `1000000` |
+| Total LP supply | `1000000` |
+| Paused | `false` |
+| LP holder | `0x42b10b337A5692743D587134c89A725422c3dFFB` |
+| LP holder balance | `1000000` |
+
+### Quote Checks
+
+| Quote | Raw input | Raw output |
+| --- | ---: | ---: |
+| USDC -> EURC | `100000` | `99860` |
+| EURC -> USDC | `100000` | `99860` |
+
+These quotes are testnet prototype outputs. They do not imply production readiness. USDC/EURC pricing still has FX and depeg risk, and the stable pool is not yet part of Coco DEX routing.
 
 ## Deployed Contracts
 
