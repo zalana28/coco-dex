@@ -21,6 +21,24 @@ The CocoStablePool V1 panel includes an Arc Testnet-only Add Liquidity section f
 
 This UI is for Arc Testnet experimentation only. Start with tiny amounts, do not overfund the prototype, and do not treat the displayed LP preview or quote checks as production readiness.
 
+## Add Liquidity UI Test
+
+The Add Liquidity UI has been tested successfully on Arc Testnet after the transaction progress and RPC rate-limit hotfixes. The UI uses exact approvals for USDC and EURC before calling `addLiquidity`, and transaction progress has been hardened with receipt polling fallback and RPC rate-limit backoff.
+
+The UI remains testnet-only and unaudited. CocoStablePool V1 is still not used by smart router routing. Remove Liquidity UI is not added yet, and router integration is not added yet.
+
+Tx hash: not recorded in this docs update.
+
+### Test Checklist
+
+- Approve USDC succeeded.
+- Approve EURC succeeded.
+- Add Liquidity succeeded.
+- Pool reserves refreshed after success.
+- LP balance refreshed after success.
+- No remove-liquidity action yet.
+- No router integration yet.
+
 ## Arc Testnet Initial Liquidity Record
 
 Initial liquidity was added to the CocoStablePool V1 Arc Testnet prototype. The seed is intentionally tiny and exists for verification only. The pool remains testnet-only, unaudited, not connected to router execution, and not connected to analytics or the indexer.
