@@ -6,9 +6,9 @@ CocoStablePool V1 is a planned native stablecoin AMM for Coco DEX on Arc Testnet
 
 The goal is to offer lower-slippage stablecoin swaps than a basic constant-product pool when assets are trading close to their expected range. V1 is testnet-only at first. It is not audited and must not be marketed as production-ready or mainnet-ready.
 
-## Prototype Status
+## LP Beta Status
 
-A CocoStablePool V1 contract prototype has been added for local testing and has a prototype deployment on Arc Testnet. Initial tiny liquidity has been added, and basic quote checks passed for both USDC -> EURC and EURC -> USDC. The pool is visible in the Coco DEX Pools page with testnet-only Add Liquidity and Remove Liquidity UI flows, but it is not used by the router, is not indexed by analytics, remains unaudited, is not production-ready, and is testnet-only. The prototype uses simplified stable-swap-inspired math and still needs deeper review, fuzzing, invariant testing, and integration planning before any broader use.
+CocoStablePool V1 is live as an Arc Testnet LP Beta. Initial tiny liquidity has been added, basic quote checks passed for both USDC -> EURC and EURC -> USDC, and the Pools page now supports tested Add Liquidity and Remove Liquidity UI flows. The pool is not used by the router, is not indexed by analytics, remains unaudited, is not production-ready, and is testnet-only. The implementation uses simplified stable-swap-inspired math and still needs deeper review, fuzzing, invariant testing, and integration planning before any broader use.
 
 ## Current On-Chain Status
 
@@ -23,7 +23,8 @@ A CocoStablePool V1 contract prototype has been added for local testing and has 
 - Remove liquidity auto-fills minimum outputs from expected proportional output with a default 0.5% slippage buffer; users can override those values manually.
 - The cSLP decimal and min-output Remove Liquidity UX has been fixed.
 - Transaction progress and RPC rate-limit handling have been added for the Add Liquidity and Remove Liquidity flows.
-- The pool remains beta, testnet-only, unaudited, and not production-ready.
+- The pool is marked LP Beta on Arc Testnet.
+- The pool remains unaudited and not production-ready.
 - Router integration remains future work.
 - The pool is not integrated into router, swap execution, analytics, or indexer flows.
 

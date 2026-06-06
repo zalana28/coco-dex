@@ -185,7 +185,7 @@ export type CocoStablePoolMetadata = {
   id: string
   pairLabel: string
   typeLabel: string
-  status: 'Prototype'
+  status: 'LP Beta'
   chainId: number
   poolAddress: typeof COCO_STABLE_POOL_ADDRESS
   lpTokenAddress: typeof COCO_STABLE_LP_TOKEN_ADDRESS
@@ -210,8 +210,8 @@ export type CocoStablePoolMetadata = {
 export const COCO_STABLE_POOL: CocoStablePoolMetadata = {
   id: 'coco-stable-usdc-eurc-v1',
   pairLabel: 'USDC / EURC',
-  typeLabel: 'Stable-swap inspired prototype',
-  status: 'Prototype',
+  typeLabel: 'Stable-swap inspired LP beta',
+  status: 'LP Beta',
   chainId: COCO_STABLE_POOL_CHAIN_ID,
   poolAddress: COCO_STABLE_POOL_ADDRESS,
   lpTokenAddress: COCO_STABLE_LP_TOKEN_ADDRESS,
@@ -219,7 +219,7 @@ export const COCO_STABLE_POOL: CocoStablePoolMetadata = {
   feeBps: 4,
   feeLabel: '0.04%',
   amplificationParameter: 100,
-  safetyLabels: ['Testnet only', 'Unaudited', 'Read-only display', 'Not routed yet'],
+  safetyLabels: ['Arc Testnet', 'LP Beta', 'Unaudited', 'Not routed'],
   docsPath: '/docs',
   poolArcscanUrl: `${COCO_STABLE_POOL_ARCSCAN_BASE_URL}/${COCO_STABLE_POOL_ADDRESS}`,
   lpTokenArcscanUrl: `${COCO_STABLE_POOL_ARCSCAN_BASE_URL}/${COCO_STABLE_LP_TOKEN_ADDRESS}`,
