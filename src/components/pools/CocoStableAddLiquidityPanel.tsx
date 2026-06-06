@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useAccount, useChainId, usePublicClient, useReadContract, useWaitForTransactionReceipt, useWriteContract } from 'wagmi'
-import { AlertTriangle, Droplets } from 'lucide-react'
+import { useCallback, useMemo, useState } from 'react'
+import { useAccount, useChainId, usePublicClient, useReadContract, useWriteContract } from 'wagmi'
+import { AlertTriangle, Droplets, RefreshCw } from 'lucide-react'
 import { TransactionProgressPanel } from '@/components/transactions/TransactionProgressPanel'
 import {
   COCO_STABLE_ERC20_LIQUIDITY_ABI,
@@ -11,13 +11,17 @@ import { arcTestnet } from '@/config/chains'
 import { formatTokenAmount, parseTokenAmount, truncateAddress } from '@/utils/format'
 import { sanitizeTokenInput, validateTokenAmount } from '@/utils/validation'
 import { useTransactionProgress } from '@/hooks/useTransactionProgress'
-import { useCheckReceipt } from '@/hooks/useCheckReceipt'
 import type { TransactionType } from '@/types/transactions'
 
 const ARC_CHAIN_ID = arcTestnet.id
 const DEFAULT_USDC_AMOUNT = '0.1'
 const DEFAULT_EURC_AMOUNT = '0.1'
 const DEFAULT_MIN_LP_OUT = '0.099'
+const RECEIPT_POLL_INTERVAL_MS = 2_000
+const RECEIPT_TIMEOUT_MS = 75_000
+const INITIAL_RECEIPT_WAIT_MS = 15_000
+
+type ReceiptResult = 'success' | 'reverted' | 'timeout' | 'not_found'
 
 function sqrtBigInt(value: bigint) {
   if (value < BigInt(2)) return value
@@ -70,6 +74,22 @@ function isUserRejected(error: unknown) {
   return message.includes('rejected') || message.includes('denied') || message.includes('cancelled') || message.includes('canceled')
 }
 
+function delay(ms: number) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms)
+  })
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
+  let timeoutId: number | undefined
+  const timeout = new Promise<undefined>((resolve) => {
+    timeoutId = window.setTimeout(() => resolve(undefined), timeoutMs)
+  })
+  const result = await Promise.race([promise, timeout])
+  if (timeoutId !== undefined) window.clearTimeout(timeoutId)
+  return result
+}
+
 type ActionState = {
   action: 'connect' | 'wrong-network' | 'paused' | 'enter' | 'insufficient-usdc' | 'insufficient-eurc' | 'approve-usdc' | 'approve-eurc' | 'add' | 'pending' | 'success'
   label: string
@@ -98,18 +118,14 @@ export function CocoStableAddLiquidityPanel({
   const [amount1Input, setAmount1Input] = useState(DEFAULT_EURC_AMOUNT)
   const [minLpOutInput, setMinLpOutInput] = useState(DEFAULT_MIN_LP_OUT)
   const [txError, setTxError] = useState<string | null>(null)
-  const [approveUsdcHash, setApproveUsdcHash] = useState<`0x${string}`>()
-  const [approveEurcHash, setApproveEurcHash] = useState<`0x${string}`>()
-  const [addLiquidityHash, setAddLiquidityHash] = useState<`0x${string}`>()
   const [lastSuccessHash, setLastSuccessHash] = useState<`0x${string}`>()
+  const [addLiquidityConfirmed, setAddLiquidityConfirmed] = useState(false)
+  const [timedOutSteps, setTimedOutSteps] = useState<Partial<Record<TransactionType, boolean>>>({})
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false)
   const txProgress = useTransactionProgress()
-  const { checkReceipt } = useCheckReceipt()
   const [token0, token1] = COCO_STABLE_POOL.tokens
 
   const { writeContract, isPending: isWalletPending } = useWriteContract()
-  const usdcReceipt = useWaitForTransactionReceipt({ hash: approveUsdcHash, query: { enabled: !!approveUsdcHash } })
-  const eurcReceipt = useWaitForTransactionReceipt({ hash: approveEurcHash, query: { enabled: !!approveEurcHash } })
-  const addReceipt = useWaitForTransactionReceipt({ hash: addLiquidityHash, query: { enabled: !!addLiquidityHash } })
 
   const token0Balance = useReadContract({
     address: token0.address as `0x${string}`,
@@ -159,7 +175,10 @@ export function CocoStableAddLiquidityPanel({
   const allowance1 = (token1Allowance.data as bigint | undefined) ?? BigInt(0)
   const needsUsdcApproval = amount0Raw > BigInt(0) && allowance0 < amount0Raw
   const needsEurcApproval = amount1Raw > BigInt(0) && allowance1 < amount1Raw
-  const isWaiting = isWalletPending || usdcReceipt.isLoading || eurcReceipt.isLoading || addReceipt.isLoading
+  const activeStep = txProgress.activeStep
+  const isStepConfirming = activeStep?.status === 'submitted' || activeStep?.status === 'pending_onchain'
+  const isStepWaitingForWallet = activeStep?.status === 'waiting_wallet_confirmation'
+  const activeTxHash = activeStep?.txHash
   const estimatedLpOut = useMemo(() => estimateLpOut({
     amount0: amount0Raw,
     amount1: amount1Raw,
@@ -171,7 +190,10 @@ export function CocoStableAddLiquidityPanel({
 
   const handleAmountChange = (value: string, setter: (nextValue: string) => void, decimals: number) => {
     const sanitized = sanitizeTokenInput(value, decimals)
-    if (sanitized !== null) setter(sanitized)
+    if (sanitized !== null) {
+      setAddLiquidityConfirmed(false)
+      setter(sanitized)
+    }
   }
 
   const refetchInputs = useCallback(() => {
@@ -182,8 +204,110 @@ export function CocoStableAddLiquidityPanel({
     onRefreshPool()
   }, [token0Balance, token1Balance, token0Allowance, token1Allowance, onRefreshPool])
 
+  const readAllowance = useCallback(async (tokenAddress: `0x${string}`) => {
+    if (!publicClient || !address) return BigInt(0)
+    const allowance = await publicClient.readContract({
+      address: tokenAddress,
+      abi: COCO_STABLE_ERC20_LIQUIDITY_ABI,
+      functionName: 'allowance',
+      args: [address, COCO_STABLE_POOL.poolAddress],
+    })
+    return allowance as bigint
+  }, [address, publicClient])
+
+  const confirmAllowance = useCallback(async (tokenAddress: `0x${string}`, requiredAmount: bigint) => {
+    const allowance = await readAllowance(tokenAddress)
+    refetchInputs()
+    return allowance >= requiredAmount
+  }, [readAllowance, refetchInputs])
+
+  const getReceiptStatus = useCallback(async (txHash: `0x${string}`): Promise<ReceiptResult> => {
+    if (!publicClient) return 'not_found'
+
+    try {
+      const receipt = await publicClient.getTransactionReceipt({ hash: txHash })
+      return receipt.status === 'success' ? 'success' : 'reverted'
+    } catch {
+      return 'not_found'
+    }
+  }, [publicClient])
+
+  const waitForReceiptWithFallback = useCallback(async (txHash: `0x${string}`): Promise<ReceiptResult> => {
+    if (!publicClient) return 'not_found'
+
+    try {
+      const receipt = await withTimeout(
+        publicClient.waitForTransactionReceipt({ hash: txHash, pollingInterval: RECEIPT_POLL_INTERVAL_MS }),
+        INITIAL_RECEIPT_WAIT_MS
+      )
+      if (receipt) return receipt.status === 'success' ? 'success' : 'reverted'
+    } catch {
+      // Fall through to direct receipt polling. Some RPCs miss wait subscriptions even after Arcscan has indexed the tx.
+    }
+
+    const startedAt = Date.now()
+    while (Date.now() - startedAt < RECEIPT_TIMEOUT_MS) {
+      const status = await getReceiptStatus(txHash)
+      if (status === 'success' || status === 'reverted') return status
+      await delay(RECEIPT_POLL_INTERVAL_MS)
+    }
+
+    return 'timeout'
+  }, [getReceiptStatus, publicClient])
+
+  const markStepSuccessFromChain = useCallback(async (step: TransactionType, txHash: `0x${string}`, requiredAmount?: bigint) => {
+    if (step === 'approve_usdc') {
+      if (requiredAmount === undefined) return false
+      const allowanceConfirmed = await confirmAllowance(token0.address as `0x${string}`, requiredAmount)
+      if (!allowanceConfirmed) {
+        setTxError('USDC approval confirmed, but allowance is still below the entered amount. Click Check status or approve again.')
+        return false
+      }
+    }
+
+    if (step === 'approve_eurc') {
+      if (requiredAmount === undefined) return false
+      const allowanceConfirmed = await confirmAllowance(token1.address as `0x${string}`, requiredAmount)
+      if (!allowanceConfirmed) {
+        setTxError('EURC approval confirmed, but allowance is still below the entered amount. Click Check status or approve again.')
+        return false
+      }
+    }
+
+    if (step === 'add_liquidity') {
+      setAddLiquidityConfirmed(true)
+      setLastSuccessHash(txHash)
+      refetchInputs()
+    }
+
+    setTimedOutSteps((prev) => ({ ...prev, [step]: false }))
+    txProgress.markSuccess(step)
+    return true
+  }, [confirmAllowance, refetchInputs, token0.address, token1.address, txProgress])
+
+  const monitorTransaction = useCallback(async (step: TransactionType, txHash: `0x${string}`, requiredAmount?: bigint) => {
+    setTimedOutSteps((prev) => ({ ...prev, [step]: false }))
+    const receiptStatus = await waitForReceiptWithFallback(txHash)
+
+    if (receiptStatus === 'success') {
+      await markStepSuccessFromChain(step, txHash, requiredAmount)
+      return
+    }
+
+    if (receiptStatus === 'reverted') {
+      setTxError('Transaction reverted')
+      txProgress.markFailed(step, 'Transaction reverted')
+      return
+    }
+
+    const recovered = step === 'approve_usdc' || step === 'approve_eurc'
+      ? await markStepSuccessFromChain(step, txHash, requiredAmount)
+      : false
+    if (!recovered) setTimedOutSteps((prev) => ({ ...prev, [step]: true }))
+  }, [markStepSuccessFromChain, txProgress, waitForReceiptWithFallback])
+
   const ensureFlow = useCallback(() => {
-    if (txProgress.currentFlow) return
+    if (txProgress.currentFlow && !txProgress.isFlowComplete) return
 
     const steps: { type: TransactionType; label: string }[] = []
     if (needsUsdcApproval) steps.push({ type: 'approve_usdc', label: 'Approve USDC' })
@@ -199,16 +323,18 @@ export function CocoStableAddLiquidityPanel({
     if (!amount0Validation.valid || !amount1Validation.valid || !minLpOutValidation.valid) return { action: 'enter', label: amount0Validation.error ?? amount1Validation.error ?? minLpOutValidation.error ?? 'Enter Amounts', disabled: true }
     if (balance0 !== undefined && amount0Raw > balance0) return { action: 'insufficient-usdc', label: 'Insufficient USDC', disabled: true }
     if (balance1 !== undefined && amount1Raw > balance1) return { action: 'insufficient-eurc', label: 'Insufficient EURC', disabled: true }
-    if (isWaiting) return { action: 'pending', label: addLiquidityHash ? 'Adding Liquidity' : 'Confirming', disabled: true }
-    if (addReceipt.isSuccess) return { action: 'success', label: 'Success', disabled: true }
+    if (isWalletPending || isStepWaitingForWallet) return { action: 'pending', label: 'Waiting for wallet', disabled: true }
+    if (isStepConfirming) return { action: 'pending', label: 'Confirming on Arc Testnet', disabled: true }
+    if (addLiquidityConfirmed) return { action: 'success', label: 'Confirmed', disabled: true }
     if (needsUsdcApproval) return { action: 'approve-usdc', label: 'Approve USDC', disabled: false }
     if (needsEurcApproval) return { action: 'approve-eurc', label: 'Approve EURC', disabled: false }
     return { action: 'add', label: 'Add Liquidity', disabled: false }
-  }, [isConnected, address, chainId, paused, amount0Validation, amount1Validation, minLpOutValidation, balance0, balance1, amount0Raw, amount1Raw, isWaiting, addLiquidityHash, addReceipt.isSuccess, needsUsdcApproval, needsEurcApproval])
+  }, [isConnected, address, chainId, paused, amount0Validation, amount1Validation, minLpOutValidation, balance0, balance1, amount0Raw, amount1Raw, isWalletPending, isStepWaitingForWallet, isStepConfirming, addLiquidityConfirmed, needsUsdcApproval, needsEurcApproval])
 
-  const approveToken = useCallback((tokenAddress: `0x${string}`, amount: bigint, step: TransactionType, setHash: (hash: `0x${string}`) => void) => {
+  const approveToken = useCallback((tokenAddress: `0x${string}`, amount: bigint, step: TransactionType) => {
     setTxError(null)
     ensureFlow()
+    txProgress.resetStep(step)
     txProgress.markWaiting(step)
     writeContract(
       {
@@ -220,20 +346,25 @@ export function CocoStableAddLiquidityPanel({
       },
       {
         onSuccess: (hash) => {
-          setHash(hash)
           txProgress.markSubmitted(step, hash)
+          void monitorTransaction(step, hash, amount)
         },
         onError: (error) => {
-          setTxError(error.message)
-          if (isUserRejected(error)) txProgress.markRejected(step)
-          else txProgress.markFailed(step, error.message)
+          if (isUserRejected(error)) {
+            setTxError('Rejected by user')
+            txProgress.markRejected(step)
+          } else {
+            setTxError(error.message)
+            txProgress.markFailed(step, error.message)
+          }
         },
       }
     )
-  }, [ensureFlow, txProgress, writeContract])
+  }, [ensureFlow, monitorTransaction, txProgress, writeContract])
 
   const handleAddLiquidity = useCallback(async () => {
     setTxError(null)
+    setAddLiquidityConfirmed(false)
 
     if (!address || chainId !== ARC_CHAIN_ID || paused) return
     if (!amount0Validation.valid || !amount1Validation.valid || !minLpOutValidation.valid) return
@@ -242,6 +373,7 @@ export function CocoStableAddLiquidityPanel({
     if (allowance0 < amount0Raw || allowance1 < amount1Raw) return
 
     ensureFlow()
+    txProgress.resetStep('add_liquidity')
     txProgress.markWaiting('add_liquidity')
 
     try {
@@ -273,26 +405,30 @@ export function CocoStableAddLiquidityPanel({
       },
       {
         onSuccess: (hash) => {
-          setAddLiquidityHash(hash)
           setLastSuccessHash(hash)
           txProgress.markSubmitted('add_liquidity', hash)
+          void monitorTransaction('add_liquidity', hash)
         },
         onError: (error) => {
-          setTxError(error.message)
-          if (isUserRejected(error)) txProgress.markRejected('add_liquidity')
-          else txProgress.markFailed('add_liquidity', error.message)
+          if (isUserRejected(error)) {
+            setTxError('Rejected by user')
+            txProgress.markRejected('add_liquidity')
+          } else {
+            setTxError(error.message)
+            txProgress.markFailed('add_liquidity', error.message)
+          }
         },
       }
     )
-  }, [address, chainId, paused, amount0Validation.valid, amount1Validation.valid, minLpOutValidation.valid, balance0, balance1, amount0Raw, amount1Raw, minLpOutRaw, allowance0, allowance1, ensureFlow, txProgress, publicClient, writeContract])
+  }, [address, chainId, paused, amount0Validation.valid, amount1Validation.valid, minLpOutValidation.valid, balance0, balance1, amount0Raw, amount1Raw, minLpOutRaw, allowance0, allowance1, ensureFlow, txProgress, publicClient, writeContract, monitorTransaction])
 
   const handleAction = () => {
     if (actionState.action === 'approve-usdc') {
-      approveToken(token0.address as `0x${string}`, amount0Raw, 'approve_usdc', setApproveUsdcHash)
+      approveToken(token0.address as `0x${string}`, amount0Raw, 'approve_usdc')
       return
     }
     if (actionState.action === 'approve-eurc') {
-      approveToken(token1.address as `0x${string}`, amount1Raw, 'approve_eurc', setApproveEurcHash)
+      approveToken(token1.address as `0x${string}`, amount1Raw, 'approve_eurc')
       return
     }
     if (actionState.action === 'add') {
@@ -303,42 +439,43 @@ export function CocoStableAddLiquidityPanel({
   const handleCheckStatus = useCallback(async () => {
     if (!txProgress.currentFlow) return
 
-    for (const step of txProgress.currentFlow.steps) {
-      if (!step.txHash || step.status === 'success' || step.status === 'failed' || step.status === 'rejected' || step.status === 'idle') continue
-      const status = await checkReceipt(step.txHash)
-      if (status === 'success') txProgress.markSuccess(step.type)
-      if (status === 'reverted') txProgress.markFailed(step.type, 'Transaction reverted')
-    }
+    try {
+      setIsCheckingStatus(true)
+      setTxError(null)
 
-    refetchInputs()
-  }, [txProgress, checkReceipt, refetchInputs])
+      for (const step of txProgress.currentFlow.steps) {
+        if (!step.txHash || step.status === 'success' || step.status === 'failed' || step.status === 'rejected' || step.status === 'idle') continue
+        const requiredAmount = step.type === 'approve_usdc'
+          ? amount0Raw
+          : step.type === 'approve_eurc'
+            ? amount1Raw
+            : undefined
+        const status = await getReceiptStatus(step.txHash)
 
-  useEffect(() => {
-    if (!approveUsdcHash) return
-    if (usdcReceipt.isSuccess) {
-      txProgress.markSuccess('approve_usdc')
+        if (status === 'success') {
+          await markStepSuccessFromChain(step.type, step.txHash, requiredAmount)
+          continue
+        }
+
+        if (status === 'reverted') {
+          setTxError('Transaction reverted')
+          txProgress.markFailed(step.type, 'Transaction reverted')
+          continue
+        }
+
+        if ((step.type === 'approve_usdc' || step.type === 'approve_eurc') && requiredAmount !== undefined) {
+          await markStepSuccessFromChain(step.type, step.txHash, requiredAmount)
+        }
+      }
+
       refetchInputs()
+    } finally {
+      setIsCheckingStatus(false)
     }
-    if (usdcReceipt.data?.status === 'reverted') txProgress.markFailed('approve_usdc', 'Transaction reverted')
-  }, [approveUsdcHash, usdcReceipt.isSuccess, usdcReceipt.data?.status, txProgress, refetchInputs])
+  }, [amount0Raw, amount1Raw, getReceiptStatus, markStepSuccessFromChain, refetchInputs, txProgress])
 
-  useEffect(() => {
-    if (!approveEurcHash) return
-    if (eurcReceipt.isSuccess) {
-      txProgress.markSuccess('approve_eurc')
-      refetchInputs()
-    }
-    if (eurcReceipt.data?.status === 'reverted') txProgress.markFailed('approve_eurc', 'Transaction reverted')
-  }, [approveEurcHash, eurcReceipt.isSuccess, eurcReceipt.data?.status, txProgress, refetchInputs])
-
-  useEffect(() => {
-    if (!addLiquidityHash) return
-    if (addReceipt.isSuccess) {
-      txProgress.markSuccess('add_liquidity')
-      refetchInputs()
-    }
-    if (addReceipt.data?.status === 'reverted') txProgress.markFailed('add_liquidity', 'Transaction reverted')
-  }, [addLiquidityHash, addReceipt.isSuccess, addReceipt.data?.status, txProgress, refetchInputs])
+  const activeStepTimedOut = activeStep?.type ? timedOutSteps[activeStep.type] === true : false
+  const showRecovery = !!activeTxHash && isStepConfirming
 
   return (
     <div className="mt-4 rounded-xl border border-blue-500/15 bg-coco-dark-bg/55 p-4">
@@ -407,7 +544,36 @@ export function CocoStableAddLiquidityPanel({
         </p>
       )}
 
-      {lastSuccessHash && addReceipt.isSuccess && (
+      {showRecovery && (
+        <div className="mt-3 rounded-lg border border-coco-amber-500/20 bg-coco-amber-500/10 p-3">
+          {activeStepTimedOut && (
+            <p className="text-xs leading-relaxed text-coco-amber-500">
+              Transaction may already be confirmed. Click Check status.
+            </p>
+          )}
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <a
+              href={`https://testnet.arcscan.app/tx/${activeTxHash}`}
+              target="_blank"
+              rel="noreferrer"
+              className="font-mono text-xs text-coco-teal-400 hover:text-coco-teal-300"
+            >
+              View transaction on Arcscan
+            </a>
+            <button
+              type="button"
+              onClick={handleCheckStatus}
+              disabled={isCheckingStatus}
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-coco-teal-400/25 bg-coco-teal-400/10 px-3 py-2 text-xs font-semibold text-coco-teal-300 transition-colors hover:bg-coco-teal-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isCheckingStatus ? 'animate-spin' : ''}`} />
+              Check status
+            </button>
+          </div>
+        </div>
+      )}
+
+      {lastSuccessHash && addLiquidityConfirmed && (
         <a
           href={`https://testnet.arcscan.app/tx/${lastSuccessHash}`}
           target="_blank"
