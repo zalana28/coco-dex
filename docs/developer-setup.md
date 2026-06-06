@@ -4,16 +4,20 @@ This document describes local Coco DEX setup for docs and app development.
 
 ## Prerequisites
 
-- Node.js compatible with the project dependencies.
+- Node.js 22 LTS is recommended for local development.
 - npm.
 - A wallet for manual Arc Testnet checks.
 - Environment variables configured locally for server/API features.
+
+The project supports Node `>=22.11 <25`. Node 25 may install and build, but it can show `EBADENGINE` warnings from dependencies that support Node 20, 22, or 24.
 
 ## Install
 
 ```bash
 git clone <repo-url>
 cd coco-dex
+nvm install 22
+nvm use 22
 npm install
 cp .env.example .env.local
 ```
@@ -76,6 +80,9 @@ Open the local Vite URL, connect a wallet, and switch to Arc Testnet for transac
 ## Build and checks
 
 ```bash
+nvm install 22
+nvm use 22
+npm install
 npm run build
 npm test
 npm run typecheck

@@ -74,7 +74,11 @@ Create `.env.local` from `.env.example`:
 
 ## Local Setup
 
+Use Node 22 LTS for local development. Node 25 may show `EBADENGINE` warnings because some dependencies support Node 20, 22, or 24.
+
 ```bash
+nvm install 22
+nvm use 22
 npm install
 cp .env.example .env.local
 npm run dev
