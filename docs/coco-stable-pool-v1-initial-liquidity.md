@@ -6,6 +6,8 @@ Initial liquidity tooling exists for the deployed CocoStablePool V1 Arc Testnet 
 
 A Pools page panel displays CocoStablePool V1 metadata and on-chain state for visibility. Tested LP Beta Add Liquidity and Remove Liquidity UI flows are available for this pool on Arc Testnet. Add Liquidity uses separate exact USDC and EURC approvals before calling `addLiquidity`; Remove Liquidity burns cSLP directly through the pool contract and does not require LP token approval. These flows do not include swap, router, analytics, indexer, or production support.
 
+Read-only router readiness diagnostics are available through `npm run debug:coco-stable-quote`. The script checks pool state and sample `getAmountOut` quotes only; it does not approve, swap, broadcast, or enable CocoStablePool as a router source.
+
 ## Pools Page Add Liquidity UI
 
 The CocoStablePool V1 panel includes an Arc Testnet LP Beta Add Liquidity section for experimentation with tiny amounts.
@@ -113,6 +115,12 @@ Initial liquidity was added to the CocoStablePool V1 Arc Testnet prototype. The 
 | EURC -> USDC | `100000` | `99860` |
 
 These quotes are testnet prototype outputs. They do not imply production readiness. USDC/EURC pricing still has FX and depeg risk, and the stable pool is not yet part of Coco DEX routing.
+
+## Quote-Only Router Readiness
+
+CocoStablePool V1 can now be inspected with `npm run debug:coco-stable-quote` as part of future smart-router readiness work. The diagnostic reads reserves, LP supply, fee, amplification, paused state, and bidirectional USDC/EURC quote outputs for small sample sizes.
+
+This remains quote-only visibility. Router execution is still disabled, the pool liquidity is intentionally tiny, and the pool is not a live smart-router source. Future router integration should first compare quotes against existing routes, add a small max input cap, enforce slippage and liquidity thresholds, keep a disable flag, and complete manual Arc Testnet tests before any execution path is enabled.
 
 ## Deployed Contracts
 

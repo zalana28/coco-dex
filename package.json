@@ -20,6 +20,7 @@
     "debug:xylonet": "npx tsx scripts/debugXylonetQuote.ts",
     "debug:xylonet-pools": "npx tsx scripts/debugXylonetStablePools.ts",
     "debug:xylonet-sim": "npx tsx scripts/debugXylonetSwapSimulation.ts",
+    "debug:coco-stable-quote": "npx tsx scripts/debugCocoStablePoolQuote.ts",
     "debug:unitflow": "npx tsx scripts/debugUnitFlowQuote.ts",
     "debug:unitflow-exec": "npx tsx scripts/debugUnitFlowExecution.ts",
     "debug:unitflow-ur": "npx tsx scripts/debugUnitFlowUniversalRouter.ts",

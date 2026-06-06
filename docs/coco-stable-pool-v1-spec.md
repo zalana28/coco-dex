@@ -24,9 +24,25 @@ CocoStablePool V1 is live as an Arc Testnet LP Beta. Initial tiny liquidity has 
 - The cSLP decimal and min-output Remove Liquidity UX has been fixed.
 - Transaction progress and RPC rate-limit handling have been added for the Add Liquidity and Remove Liquidity flows.
 - The pool is marked LP Beta on Arc Testnet.
+- Quote-only router readiness diagnostics are available through `npm run debug:coco-stable-quote`.
 - The pool remains unaudited and not production-ready.
 - Router integration remains future work.
 - The pool is not integrated into router, swap execution, analytics, or indexer flows.
+
+## Router Readiness Diagnostics
+
+CocoStablePool V1 now has a read-only quote diagnostic script for router readiness research. Run `npm run debug:coco-stable-quote` with `ARC_TESTNET_RPC_URL` configured to read pool tokens, reserves, LP supply, fee, amplification, paused state, and `getAmountOut` results for USDC -> EURC and EURC -> USDC sample inputs.
+
+This diagnostic is quote-only. It never approves tokens, calls `swap`, broadcasts transactions, or enables the pool as a smart router source. The current pool liquidity is intentionally tiny, so quotes are useful for sanity checks and comparison only. They must not be treated as production readiness.
+
+Future router execution work must remain gated by:
+
+- quote-only comparison against existing routes first;
+- small maximum input caps;
+- slippage and minimum-output guards;
+- a pool liquidity threshold before route eligibility;
+- an explicit disable flag that defaults to disabled;
+- Arc Testnet manual execution tests before any broader rollout.
 
 ## Fuzz and Invariant Testing Status
 

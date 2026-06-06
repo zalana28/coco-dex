@@ -14,6 +14,18 @@ Coco DEX compares supported Arc Testnet routes before the user swaps. The route 
 
 CocoStablePool V1 is live as an Arc Testnet LP Beta with working add/remove liquidity flows, but it is not yet a smart router source. It remains available only through the Pools page beta flow.
 
+Quote-only readiness diagnostics are available through `npm run debug:coco-stable-quote`. The diagnostic script reads pool state and calls `getAmountOut` for USDC -> EURC and EURC -> USDC sample sizes, but it does not approve, swap, broadcast, or mark CocoStablePool executable. The current pool liquidity is intentionally tiny, so any future router work must start with conservative caps and manual Arc Testnet validation.
+
+Future CocoStablePool router integration must follow this safety sequence:
+
+- keep quote-only diagnostics first;
+- compare CocoStablePool quotes against the existing Coco, XyloNet, UnitFlow, and Synthra routes;
+- add a small maximum input cap before any execution testing;
+- require slippage guards and minimum-output checks;
+- require a pool liquidity threshold before route eligibility;
+- keep an explicit disable flag available;
+- enable execution only after Arc Testnet manual tests pass.
+
 ### XyloNet
 
 - Type: external router route.
