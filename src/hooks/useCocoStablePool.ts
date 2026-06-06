@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react'
 import { useChainId, useReadContract } from 'wagmi'
 import {
+  COCO_STABLE_LP_DECIMALS,
   COCO_STABLE_LP_READ_ABI,
   COCO_STABLE_POOL,
   COCO_STABLE_POOL_READ_ABI,
@@ -75,14 +76,6 @@ export function useCocoStablePool(address: `0x${string}` | undefined) {
     query: STABLE_POOL_QUERY_OPTIONS,
   })
 
-  const lpDecimals = useReadContract({
-    address: COCO_STABLE_POOL.lpTokenAddress,
-    abi: COCO_STABLE_LP_READ_ABI,
-    functionName: 'decimals',
-    chainId: ARC_CHAIN_ID,
-    query: STABLE_POOL_QUERY_OPTIONS,
-  })
-
   const userLpBalance = useReadContract({
     address: COCO_STABLE_POOL.lpTokenAddress,
     abi: COCO_STABLE_LP_READ_ABI,
@@ -125,7 +118,6 @@ export function useCocoStablePool(address: `0x${string}` | undefined) {
       amplificationParameter.refetch(),
       paused.refetch(),
       totalSupply.refetch(),
-      lpDecimals.refetch(),
       userLpBalance.refetch(),
       usdcToEurcQuote.refetch(),
       eurcToUsdcQuote.refetch(),
@@ -137,7 +129,6 @@ export function useCocoStablePool(address: `0x${string}` | undefined) {
     balances,
     eurcToUsdcQuote,
     feeBps,
-    lpDecimals,
     lpToken,
     paused,
     tokens,
@@ -156,7 +147,6 @@ export function useCocoStablePool(address: `0x${string}` | undefined) {
     amplificationParameter.error,
     paused.error,
     totalSupply.error,
-    lpDecimals.error,
     usdcToEurcQuote.error,
     eurcToUsdcQuote.error,
     userLpBalance.error,
@@ -170,7 +160,6 @@ export function useCocoStablePool(address: `0x${string}` | undefined) {
     amplificationParameter.isLoading,
     paused.isLoading,
     totalSupply.isLoading,
-    lpDecimals.isLoading,
     usdcToEurcQuote.isLoading,
     eurcToUsdcQuote.isLoading,
     userLpBalance.isLoading,
@@ -187,7 +176,7 @@ export function useCocoStablePool(address: `0x${string}` | undefined) {
     amplificationParameter: (amplificationParameter.data as bigint | undefined) ?? BigInt(COCO_STABLE_POOL.amplificationParameter),
     paused: (paused.data as boolean | undefined) ?? COCO_STABLE_POOL.fallback.paused,
     totalSupply: (totalSupply.data as bigint | undefined) ?? COCO_STABLE_POOL.fallback.totalLpSupply,
-    lpDecimals: (lpDecimals.data as number | undefined) ?? 18,
+    lpDecimals: COCO_STABLE_LP_DECIMALS,
     userLpBalance: userLpBalance.data as bigint | undefined,
     quoteInput: COCO_STABLE_POOL_SAMPLE_QUOTE_INPUT,
     quoteUsdcToEurc: (usdcToEurcQuote.data as bigint | undefined) ?? COCO_STABLE_POOL.fallback.quoteUsdcToEurc,

@@ -20,6 +20,7 @@ A CocoStablePool V1 contract prototype has been added for local testing and has 
 - Testnet-only Add Liquidity and Remove Liquidity UI flows have been added for the Pools page beta flow.
 - Add liquidity uses separate exact USDC and EURC approvals before calling `addLiquidity`.
 - Remove liquidity burns cSLP through `removeLiquidity` and does not require LP approval.
+- Remove liquidity auto-fills minimum outputs from expected proportional output with a default 0.5% slippage buffer; users can override those values manually.
 - Transaction progress and RPC rate-limit handling have been added for the Add Liquidity and Remove Liquidity flows.
 - The pool remains beta, testnet-only, unaudited, and not production-ready.
 - Router integration remains future work.

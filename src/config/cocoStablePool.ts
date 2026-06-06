@@ -4,6 +4,7 @@ import type { Token } from '@/types/token'
 export const COCO_STABLE_POOL_CHAIN_ID = 5_042_002
 export const COCO_STABLE_POOL_ADDRESS = '0x0EA7A79F8864091ac7F2B8643BaA7598a9d05a83' as const
 export const COCO_STABLE_LP_TOKEN_ADDRESS = '0xfE4A959c689019E09f584F25114Bb5A5e2aA8499' as const
+export const COCO_STABLE_LP_DECIMALS = 6
 export const COCO_STABLE_POOL_ARCSCAN_BASE_URL = 'https://testnet.arcscan.app/address'
 export const COCO_STABLE_POOL_SAMPLE_QUOTE_INPUT = BigInt(100000)
 
@@ -177,13 +178,6 @@ export const COCO_STABLE_LP_READ_ABI = [
     stateMutability: 'view',
     inputs: [{ name: 'account', type: 'address' }],
     outputs: [{ name: '', type: 'uint256' }],
-  },
-  {
-    type: 'function',
-    name: 'decimals',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ name: '', type: 'uint8' }],
   },
 ] as const
 
