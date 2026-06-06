@@ -8,7 +8,7 @@ The goal is to offer lower-slippage stablecoin swaps than a basic constant-produ
 
 ## Prototype Status
 
-A CocoStablePool V1 contract prototype has been added for local testing and has a prototype deployment on Arc Testnet. Initial tiny liquidity has been added, and basic quote checks passed for both USDC -> EURC and EURC -> USDC. The pool is not live in the Coco DEX UI, is not used by the router, is not indexed by analytics, remains unaudited, is not production-ready, and is testnet-only. The prototype uses simplified stable-swap-inspired math and still needs deeper review, fuzzing, invariant testing, and integration planning before any broader use.
+A CocoStablePool V1 contract prototype has been added for local testing and has a prototype deployment on Arc Testnet. Initial tiny liquidity has been added, and basic quote checks passed for both USDC -> EURC and EURC -> USDC. The pool is visible in the Coco DEX Pools page with a testnet-only Add Liquidity UI, but it is not used by the router, is not indexed by analytics, remains unaudited, is not production-ready, and is testnet-only. The prototype uses simplified stable-swap-inspired math and still needs deeper review, fuzzing, invariant testing, and integration planning before any broader use.
 
 ## Current On-Chain Status
 
@@ -16,13 +16,14 @@ A CocoStablePool V1 contract prototype has been added for local testing and has 
 - Initial tiny liquidity has been added for verification.
 - Post-liquidity inspection shows `1000000` raw units of USDC, `1000000` raw units of EURC, total LP supply `1000000`, and `paused = false`.
 - Quote checks passed for `100000` raw input in both directions, returning `99860` raw output.
-- A read-only Pools page panel displays the pool for visibility only.
-- There is still no add/remove liquidity UI for this pool.
-- Still unaudited, not production-ready, and not integrated into frontend, router, analytics, or indexer flows.
+- A Pools page panel displays the pool for visibility and includes a testnet-only Add Liquidity UI.
+- Add liquidity uses separate exact USDC and EURC approvals before calling `addLiquidity`.
+- There is still no remove liquidity UI for this pool.
+- Still unaudited, not production-ready, and not integrated into router, swap execution, analytics, or indexer flows.
 
 ## Fuzz and Invariant Testing Status
 
-Fuzz tests and invariant tests have been added for the CocoStablePool V1 prototype. They cover liquidity operations, swaps, round-trip behavior, quote safety, LP accounting, pool balance accounting, fee bounds, and paused-state write blocking. This does not make the prototype audited or production-ready. It is still not deployed, not connected to the frontend or router, and the production math still needs deeper review before any integration.
+Fuzz tests and invariant tests have been added for the CocoStablePool V1 prototype. They cover liquidity operations, swaps, round-trip behavior, quote safety, LP accounting, pool balance accounting, fee bounds, and paused-state write blocking. This does not make the prototype audited or production-ready. The Arc Testnet deployment is still not connected to router execution, and the production math still needs deeper review before any broader integration.
 
 ## Deployment Tooling Status
 

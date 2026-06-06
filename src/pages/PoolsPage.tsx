@@ -9,6 +9,7 @@ import { usePairReserves } from '@/hooks/usePairReserves'
 import { useLPBalance } from '@/hooks/useLPBalance'
 import { useXyloNetStablePool } from '@/hooks/useXyloNetStablePool'
 import { useCocoStablePool } from '@/hooks/useCocoStablePool'
+import { CocoStableAddLiquidityPanel } from '@/components/pools/CocoStableAddLiquidityPanel'
 
 type Tab = 'all' | 'my'
 
@@ -208,6 +209,7 @@ function CocoNativeStablePoolPanel({
   isLoading,
   hasReadError,
   isWrongNetwork,
+  refetch,
 }: ReturnType<typeof useCocoStablePool>) {
   const [token0, token1] = pool.tokens
   const feeLabel = `${(Number(feeBps) / 100).toFixed(2)}%`
@@ -340,9 +342,18 @@ function CocoNativeStablePoolPanel({
 
         <div className="mt-3 rounded-lg border border-coco-amber-500/20 bg-coco-amber-500/10 p-3">
           <p className="text-xs leading-relaxed text-coco-amber-500">
-            CocoStablePool V1 is testnet-only, unaudited, and not used by the smart router yet. This panel is read-only and does not provide add, remove, approve, swap, or deposit actions.
+            CocoStablePool V1 is testnet-only, unaudited, and not used by the smart router yet. The pool state above is read-only; the scoped action below only supports testnet add liquidity with exact approvals.
           </p>
         </div>
+
+        <CocoStableAddLiquidityPanel
+          reserve0={reserve0}
+          reserve1={reserve1}
+          totalSupply={totalSupply}
+          amplificationParameter={amplificationParameter}
+          paused={paused}
+          onRefreshPool={refetch}
+        />
       </Card>
     </section>
   )

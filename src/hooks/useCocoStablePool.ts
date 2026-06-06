@@ -144,5 +144,17 @@ export function useCocoStablePool(address: `0x${string}` | undefined) {
     isLoading,
     hasReadError,
     isWrongNetwork: !!address && chainId !== ARC_CHAIN_ID,
+    refetch: () => {
+      tokens.refetch()
+      balances.refetch()
+      lpToken.refetch()
+      feeBps.refetch()
+      amplificationParameter.refetch()
+      paused.refetch()
+      totalSupply.refetch()
+      userLpBalance.refetch()
+      usdcToEurcQuote.refetch()
+      eurcToUsdcQuote.refetch()
+    },
   }
 }
