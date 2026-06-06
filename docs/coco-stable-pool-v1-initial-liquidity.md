@@ -56,6 +56,25 @@ Tx hash: not recorded in this docs update.
 - Remove Liquidity UI added separately for cSLP burns.
 - No router integration yet.
 
+## Remove Liquidity UI Test
+
+The Remove Liquidity UI has been tested successfully on Arc Testnet after the cSLP decimal and min-output hotfix. cSLP decimal formatting was fixed so 25%, 50%, 75%, and Max buttons auto-fill human-readable cSLP amounts. Min USDC and EURC outputs auto-fill from expected output with default slippage, and impossible min outputs are blocked before simulation or send.
+
+LP approval is not required because the pool burns cSLP through the pool-controlled burn flow. The pool remains testnet-only and unaudited, and it is still not used by the smart router.
+
+Tx hash: not recorded in this docs update.
+
+### Remove Test Checklist
+
+- cSLP balance displayed.
+- Percent buttons worked.
+- Min outputs auto-filled safely.
+- Remove transaction succeeded.
+- Reserves refreshed after success.
+- cSLP balance refreshed after success.
+- No router integration yet.
+- No analytics/indexer integration yet.
+
 ## Arc Testnet Initial Liquidity Record
 
 Initial liquidity was added to the CocoStablePool V1 Arc Testnet prototype. The seed is intentionally tiny and exists for verification only. The pool remains testnet-only, unaudited, not connected to router execution, and not connected to analytics or the indexer.
