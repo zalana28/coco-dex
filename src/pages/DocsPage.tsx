@@ -434,7 +434,7 @@ export function DocsPage() {
                 <GlassCard className="border-coco-amber-500/20 bg-coco-amber-500/10">
                   <h3 className="text-lg font-semibold text-coco-dark-text">Arc Testnet LP Beta</h3>
                   <p className="mt-3 text-sm leading-6 text-coco-dark-muted">
-                    Coco Native Stable Pool V1 supports tiny test add/remove liquidity flows on the Pools page. It is unaudited, not routed, and not indexed in analytics yet.
+                    Coco Native Stable Pool V1 supports tiny test add/remove liquidity flows on the Pools page. It is unaudited, not routed, and indexed only through separate beta observability.
                   </p>
                 </GlassCard>
                 <GlassCard>

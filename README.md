@@ -28,7 +28,7 @@ Coco Native Stable Pool V1 is visible on the Pools page as an Arc Testnet LP Bet
 
 - Unaudited.
 - Not routed by the smart router.
-- Not indexed in analytics yet.
+- Indexed only in separate beta observability endpoints.
 - Not production-ready.
 - Arc Testnet only.
 
@@ -62,7 +62,7 @@ Frontend (React/Vite)
 
 - **Swap/Liquidity:** Frontend connects wallet via Wagmi and sends transactions to Arc Testnet contracts via Viem.
 - **Analytics:** Vercel serverless functions read indexed classic Coco V2 pair data from Supabase. An external cron service calls `/api/cron/indexer` to index new blockchain events.
-- **Indexer:** Reads classic Pair contract logs (Swap, Mint, Burn, Sync) using `viem.getLogs()`, stores them in Supabase with block timestamps, and does not index Coco Native Stable Pool V1 yet.
+- **Indexer:** Reads classic Pair contract logs (Swap, Mint, Burn, Sync) using `viem.getLogs()` and stores them in Supabase with block timestamps. Coco Native Stable Pool V1 uses separate beta observability tables and endpoints that are not merged into classic Coco V2 TVL.
 
 ## Environment Variables
 

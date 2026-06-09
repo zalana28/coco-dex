@@ -12,7 +12,7 @@ Coco DEX is a smart-routing DEX interface for Arc Testnet stablecoin swaps. It c
 
 ## Coco Native Stable Pool LP Beta
 
-CocoStablePool V1 is live on Arc Testnet as an LP Beta. The Pools page shows the pool and supports tiny test add/remove liquidity flows. It remains unaudited, not routed, not indexed in analytics yet, and not production-ready.
+CocoStablePool V1 is live on Arc Testnet as an LP Beta. The Pools page shows the pool and supports tiny test add/remove liquidity flows. It remains unaudited, not routed, indexed only in separate beta observability, and not production-ready.
 
 Read the current readiness status in `stable-pool-readiness.md` and the V2 design plan in `stable-pool-v2-plan.md`.
 

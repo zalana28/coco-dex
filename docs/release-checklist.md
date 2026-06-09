@@ -32,7 +32,7 @@ npm run contracts:test
 - `/pools` loads on desktop and mobile.
 - `/pools` has no mobile horizontal overflow.
 - Coco Native Stable Pool badges are visible: Arc Testnet, LP Beta, Unaudited, Not Routed.
-- Stable pool warning is visible near write actions: Arc Testnet LP Beta, tiny test amounts only, unaudited, not routed, not indexed.
+- Stable pool warning is visible near write actions: Arc Testnet LP Beta, tiny test amounts only, unaudited, not routed, beta observability only.
 - Stable Pool Observability shows configured status or the fallback copy: "Stable pool analytics are not configured yet."
 - `/analytics` keeps classic Coco V2 pair metrics separate from stable pool beta analytics.
 - `/docs` uses Arc Testnet wording.

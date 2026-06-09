@@ -2,13 +2,13 @@
 
 ## Status
 
-CocoStablePool V1 has a prototype deployment on Arc Testnet for verification. Initial tiny liquidity has been added after deployment, so the pool is no longer empty. The prototype remains unaudited, Arc Testnet only, not routed, and not indexed by analytics.
+CocoStablePool V1 has a prototype deployment on Arc Testnet for verification. Initial tiny liquidity has been added after deployment, so the pool is no longer empty. The prototype remains unaudited, Arc Testnet only, not routed, and indexed only through separate beta observability.
 
-Initial liquidity tooling exists in `contracts/script/AddInitialLiquidityCocoStablePool.s.sol`, and the first manual seed transaction is documented in `docs/coco-stable-pool-v1-initial-liquidity.md`. The Pools page exposes the LP Beta add/remove surface for tiny Arc Testnet verification amounts. Router, analytics, and indexer integration remain out of scope for V1.
+Initial liquidity tooling exists in `contracts/script/AddInitialLiquidityCocoStablePool.s.sol`, and the first manual seed transaction is documented in `docs/coco-stable-pool-v1-initial-liquidity.md`. The Pools page exposes the LP Beta add/remove surface for tiny Arc Testnet verification amounts. Router execution remains out of scope for V1, while analytics/indexer visibility is limited to separate beta observability.
 
 ## Arc Testnet Deployment Record
 
-CocoStablePool V1 was deployed on Arc Testnet for prototype verification. It is not audited, has only tiny verification liquidity, is visible through the Pools page LP Beta flow, is not routed, is not connected to analytics or the indexer, and must be treated as Arc Testnet only.
+CocoStablePool V1 was deployed on Arc Testnet for prototype verification. It is not audited, has only tiny verification liquidity, is visible through the Pools page LP Beta flow, is not routed, has separate beta observability, and must be treated as Arc Testnet only.
 
 ### Deployment
 
