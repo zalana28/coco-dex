@@ -380,6 +380,7 @@ function CocoNativeStablePoolPanel({
           reserve0={reserve0}
           reserve1={reserve1}
           totalSupply={totalSupply}
+          lpDecimals={lpDecimals}
           amplificationParameter={amplificationParameter}
           paused={paused}
           onRefreshPool={refetch}
