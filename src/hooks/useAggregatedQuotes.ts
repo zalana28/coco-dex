@@ -1,14 +1,16 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useReadContract } from 'wagmi'
 import { arcTestnet } from '@/config/chains'
+import { COCO_STABLE_POOL, COCO_STABLE_POOL_READ_ABI } from '@/config/cocoStablePool'
 import { EXTERNAL_DEXES } from '@/config/externalDexes'
 import type { Token } from '@/types/token'
 import { getCocoRouteQuote } from '@/lib/router/cocoAdapter'
+import { buildCocoStableShadowRouteQuote, isCocoStablePairSupported } from '@/lib/router/cocoStableAdapter'
 import { buildSynthraRouteQuote, getSynthraV3QuoteRequest, isSynthraPairSupported, SYNTHRA_V3_QUOTER_ABI } from '@/lib/router/synthraAdapter'
 import { buildXyloNetRouteQuote, isXyloNetPairSupported, XYLONET_ROUTER_ABI } from '@/lib/router/xylonetAdapter'
 import { buildUnitFlowRouteQuote, getUnitFlowV25QuoteRequest, isUnitFlowPairSupported, UNITFLOW_V25_ROUTER_ABI } from '@/lib/router/unitflowAdapter'
 import type { RouteQuote } from '@/lib/router/types'
-import { isCocoStablePoolExecutableRoute } from '@/lib/router/cocoStablePoolGuard'
+import { ROUTER_SHADOW_MODE_CONFIG } from '@/lib/router/routerConfig'
 
 type UseAggregatedQuotesParams = {
   tokenIn: Token
@@ -29,7 +31,9 @@ export function useAggregatedQuotes({
   reserveEurc,
   slippageBps,
 }: UseAggregatedQuotesParams) {
+  const [quoteTimestamp] = useState(() => Date.now())
   const shouldReadXyloNet = amountIn > BigInt(0) && isXyloNetPairSupported(tokenIn, tokenOut)
+  const shouldReadCocoStable = ROUTER_SHADOW_MODE_CONFIG.nativeStable.quoteOnly && amountIn > BigInt(0) && isCocoStablePairSupported(tokenIn, tokenOut)
   const xylonet = EXTERNAL_DEXES.xylonet
   const unitflow = EXTERNAL_DEXES.unitflow
   const synthra = EXTERNAL_DEXES.synthra
@@ -47,6 +51,18 @@ export function useAggregatedQuotes({
     chainId: arcTestnet.id,
     query: {
       enabled: shouldReadXyloNet,
+      refetchInterval: 15_000,
+    },
+  })
+
+  const { data: cocoStableAmountOut, isLoading: isCocoStableLoading, error: cocoStableError } = useReadContract({
+    address: COCO_STABLE_POOL.poolAddress,
+    abi: COCO_STABLE_POOL_READ_ABI,
+    functionName: 'getAmountOut',
+    args: [tokenIn.address as `0x${string}`, amountIn],
+    chainId: arcTestnet.id,
+    query: {
+      enabled: shouldReadCocoStable,
       refetchInterval: 15_000,
     },
   })
@@ -113,27 +129,48 @@ export function useAggregatedQuotes({
     : undefined
 
   return useMemo(() => {
-    const includeCocoStablePoolRoute = isCocoStablePoolExecutableRoute()
+    const cocoQuote = getCocoRouteQuote({ tokenIn, tokenOut, amountIn, reserveUsdc, reserveEurc, slippageBps })
+    const xylonetQuote = buildXyloNetRouteQuote({
+      tokenIn,
+      tokenOut,
+      amountIn,
+      amountOut: xylonetAmountOut,
+      slippageBps,
+      isLoading: isXyloNetLoading,
+      error: xylonetError,
+    })
+    const unitflowQuote = buildUnitFlowRouteQuote({
+      tokenIn,
+      tokenOut,
+      amountIn,
+      amountsOut: unitflowAmountsOut,
+      slippageBps,
+      isLoading: isUnitFlowLoading,
+      error: unitflowError,
+    })
+    const benchmarkQuote = xylonetQuote.availabilityStatus === 'available' && xylonetQuote.healthStatus === 'healthy'
+      ? xylonetQuote
+      : unitflowQuote.availabilityStatus === 'available' && unitflowQuote.healthStatus === 'healthy'
+        ? unitflowQuote
+        : undefined
+    const cocoStableQuote = ROUTER_SHADOW_MODE_CONFIG.nativeStable.quoteOnly
+      ? buildCocoStableShadowRouteQuote({
+          tokenIn,
+          tokenOut,
+          amountIn,
+          amountOut: cocoStableAmountOut,
+          slippageBps,
+          benchmarkQuote,
+          isLoading: isCocoStableLoading,
+          error: cocoStableError,
+          nowMs: quoteTimestamp,
+        })
+      : undefined
     const baseQuotes = [
-      getCocoRouteQuote({ tokenIn, tokenOut, amountIn, reserveUsdc, reserveEurc, slippageBps }),
-      buildXyloNetRouteQuote({
-        tokenIn,
-        tokenOut,
-        amountIn,
-        amountOut: xylonetAmountOut,
-        slippageBps,
-        isLoading: isXyloNetLoading,
-        error: xylonetError,
-      }),
-      buildUnitFlowRouteQuote({
-        tokenIn,
-        tokenOut,
-        amountIn,
-        amountsOut: unitflowAmountsOut,
-        slippageBps,
-        isLoading: isUnitFlowLoading,
-        error: unitflowError,
-      }),
+      cocoQuote,
+      cocoStableQuote,
+      xylonetQuote,
+      unitflowQuote,
       buildSynthraRouteQuote({
         tokenIn,
         tokenOut,
@@ -147,12 +184,9 @@ export function useAggregatedQuotes({
         isLoading: isSynthraLoading,
         error: synthraError,
       }),
-    ].filter((quote): quote is RouteQuote => {
-      if (!quote) return false
-      return includeCocoStablePoolRoute || quote.id !== 'coco-stable-usdc-eurc-v1'
-    })
+    ].filter((quote): quote is RouteQuote => Boolean(quote))
 
-    const selectableQuotes = baseQuotes.filter((quote) => quote.availabilityStatus === 'available' && quote.amountOut > BigInt(0))
+    const selectableQuotes = baseQuotes.filter((quote) => quote.availabilityStatus === 'available' && quote.executionStatus === 'executable' && quote.amountOut > BigInt(0))
 
     const bestQuote = selectableQuotes.reduce<RouteQuote | undefined>((best, quote) => {
       if (!best || quote.amountOut > best.amountOut) return quote
@@ -160,7 +194,7 @@ export function useAggregatedQuotes({
     }, undefined)
 
     const quotes = baseQuotes.map((quote) => {
-      if (quote.source !== 'coco' || quote.availabilityStatus !== 'available' || !bestQuote || bestQuote.source === 'coco' || quote.amountOut <= BigInt(0)) {
+      if (quote.source !== 'coco' || quote.availabilityStatus !== 'available' || quote.executionStatus !== 'executable' || !bestQuote || bestQuote.source === 'coco' || quote.amountOut <= BigInt(0)) {
         return quote
       }
 
@@ -176,15 +210,17 @@ export function useAggregatedQuotes({
     return {
       quotes,
       bestQuote,
-      selectedQuote: quotes.find((quote) => quote.source === 'coco' && quote.availabilityStatus === 'available') ?? bestQuote,
-      isLoading: isXyloNetLoading || isUnitFlowLoading || isSynthraLoading,
+      selectedQuote: quotes.find((quote) => quote.source === 'coco' && quote.availabilityStatus === 'available' && quote.executionStatus === 'executable') ?? bestQuote,
+      isLoading: isXyloNetLoading || isUnitFlowLoading || isSynthraLoading || isCocoStableLoading,
       xylonetError,
       unitflowError,
       synthraError,
+      cocoStableError,
       comingSoonSources: [],
     }
   }, [
     amountIn,
+    quoteTimestamp,
     reserveEurc,
     reserveUsdc,
     slippageBps,
@@ -193,6 +229,9 @@ export function useAggregatedQuotes({
     xylonetAmountOut,
     isXyloNetLoading,
     xylonetError,
+    cocoStableAmountOut,
+    isCocoStableLoading,
+    cocoStableError,
     unitflowAmountsOut,
     isUnitFlowLoading,
     unitflowError,

@@ -5,6 +5,7 @@ import type { Token } from '@/types/token'
 import { formatTokenAmount } from '@/utils/format'
 import { calculateMinimumReceived } from '@/utils/price'
 import type { RouteAvailabilityStatus, RouteQuote, RouteUnavailableReason } from './types'
+import { DEFAULT_ROUTE_TTL_MS, getRouteHealthStatus } from './routeMetadata'
 
 export const UNITFLOW_V25_ROUTER_ABI = [
   {
@@ -128,13 +129,22 @@ export function buildUnitFlowRouteQuote({
     id: 'unitflow-v25-wusdc-eurc',
     source: 'unitflow',
     label: unitflow.label,
+    inputToken: tokenIn,
+    outputToken: tokenOut,
     amountIn,
     amountOut: safeAmountOut,
     amountOutFormatted: safeAmountOut > BigInt(0) ? formatTokenAmount(safeAmountOut, tokenOut.decimals) : '-',
     minAmountOut,
     routePath: [tokenIn.symbol, 'WUSDC', tokenOut.symbol],
+    quoteTimestamp: Date.now(),
+    ttlMs: DEFAULT_ROUTE_TTL_MS,
+    healthStatus: getRouteHealthStatus(availabilityStatus),
+    warnings: availabilityStatus === 'available'
+      ? [isExecutable ? 'Executes through UnitFlow UniversalRouter with native USDC wrapping.' : 'Execution coming soon']
+      : [],
     routerAddress: unitflow.v25.swapRouterAddress,
     isExecutable,
+    executable: isExecutable,
     availabilityStatus,
     executionStatus: isExecutable ? 'executable' : 'non_executable',
     unavailableReason,

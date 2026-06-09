@@ -4,6 +4,7 @@ import type { Token } from '@/types/token'
 import { formatTokenAmount } from '@/utils/format'
 import { calculateMinimumReceived, getAmountOut } from '@/utils/price'
 import type { RouteQuote } from './types'
+import { DEFAULT_ROUTE_TTL_MS } from './routeMetadata'
 
 type GetCocoQuoteParams = {
   tokenIn: Token
@@ -35,14 +36,22 @@ export function getCocoRouteQuote({
     id: 'coco-usdc-eurc',
     source: 'coco',
     label: 'Coco',
+    inputToken: tokenIn,
+    outputToken: tokenOut,
     amountIn,
     amountOut,
     amountOutFormatted: formatTokenAmount(amountOut, tokenOut.decimals),
     minAmountOut: calculateMinimumReceived(amountOut, slippageBps),
     routePath: [tokenIn.symbol, tokenOut.symbol],
+    feeBps: 30,
+    quoteTimestamp: Date.now(),
+    ttlMs: DEFAULT_ROUTE_TTL_MS,
+    healthStatus: 'healthy',
+    warnings: [],
     routerAddress: ROUTER_ADDRESS,
     poolAddress: USDC_EURC_PAIR_ADDRESS,
     isExecutable: true,
+    executable: true,
     availabilityStatus: 'available',
     executionStatus: 'executable',
   }
