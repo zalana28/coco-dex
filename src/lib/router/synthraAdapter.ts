@@ -5,6 +5,7 @@ import type { Token } from '@/types/token'
 import { formatTokenAmount } from '@/utils/format'
 import { calculateMinimumReceived } from '@/utils/price'
 import type { RouteAvailabilityStatus, RouteQuote, RouteUnavailableReason } from './types'
+import { DEFAULT_ROUTE_TTL_MS, getRouteHealthStatus } from './routeMetadata'
 
 export const SYNTHRA_V3_QUOTER_ABI = [
   {
@@ -125,14 +126,23 @@ export function buildSynthraRouteQuote({
     id: bestFeeQuote ? `synthra-v3-${bestFeeQuote.fee}` : 'synthra-v3',
     source: 'synthra',
     label: synthra.label,
+    inputToken: tokenIn,
+    outputToken: tokenOut,
     amountIn,
     amountOut: safeAmountOut,
     amountOutFormatted: safeAmountOut > BigInt(0) ? formatTokenAmount(safeAmountOut, tokenOut.decimals) : '-',
     minAmountOut,
     routePath: [tokenIn.symbol, `Synthra V3 ${formatFeeTier(bestFeeQuote?.fee)}`, tokenOut.symbol],
     feeTier: bestFeeQuote?.fee,
+    quoteTimestamp: Date.now(),
+    ttlMs: DEFAULT_ROUTE_TTL_MS,
+    healthStatus: getRouteHealthStatus(availabilityStatus),
+    warnings: availabilityStatus === 'available'
+      ? ['Executes through Synthra V3 swap router and requires token approval.']
+      : [],
     routerAddress: synthra.v3.swapRouterAddress,
     isExecutable: availabilityStatus === 'available' && Boolean(bestFeeQuote?.fee),
+    executable: availabilityStatus === 'available' && Boolean(bestFeeQuote?.fee),
     availabilityStatus,
     executionStatus: availabilityStatus === 'available' && Boolean(bestFeeQuote?.fee) ? 'executable' : 'non_executable',
     unavailableReason,

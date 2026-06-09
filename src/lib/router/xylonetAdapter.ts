@@ -4,6 +4,7 @@ import type { Token } from '@/types/token'
 import { formatTokenAmount } from '@/utils/format'
 import { calculateMinimumReceived } from '@/utils/price'
 import type { RouteAvailabilityStatus, RouteQuote, RouteUnavailableReason } from './types'
+import { DEFAULT_ROUTE_TTL_MS, getRouteHealthStatus } from './routeMetadata'
 
 /**
  * XyloNet Router ABI — corrected to match on-chain contract.
@@ -105,14 +106,23 @@ export function buildXyloNetRouteQuote({
     id: 'xylonet-usdc-eurc',
     source: 'xylonet',
     label: xylonet.label,
+    inputToken: tokenIn,
+    outputToken: tokenOut,
     amountIn,
     amountOut: safeAmountOut,
     amountOutFormatted: safeAmountOut > BigInt(0) ? formatTokenAmount(safeAmountOut, tokenOut.decimals) : '-',
     minAmountOut: safeAmountOut > BigInt(0) ? calculateMinimumReceived(safeAmountOut, slippageBps) : BigInt(0),
     routePath: [tokenIn.symbol, tokenOut.symbol],
+    quoteTimestamp: Date.now(),
+    ttlMs: DEFAULT_ROUTE_TTL_MS,
+    healthStatus: getRouteHealthStatus(availabilityStatus),
+    warnings: availabilityStatus === 'available'
+      ? ['This swap executes through XyloNet router and requires a separate token approval.']
+      : [],
     routerAddress: xylonet.routerAddress,
     poolAddress: xylonet.usdcEurcPoolAddress,
     isExecutable: availabilityStatus === 'available',
+    executable: availabilityStatus === 'available',
     availabilityStatus,
     executionStatus: availabilityStatus === 'available' ? 'executable' : 'non_executable',
     unavailableReason,

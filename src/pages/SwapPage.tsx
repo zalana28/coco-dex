@@ -126,6 +126,8 @@ export function SwapPage() {
             ? 'UnitFlow'
             : activeQuote.source === 'synthra'
               ? 'Synthra'
+              : activeQuote.source === 'coco_stable'
+                ? 'Coco Native Stable'
               : 'Coco',
       }
     }
@@ -848,6 +850,7 @@ function QuotesPanel({
 }) {
   const routeDetailBySource: Record<RouteQuote['source'], string> = {
     coco: 'Direct pool',
+    coco_stable: 'Shadow quote',
     xylonet: 'External router',
     unitflow: 'Universal router',
     synthra: 'V3 route',
@@ -879,7 +882,11 @@ function QuotesPanel({
           const isQuoteOnly = quote.executionStatus === 'non_executable' && isAvailable
           const isExecutable = quote.executionStatus === 'executable' && isAvailable
           const sourceDetail = routeDetailBySource[quote.source]
-          const routeTypeLabel = quote.source === 'coco' ? 'Live route' : 'External route'
+          const routeTypeLabel = quote.source === 'coco'
+            ? 'Live route'
+            : quote.source === 'coco_stable'
+              ? 'Shadow only'
+              : 'External route'
           const pathStart = quote.routePath[0] ?? ''
           const pathEnd = quote.routePath[quote.routePath.length - 1] ?? ''
           const compactPath = quote.source === 'unitflow'
@@ -890,7 +897,7 @@ function QuotesPanel({
             : isLoadingQuote
               ? 'Loading quote'
               : isQuoteOnly
-                ? 'Quote available. Execution is disabled for this route.'
+                ? quote.blockedReason ?? 'Quote available. Execution is disabled for this route.'
                 : quote.warning
 
           return (
