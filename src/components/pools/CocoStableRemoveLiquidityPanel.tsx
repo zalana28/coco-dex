@@ -616,7 +616,7 @@ export function CocoStableRemoveLiquidityPanel({
         <div className="flex items-start gap-2">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-coco-amber-500" />
           <p className="text-xs leading-relaxed text-coco-amber-500">
-            Arc Testnet LP Beta. Use tiny test amounts only. Unaudited. Not routed. Not indexed in analytics yet.
+            Arc Testnet LP Beta. Use tiny test amounts only. Unaudited. Not routed. Beta observability only.
           </p>
         </div>
       </div>

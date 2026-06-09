@@ -36,7 +36,7 @@ test.describe('mobile shell', () => {
     await expect(page.getByText('LP Beta').first()).toBeVisible()
     await expect(page.getByText('Unaudited').first()).toBeVisible()
     await expect(page.getByText('Not routed').first()).toBeVisible()
-    await expect(page.getByText('Arc Testnet LP Beta. Use tiny test amounts only. Unaudited. Not routed. Not indexed in analytics yet.').first()).toBeVisible()
+    await expect(page.getByText('Arc Testnet LP Beta. Use tiny test amounts only. Unaudited. Not routed. Beta observability only.').first()).toBeVisible()
     await expect(page.getByText('Slippage tolerance').first()).toBeVisible()
     await expect(page.getByRole('button', { name: '25%' })).toBeVisible()
     await expect(page.getByRole('button', { name: '50%' })).toBeVisible()

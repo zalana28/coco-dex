@@ -8,7 +8,7 @@ The goal is to offer lower-slippage stablecoin swaps than a basic constant-produ
 
 ## LP Beta Status
 
-CocoStablePool V1 is live as an Arc Testnet LP Beta. Initial tiny liquidity has been added, basic quote checks passed for both USDC -> EURC and EURC -> USDC, and the Pools page supports tested Add Liquidity and Remove Liquidity UI flows. The pool is not used by the router, is not indexed by analytics, remains unaudited, is not production-ready, and is Arc Testnet only. The implementation uses simplified stable-swap-inspired math and still needs deeper review, fuzzing, invariant testing, and integration planning before any broader use.
+CocoStablePool V1 is live as an Arc Testnet LP Beta. Initial tiny liquidity has been added, basic quote checks passed for both USDC -> EURC and EURC -> USDC, and the Pools page supports tested Add Liquidity and Remove Liquidity UI flows. The pool is not used by the router, is indexed only through separate beta observability, remains unaudited, is not production-ready, and is Arc Testnet only. The implementation uses simplified stable-swap-inspired math and still needs deeper review, fuzzing, invariant testing, and integration planning before any broader use.
 
 ## Current On-Chain Status
 

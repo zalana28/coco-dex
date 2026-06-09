@@ -2,9 +2,9 @@
 
 ## Status
 
-Initial liquidity tooling exists for the deployed CocoStablePool V1 Arc Testnet LP Beta. Initial liquidity has now been added manually on Arc Testnet. The pool is still unaudited, testnet-only, and not connected to the router, analytics, or indexer.
+Initial liquidity tooling exists for the deployed CocoStablePool V1 Arc Testnet LP Beta. Initial liquidity has now been added manually on Arc Testnet. The pool is still unaudited, testnet-only, not connected to router execution, and indexed only through separate beta observability.
 
-A Pools page panel displays CocoStablePool V1 metadata and on-chain state for visibility. Tested LP Beta Add Liquidity and Remove Liquidity UI flows are available for this pool on Arc Testnet. Add Liquidity uses separate exact USDC and EURC approvals before calling `addLiquidity`; Remove Liquidity burns cSLP directly through the pool contract and does not require LP token approval. These flows do not include swap, router, analytics, indexer, or production support.
+A Pools page panel displays CocoStablePool V1 metadata and on-chain state for visibility. Tested LP Beta Add Liquidity and Remove Liquidity UI flows are available for this pool on Arc Testnet. Add Liquidity uses separate exact USDC and EURC approvals before calling `addLiquidity`; Remove Liquidity burns cSLP directly through the pool contract and does not require LP token approval. These flows do not include swap execution, router execution, classic Coco V2 analytics, or production support.
 
 Read-only router readiness diagnostics are available through `npm run debug:coco-stable-quote`. The script checks pool state and sample `getAmountOut` quotes only; it does not approve, swap, broadcast, or enable CocoStablePool as a router source.
 
@@ -79,7 +79,7 @@ Tx hash: not recorded in this docs update.
 
 ## Arc Testnet Initial Liquidity Record
 
-Initial liquidity was added to the CocoStablePool V1 Arc Testnet prototype. The seed is intentionally tiny and exists for verification only. The pool remains testnet-only, unaudited, not connected to router execution, and not connected to analytics or the indexer.
+Initial liquidity was added to the CocoStablePool V1 Arc Testnet prototype. The seed is intentionally tiny and exists for verification only. The pool remains testnet-only, unaudited, not connected to router execution, and indexed only through separate beta observability.
 
 ### Transaction
 
