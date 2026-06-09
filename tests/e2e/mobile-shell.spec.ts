@@ -29,20 +29,43 @@ test.describe('mobile shell', () => {
     await expect(page.getByRole('button', { name: /Route Quotes/i })).toBeVisible()
   })
 
-  test('shows stable pool beta safety controls on pools', async ({ page }) => {
+  test('shows simplified pools layout and opens stable beta flow from modal', async ({ page }) => {
     await page.goto('/pools')
 
-    await expect(page.getByRole('heading', { name: 'Coco Native Stable Pool' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Pools' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'All Pools' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'My Positions' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'USDC / EURC' }).first()).toBeVisible()
+    await expect(page.getByText('Classic Coco V2', { exact: true })).toBeVisible()
+    await page.getByText('LP Beta').first().scrollIntoViewIfNeeded()
     await expect(page.getByText('LP Beta').first()).toBeVisible()
     await expect(page.getByText('Unaudited').first()).toBeVisible()
-    await expect(page.getByText('Not routed').first()).toBeVisible()
-    await expect(page.getByText('Arc Testnet LP Beta. Use tiny test amounts only. Unaudited. Not routed. Beta observability only.').first()).toBeVisible()
+    await expect(page.getByText('Not Routed').first()).toBeVisible()
+
+    await expect(page.getByText('Slippage tolerance')).toHaveCount(0)
+    await expect(page.getByText('Stable Pool Observability')).not.toBeVisible()
+
+    await page.getByRole('button', { name: 'New Position' }).click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await expect(page.getByRole('button', { name: /Classic Coco V2 Pool/i })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Native Stable Pool Beta/i })).toBeVisible()
+
+    await page.getByRole('button', { name: /Native Stable Pool Beta/i }).click()
+    await expect(page.getByText('Coco Native Stable Pool V1 is Arc Testnet LP Beta. Use tiny test amounts only. Unaudited. Not Routed. Quote-only for swaps.')).toBeVisible()
     await expect(page.getByText('Slippage tolerance').first()).toBeVisible()
-    await expect(page.getByRole('button', { name: '25%' })).toBeVisible()
-    await expect(page.getByRole('button', { name: '50%' })).toBeVisible()
-    await expect(page.getByRole('button', { name: '75%' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Max' })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Stable Pool Observability' })).toBeVisible()
-    await expect(page.getByText('Stable pool analytics are not configured yet.')).toBeVisible()
+    await expect(page.getByText('Min cSLP out')).toBeVisible()
+  })
+
+  test('shows positions empty state and keeps advanced details collapsed by default', async ({ page }) => {
+    await page.goto('/pools')
+
+    await page.getByRole('button', { name: 'My Positions' }).click()
+    await expect(page.getByRole('heading', { name: /No LP positions yet|Connect your wallet/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Add Liquidity' })).toBeVisible()
+
+    await page.getByRole('button', { name: 'All Pools' }).click()
+    await page.getByText('View Details').nth(1).click()
+    await expect(page.getByText('Stable Pool Observability')).toBeVisible()
+    await expect(page.getByText('External liquidity sources')).toBeVisible()
   })
 })
