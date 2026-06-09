@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAccount } from 'wagmi'
 import { AlertTriangle, Check, Copy, Droplets, ExternalLink, Minus, Plus, X } from 'lucide-react'
 import { Card } from '@/components/common/Card'
+import { ConnectWalletButton } from '@/components/common/ConnectWalletButton'
 import { TokenIcon } from '@/components/common/TokenIcon'
 import { CocoStableAddLiquidityPanel } from '@/components/pools/CocoStableAddLiquidityPanel'
 import { CocoStableRemoveLiquidityPanel } from '@/components/pools/CocoStableRemoveLiquidityPanel'
@@ -12,7 +13,7 @@ import { usePairReserves } from '@/hooks/usePairReserves'
 import { useXyloNetStablePool } from '@/hooks/useXyloNetStablePool'
 import { formatCompact, formatPercentage, formatTokenAmount } from '@/utils/format'
 
-type Tab = 'all' | 'my'
+type Tab = 'positions' | 'pools'
 type PoolId = 'classic' | 'stable'
 type ModalAction = 'select' | 'add' | 'remove'
 
@@ -72,8 +73,9 @@ function useStablePoolObservability() {
 }
 
 export function PoolsPage() {
-  const [activeTab, setActiveTab] = useState<Tab>('all')
+  const [activeTab, setActiveTab] = useState<Tab>('positions')
   const [modal, setModal] = useState<LiquidityModalState | null>(null)
+  const [detailsPool, setDetailsPool] = useState<PoolId | null>(null)
   const { address, isConnected } = useAccount()
   const { reserveUsdc, reserveEurc, hasLiquidity, isLoading } = usePairReserves()
   const classicLp = useLPBalance(address)
@@ -85,15 +87,26 @@ export function PoolsPage() {
   const openAdd = (poolId: PoolId) => setModal({ action: 'add', poolId })
   const openRemove = (poolId: PoolId) => setModal({ action: 'remove', poolId })
   const closeModal = () => setModal(null)
+  const hasClassicPosition = classicLp.balance !== undefined && classicLp.balance > 0n
+  const hasStablePosition = stablePool.userLpBalance !== undefined && stablePool.userLpBalance > 0n
+  const totalPositions = Number(hasClassicPosition) + Number(hasStablePosition)
+  const classicPositionValue = hasClassicPosition && hasLiquidity && reserveUsdc && reserveEurc
+    ? (Number(reserveUsdc) / 1e6 + Number(reserveEurc) / 1e6 * 1.086) * classicLp.share
+    : 0
+  const stablePositionValue = hasStablePosition && stablePool.totalSupply > 0n && stablePool.userLpBalance
+    ? (
+      Number((stablePool.userLpBalance * stablePool.reserve0) / stablePool.totalSupply) / 1e6 +
+      Number((stablePool.userLpBalance * stablePool.reserve1) / stablePool.totalSupply) / 1e6 * 1.086
+    )
+    : 0
 
   return (
-    <div className="page-fade mx-auto max-w-6xl px-3 pb-12 pt-28 sm:px-4 sm:pt-24">
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="page-fade mx-auto max-w-4xl px-3 pb-12 pt-28 sm:px-4 sm:pt-24">
+      <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.22em] text-coco-teal-400">Arc Testnet liquidity</p>
-          <h1 className="mt-1 text-2xl font-bold text-coco-dark-text">Pools</h1>
+          <h1 className="text-2xl font-bold text-coco-dark-text">Positions</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-coco-dark-muted">
-            Browse available USDC/EURC pools and manage LP positions without leaving the Pools page.
+            Manage liquidity on Coco DEX.
           </p>
         </div>
         <button
@@ -106,13 +119,20 @@ export function PoolsPage() {
         </button>
       </div>
 
-      <div className="mb-6 flex w-full gap-1 rounded-xl border border-coco-dark-border bg-coco-dark-surface/70 p-1 backdrop-blur-xl sm:w-fit">
-        <TabButton active={activeTab === 'all'} onClick={() => setActiveTab('all')}>All Pools</TabButton>
-        <TabButton active={activeTab === 'my'} onClick={() => setActiveTab('my')}>My Positions</TabButton>
+      <PositionsSummary
+        totalPositions={isConnected ? totalPositions : 0}
+        estimatedLiquidity={classicPositionValue + stablePositionValue}
+        stableObservability={stablePoolObservability.data}
+        stableObservabilityLoading={stablePoolObservability.loading}
+      />
+
+      <div className="mb-5 mt-5 flex w-full gap-1 rounded-xl border border-coco-dark-border bg-coco-dark-surface/70 p-1 backdrop-blur-xl">
+        <TabButton active={activeTab === 'positions'} onClick={() => setActiveTab('positions')}>My Positions</TabButton>
+        <TabButton active={activeTab === 'pools'} onClick={() => setActiveTab('pools')}>Pools</TabButton>
       </div>
 
-      {activeTab === 'all' ? (
-        <AllPools
+      {activeTab === 'pools' ? (
+        <PoolsTab
           reserveUsdc={reserveUsdc}
           reserveEurc={reserveEurc}
           hasLiquidity={hasLiquidity}
@@ -121,8 +141,8 @@ export function PoolsPage() {
           stablePool={stablePool}
           stableObservability={stablePoolObservability.data}
           stableObservabilityLoading={stablePoolObservability.loading}
-          externalStablePool={externalStablePool}
           onAdd={openAdd}
+          onDetails={setDetailsPool}
         />
       ) : (
         <MyPositions
@@ -135,6 +155,8 @@ export function PoolsPage() {
           stablePool={stablePool}
           onAdd={openAdd}
           onRemove={openRemove}
+          onDetails={setDetailsPool}
+          onNewPosition={openNewPosition}
         />
       )}
 
@@ -144,6 +166,48 @@ export function PoolsPage() {
         onClose={closeModal}
         onSelectPool={(poolId) => setModal({ action: 'add', poolId })}
       />
+      <PoolDetailsDrawer
+        poolId={detailsPool}
+        reserveUsdc={reserveUsdc}
+        reserveEurc={reserveEurc}
+        hasLiquidity={hasLiquidity}
+        isLoading={isLoading}
+        stablePool={stablePool}
+        stableObservability={stablePoolObservability.data}
+        stableObservabilityLoading={stablePoolObservability.loading}
+        externalStablePool={externalStablePool}
+        onClose={() => setDetailsPool(null)}
+      />
+    </div>
+  )
+}
+
+function PositionsSummary({
+  totalPositions,
+  estimatedLiquidity,
+  stableObservability,
+  stableObservabilityLoading,
+}: {
+  totalPositions: number
+  estimatedLiquidity: number
+  stableObservability: StablePoolObservability | null
+  stableObservabilityLoading: boolean
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <SummaryTile label="Positions" value={String(totalPositions)} />
+      <SummaryTile label="Est. liquidity" value={estimatedLiquidity > 0 ? formatCompact(estimatedLiquidity) : '$0'} />
+      <SummaryTile label="Network" value="Arc Testnet" />
+      <SummaryTile label="Stable Pool" value={stableObservabilityLoading ? 'Checking...' : stableObservability?.status === 'not_configured' ? 'Beta / Quote-only' : 'Beta / Quote-only'} />
+    </div>
+  )
+}
+
+function SummaryTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-coco-dark-border bg-coco-dark-surface/70 p-3">
+      <p className="text-[11px] text-coco-dark-muted">{label}</p>
+      <p className="mt-1 truncate text-sm font-semibold text-coco-dark-text">{value}</p>
     </div>
   )
 }
@@ -164,7 +228,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   )
 }
 
-function AllPools({
+function PoolsTab({
   reserveUsdc,
   reserveEurc,
   hasLiquidity,
@@ -173,8 +237,8 @@ function AllPools({
   stablePool,
   stableObservability,
   stableObservabilityLoading,
-  externalStablePool,
   onAdd,
+  onDetails,
 }: {
   reserveUsdc: bigint | undefined
   reserveEurc: bigint | undefined
@@ -184,8 +248,8 @@ function AllPools({
   stablePool: ReturnType<typeof useCocoStablePool>
   stableObservability: StablePoolObservability | null
   stableObservabilityLoading: boolean
-  externalStablePool: ReturnType<typeof useXyloNetStablePool>
   onAdd: (poolId: PoolId) => void
+  onDetails: (poolId: PoolId) => void
 }) {
   const classicTvl = hasLiquidity && reserveUsdc && reserveEurc
     ? (Number(reserveUsdc) / 1e6) + (Number(reserveEurc) / 1e6 * 1.086)
@@ -205,14 +269,7 @@ function AllPools({
           lpBalance={classicLpBalance !== undefined ? formatTokenAmount(classicLpBalance, 18) : 'Connect wallet to read'}
           badges={['Arc Testnet', hasLiquidity ? 'Active' : 'No Liquidity', 'Routed']}
           onAdd={() => onAdd('classic')}
-          details={
-            <ClassicPoolDetails
-              reserveUsdc={reserveUsdc}
-              reserveEurc={reserveEurc}
-              hasLiquidity={hasLiquidity}
-              isLoading={isLoading}
-            />
-          }
+          onDetails={() => onDetails('classic')}
         />
 
         <PoolCard
@@ -225,14 +282,7 @@ function AllPools({
           badges={['Arc Testnet', 'LP Beta', 'Unaudited', 'Not Routed', 'Quote-only']}
           health={<StablePoolHealthBadge observability={stableObservability} isLoading={stableObservabilityLoading} />}
           onAdd={() => onAdd('stable')}
-          details={
-            <StablePoolAdvancedDetails
-              stablePool={stablePool}
-              observability={stableObservability}
-              observabilityLoading={stableObservabilityLoading}
-              externalStablePool={externalStablePool}
-            />
-          }
+          onDetails={() => onDetails('stable')}
         />
       </div>
     </div>
@@ -248,8 +298,8 @@ function PoolCard({
   lpBalance,
   badges,
   health,
-  details,
   onAdd,
+  onDetails,
 }: {
   pair: string
   poolType: string
@@ -259,8 +309,8 @@ function PoolCard({
   lpBalance: string
   badges: string[]
   health?: React.ReactNode
-  details: React.ReactNode
   onAdd: () => void
+  onDetails: () => void
 }) {
   return (
     <Card className="flex min-w-0 flex-col p-5">
@@ -298,14 +348,13 @@ function PoolCard({
           <Plus className="h-4 w-4" />
           Add Liquidity
         </button>
-        <details className="group flex-1">
-          <summary className="inline-flex min-h-10 w-full cursor-pointer list-none items-center justify-center rounded-lg border border-coco-dark-border bg-coco-dark-bg/70 px-3 py-2 text-sm font-semibold text-coco-dark-text transition-colors hover:border-coco-teal-400/30">
-            View Details
-          </summary>
-          <div className="mt-3 rounded-xl border border-coco-dark-border bg-coco-dark-bg/50 p-3">
-            {details}
-          </div>
-        </details>
+        <button
+          type="button"
+          onClick={onDetails}
+          className="inline-flex min-h-10 flex-1 items-center justify-center rounded-lg border border-coco-dark-border bg-coco-dark-bg/70 px-3 py-2 text-sm font-semibold text-coco-dark-text transition-colors hover:border-coco-teal-400/30"
+        >
+          Details
+        </button>
       </div>
     </Card>
   )
@@ -487,6 +536,8 @@ function MyPositions({
   stablePool,
   onAdd,
   onRemove,
+  onDetails,
+  onNewPosition,
 }: {
   isConnected: boolean
   reserveUsdc: bigint | undefined
@@ -497,6 +548,8 @@ function MyPositions({
   stablePool: ReturnType<typeof useCocoStablePool>
   onAdd: (poolId: PoolId) => void
   onRemove: (poolId: PoolId) => void
+  onDetails: (poolId: PoolId) => void
+  onNewPosition: () => void
 }) {
   const hasClassicPosition = classicLpBalance !== undefined && classicLpBalance > 0n
   const hasStablePosition = stablePool.userLpBalance !== undefined && stablePool.userLpBalance > 0n
@@ -505,20 +558,26 @@ function MyPositions({
     return (
       <Card className="p-8 text-center sm:p-12">
         <Droplets className="mx-auto mb-4 h-12 w-12 text-coco-dark-muted" />
-        <h2 className="text-lg font-medium text-coco-dark-text">{isConnected ? 'No LP positions yet' : 'Connect your wallet'}</h2>
+        <h2 className="text-lg font-medium text-coco-dark-text">{isConnected ? 'No liquidity positions yet' : 'Connect wallet to view your liquidity positions'}</h2>
         <p className="mt-2 text-sm text-coco-dark-muted">
           {isConnected
             ? 'Add liquidity to create your first Arc Testnet LP position.'
-            : 'Connect your wallet to view your liquidity positions.'}
+            : 'Your positions will appear here after a wallet is connected.'}
         </p>
-        <button
-          type="button"
-          onClick={() => onAdd('classic')}
-          className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coco-green-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-coco-green-600"
-        >
-          <Plus className="h-4 w-4" />
-          Add Liquidity
-        </button>
+        <div className="mt-4 flex justify-center">
+          {isConnected ? (
+            <button
+              type="button"
+              onClick={onNewPosition}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coco-green-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-coco-green-600"
+            >
+              <Plus className="h-4 w-4" />
+              New position
+            </button>
+          ) : (
+            <ConnectWalletButton />
+          )}
+        </div>
       </Card>
     )
   }
@@ -547,6 +606,7 @@ function MyPositions({
           badges={['Arc Testnet', 'Routed']}
           onAddMore={() => onAdd('classic')}
           onRemove={() => onRemove('classic')}
+          onDetails={() => onDetails('classic')}
         />
       )}
 
@@ -560,6 +620,7 @@ function MyPositions({
           badges={['LP Beta', 'Unaudited', 'Not Routed', 'Quote-only']}
           onAddMore={() => onAdd('stable')}
           onRemove={() => onRemove('stable')}
+          onDetails={() => onDetails('stable')}
         />
       )}
     </div>
@@ -575,6 +636,7 @@ function PositionCard({
   badges,
   onAddMore,
   onRemove,
+  onDetails,
 }: {
   pair: string
   poolType: string
@@ -584,6 +646,7 @@ function PositionCard({
   badges: string[]
   onAddMore: () => void
   onRemove: () => void
+  onDetails: () => void
 }) {
   return (
     <Card className="p-5">
@@ -609,25 +672,113 @@ function PositionCard({
         <PoolMetric label="Estimated assets" value={underlying} mono />
       </div>
 
-      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
         <button
           type="button"
           onClick={onAddMore}
-          className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-coco-green-500/10 px-3 py-2 text-sm font-semibold text-coco-green-500 transition-colors hover:bg-coco-green-500/20"
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-coco-green-500/10 px-3 py-2 text-sm font-semibold text-coco-green-500 transition-colors hover:bg-coco-green-500/20"
         >
           <Plus className="h-4 w-4" />
-          Add More
+          Add
         </button>
         <button
           type="button"
           onClick={onRemove}
-          className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-coco-red-500/10 px-3 py-2 text-sm font-semibold text-coco-red-500 transition-colors hover:bg-coco-red-500/20"
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-coco-red-500/10 px-3 py-2 text-sm font-semibold text-coco-red-500 transition-colors hover:bg-coco-red-500/20"
         >
           <Minus className="h-4 w-4" />
           Remove
         </button>
+        <button
+          type="button"
+          onClick={onDetails}
+          className="inline-flex min-h-10 items-center justify-center rounded-lg border border-coco-dark-border bg-coco-dark-bg/70 px-3 py-2 text-sm font-semibold text-coco-dark-text transition-colors hover:border-coco-teal-400/30"
+        >
+          Details
+        </button>
       </div>
     </Card>
+  )
+}
+
+function PoolDetailsDrawer({
+  poolId,
+  reserveUsdc,
+  reserveEurc,
+  hasLiquidity,
+  isLoading,
+  stablePool,
+  stableObservability,
+  stableObservabilityLoading,
+  externalStablePool,
+  onClose,
+}: {
+  poolId: PoolId | null
+  reserveUsdc: bigint | undefined
+  reserveEurc: bigint | undefined
+  hasLiquidity: boolean
+  isLoading: boolean
+  stablePool: ReturnType<typeof useCocoStablePool>
+  stableObservability: StablePoolObservability | null
+  stableObservabilityLoading: boolean
+  externalStablePool: ReturnType<typeof useXyloNetStablePool>
+  onClose: () => void
+}) {
+  useEffect(() => {
+    if (!poolId) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onClose, poolId])
+
+  if (!poolId) return null
+
+  const isStable = poolId === 'stable'
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="pool-details-title">
+      <button type="button" className="absolute inset-0 cursor-default" aria-label="Close pool details" onClick={onClose} />
+      <aside className="relative z-10 h-full w-full max-w-xl overflow-y-auto border-l border-coco-dark-border bg-coco-dark-surface p-4 shadow-2xl sm:p-6">
+        <div className="mb-5 flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.22em] text-coco-teal-400">Pool details</p>
+            <h2 id="pool-details-title" className="mt-1 text-xl font-semibold text-coco-dark-text">
+              {isStable ? 'USDC / EURC Stable Pool Beta' : 'USDC / EURC Classic V2 Pool'}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-coco-dark-border text-coco-dark-muted transition-colors hover:border-coco-teal-400/35 hover:text-coco-dark-text"
+            aria-label="Close pool details"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {isStable ? (
+          <StablePoolAdvancedDetails
+            stablePool={stablePool}
+            observability={stableObservability}
+            observabilityLoading={stableObservabilityLoading}
+            externalStablePool={externalStablePool}
+          />
+        ) : (
+          <Card className="p-4">
+            <ClassicPoolDetails
+              reserveUsdc={reserveUsdc}
+              reserveEurc={reserveEurc}
+              hasLiquidity={hasLiquidity}
+              isLoading={isLoading}
+            />
+          </Card>
+        )}
+      </aside>
+    </div>
   )
 }
 
@@ -642,6 +793,17 @@ function LiquidityActionModal({
   onClose: () => void
   onSelectPool: (poolId: PoolId) => void
 }) {
+  useEffect(() => {
+    if (!modal) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [modal, onClose])
+
   if (!modal) return null
 
   const title = modal.action === 'select'

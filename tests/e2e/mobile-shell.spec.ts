@@ -29,12 +29,15 @@ test.describe('mobile shell', () => {
     await expect(page.getByRole('button', { name: /Route Quotes/i })).toBeVisible()
   })
 
-  test('shows simplified pools layout and opens stable beta flow from modal', async ({ page }) => {
+  test('shows positions-first pools layout and opens stable beta flow from modal', async ({ page }) => {
     await page.goto('/pools')
 
-    await expect(page.getByRole('heading', { name: 'Pools' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'All Pools' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Positions', exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: 'My Positions' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Pools' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /No liquidity positions yet|Connect wallet to view your liquidity positions/ })).toBeVisible()
+
+    await page.getByRole('button', { name: 'Pools' }).click()
     await expect(page.getByRole('heading', { name: 'USDC / EURC' }).first()).toBeVisible()
     await expect(page.getByText('Classic Coco V2', { exact: true })).toBeVisible()
     await page.getByText('LP Beta').first().scrollIntoViewIfNeeded()
@@ -56,15 +59,15 @@ test.describe('mobile shell', () => {
     await expect(page.getByText('Min cSLP out')).toBeVisible()
   })
 
-  test('shows positions empty state and keeps advanced details collapsed by default', async ({ page }) => {
+  test('shows positions empty state and opens details drawer from pool card', async ({ page }) => {
     await page.goto('/pools')
 
-    await page.getByRole('button', { name: 'My Positions' }).click()
-    await expect(page.getByRole('heading', { name: /No LP positions yet|Connect your wallet/ })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Add Liquidity' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /No liquidity positions yet|Connect wallet to view your liquidity positions/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'New Position' })).toBeVisible()
 
-    await page.getByRole('button', { name: 'All Pools' }).click()
-    await page.getByText('View Details').nth(1).click()
+    await page.getByRole('button', { name: 'Pools' }).click()
+    await page.getByRole('button', { name: 'Details' }).nth(1).click()
+    await expect(page.getByRole('dialog', { name: /USDC \/ EURC Stable Pool Beta/i })).toBeVisible()
     await expect(page.getByText('Stable Pool Observability')).toBeVisible()
     await expect(page.getByText('External liquidity sources')).toBeVisible()
   })
