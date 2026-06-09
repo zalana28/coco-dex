@@ -62,14 +62,19 @@ export async function runStablePoolIndexer({
     const lastBlock = await getLastStablePoolBlock(supabase)
     const currentBlock = await client.getBlockNumber()
     const effectiveLastBlock = lastBlock < STABLE_POOL_DEPLOYMENT_BLOCK ? STABLE_POOL_DEPLOYMENT_BLOCK - 1n : lastBlock
-    fromBlock = effectiveLastBlock + 1n
-    toBlockMax = currentBlock
+    let nextFromBlock = effectiveLastBlock + 1n
+    const finalToBlock = currentBlock
+    fromBlock = nextFromBlock
+    toBlockMax = finalToBlock
 
     const tsCache = new Map<bigint, string>()
 
-    while (fromBlock <= toBlockMax) {
-      const toBlock = fromBlock + STABLE_POOL_BATCH_SIZE - 1n > toBlockMax ? toBlockMax : fromBlock + STABLE_POOL_BATCH_SIZE - 1n
-      const logs = await fetchStablePoolLogs(client, fromBlock, toBlock)
+    while (nextFromBlock <= finalToBlock) {
+      const toBlock =
+        nextFromBlock + STABLE_POOL_BATCH_SIZE - 1n > finalToBlock
+          ? finalToBlock
+          : nextFromBlock + STABLE_POOL_BATCH_SIZE - 1n
+      const logs = await fetchStablePoolLogs(client, nextFromBlock, toBlock)
       const allLogs = [
         ...logs.liquidityAddedLogs,
         ...logs.liquidityRemovedLogs,
@@ -123,7 +128,8 @@ export async function runStablePoolIndexer({
       })
       snapshotsWritten++
 
-      fromBlock = toBlock + 1n
+      nextFromBlock = toBlock + 1n
+      fromBlock = nextFromBlock
     }
 
     const finishedAt = new Date().toISOString()
@@ -134,7 +140,7 @@ export async function runStablePoolIndexer({
           finished_at: finishedAt,
           status: 'success',
           from_block: Number(effectiveLastBlock + 1n),
-          to_block: Number(toBlockMax),
+          to_block: Number(finalToBlock),
           events_indexed: eventsIndexed,
           snapshots_written: snapshotsWritten,
         })
@@ -144,7 +150,7 @@ export async function runStablePoolIndexer({
     return {
       status: 'success' as const,
       fromBlock: Number(effectiveLastBlock + 1n),
-      toBlock: Number(toBlockMax),
+      toBlock: Number(finalToBlock),
       eventsIndexed,
       snapshotsWritten,
     }
