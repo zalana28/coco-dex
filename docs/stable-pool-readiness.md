@@ -29,9 +29,22 @@ The current beta safety work improves the public Arc Testnet MVP surface without
 - Stable pool math is still V1/prototype math.
 - V1 must not be presented as production-ready.
 - V1 has no smart route execution.
-- V1 has no analytics/indexer support yet.
+- V1 has separate beta observability support. Stable pool telemetry is not merged into classic Coco V2 pair analytics.
 - V1 has no third-party audit.
 - Current liquidity is intentionally tiny and suitable only for Arc Testnet verification.
+
+## Observability Status
+
+Stable pool observability is separated from classic Coco V2 pair analytics. The indexer can write V1 events where available and writes reserve/LP snapshots because V1 does not emit a Uniswap-style `Sync` event.
+
+Current stable pool endpoints:
+
+- `/api/analytics/stable-pool/summary`
+- `/api/analytics/stable-pool/events`
+- `/api/analytics/stable-pool/reserves`
+- `/api/analytics/stable-pool/health`
+
+If Supabase is not configured, these endpoints return `status: "not_configured"`.
 
 ## Why USDC/EURC Needs Rate-Aware Design
 
@@ -51,5 +64,5 @@ Do not remove the LP Beta label until all of the following are complete:
 - Unit, fuzz, invariant, differential, and gas snapshot tests complete.
 - Third-party audit or equivalent independent review complete.
 - Arc Testnet deployment runbook and rollback path reviewed.
-- Analytics/indexer schema updated to separate pool sources before stable pool metrics are public.
+- Analytics/indexer schema keeps stable pool telemetry separate from classic Coco V2 pair analytics.
 - Smart routing remains disabled until capped Arc Testnet execution tests pass.

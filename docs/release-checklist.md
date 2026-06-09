@@ -33,7 +33,8 @@ npm run contracts:test
 - `/pools` has no mobile horizontal overflow.
 - Coco Native Stable Pool badges are visible: Arc Testnet, LP Beta, Unaudited, Not Routed.
 - Stable pool warning is visible near write actions: Arc Testnet LP Beta, tiny test amounts only, unaudited, not routed, not indexed.
-- `/analytics` shows classic Coco V2 pair analytics only.
+- Stable Pool Observability shows configured status or the fallback copy: "Stable pool analytics are not configured yet."
+- `/analytics` keeps classic Coco V2 pair metrics separate from stable pool beta analytics.
 - `/docs` uses Arc Testnet wording.
 
 ## Wallet And Network Checks
@@ -55,12 +56,21 @@ Use only tiny Arc Testnet amounts.
 - Remove Liquidity derives min outputs from estimated outputs and slippage.
 - Rejected wallet actions leave the user in a recoverable retry/reset state.
 
+## Stable Pool Observability Checks
+
+- Apply `supabase/migrations/002_stable_pool_observability.sql` before enabling stable pool API checks.
+- Confirm `/api/analytics/stable-pool/health` returns `not_configured` when Supabase env vars are absent.
+- Confirm `/api/analytics/stable-pool/health` returns latest run metadata when configured.
+- Confirm stable pool rows are written only to `stable_pool_*` tables.
+- Confirm classic `/api/analytics/summary` does not include stable pool TVL.
+
 ## Rollback Checklist
 
 If a preview or release has a user-facing issue:
 
 - Disable or roll back the Vercel deployment to the previous known-good build.
 - Keep stable pool routing disabled.
+- Roll back stable pool observability by reverting the app/API deployment; do not drop classic analytics tables.
 - Do not deploy or modify contracts as part of an app rollback.
 - Pause Coco Native Stable Pool V1 from the owner wallet only if an on-chain emergency requires it.
 - Announce that the affected surface is Arc Testnet only.

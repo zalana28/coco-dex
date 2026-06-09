@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Card } from '@/components/common/Card'
 import { TokenIcon } from '@/components/common/TokenIcon'
@@ -13,6 +13,56 @@ import { CocoStableAddLiquidityPanel } from '@/components/pools/CocoStableAddLiq
 import { CocoStableRemoveLiquidityPanel } from '@/components/pools/CocoStableRemoveLiquidityPanel'
 
 type Tab = 'all' | 'my'
+
+type StablePoolObservability = {
+  status?: 'not_configured' | string
+  reason?: string
+  latestSnapshot?: {
+    block_number?: number
+    block_timestamp?: string | null
+    reserve0_raw?: string
+    reserve1_raw?: string
+    lp_total_supply_raw?: string
+    lp_decimals?: number
+  } | null
+  eventCount?: number
+  latestRun?: {
+    status?: string
+    started_at?: string
+    finished_at?: string | null
+    events_indexed?: number
+    snapshots_written?: number
+  } | null
+}
+
+function useStablePoolObservability() {
+  const [data, setData] = useState<StablePoolObservability | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const fetchSummary = useCallback(() => {
+    setLoading(true)
+    fetch('/api/analytics/stable-pool/summary')
+      .then((response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        return response.json()
+      })
+      .then((payload: StablePoolObservability) => {
+        setData(payload)
+        setLoading(false)
+      })
+      .catch(() => {
+        setData({ status: 'not_configured', reason: 'Stable pool analytics are not configured yet.' })
+        setLoading(false)
+      })
+  }, [])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchSummary()
+  }, [fetchSummary])
+
+  return { data, loading, refetch: fetchSummary }
+}
 
 export function PoolsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('all')
@@ -84,6 +134,7 @@ function AllPools({ reserveUsdc, reserveEurc, hasLiquidity, isLoading, address }
 }) {
   const externalStablePool = useXyloNetStablePool(address)
   const cocoStablePool = useCocoStablePool(address)
+  const stablePoolObservability = useStablePoolObservability()
   const tvl = hasLiquidity && reserveUsdc && reserveEurc
     ? (Number(reserveUsdc) / 1e6) + (Number(reserveEurc) / 1e6 * 1.086) // EURC ≈ $1.086
     : 0
@@ -144,9 +195,105 @@ function AllPools({ reserveUsdc, reserveEurc, hasLiquidity, isLoading, address }
       </Card>
 
       <CocoNativeStablePoolPanel {...cocoStablePool} />
+      <StablePoolObservabilityPanel
+        observability={stablePoolObservability.data}
+        isLoading={stablePoolObservability.loading}
+        lpDecimals={cocoStablePool.lpDecimals}
+        onRefresh={stablePoolObservability.refetch}
+      />
 
       <ExternalStablePoolsPanel {...externalStablePool} />
     </div>
+  )
+}
+
+function StablePoolObservabilityPanel({
+  observability,
+  isLoading,
+  lpDecimals,
+  onRefresh,
+}: {
+  observability: StablePoolObservability | null
+  isLoading: boolean
+  lpDecimals: number
+  onRefresh: () => void
+}) {
+  const snapshot = observability?.latestSnapshot
+  const latestRun = observability?.latestRun
+  const isConfigured = observability?.status !== 'not_configured' && Boolean(snapshot || latestRun)
+  const latestSnapshotTime = snapshot?.block_timestamp
+    ? new Date(snapshot.block_timestamp).toLocaleString()
+    : 'Unavailable'
+
+  return (
+    <section className="pt-2">
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-[0.22em] text-coco-teal-400">Separate beta analytics</p>
+          <h2 className="mt-1 text-xl font-semibold text-coco-dark-text">Stable Pool Observability</h2>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge>LP Beta</Badge>
+          <Badge>Not routed</Badge>
+          <Badge>Separate indexer</Badge>
+        </div>
+      </div>
+
+      <Card className="p-5 border-coco-amber-500/20 bg-coco-dark-surface/80">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-coco-dark-text">Arc Testnet stable pool telemetry</p>
+            <p className="mt-1 text-xs leading-relaxed text-coco-dark-muted">
+              Stable pool analytics are separate from classic Coco V2 pair analytics and do not affect routed TVL.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onRefresh}
+            className="w-fit rounded-lg border border-coco-dark-border bg-coco-dark-bg/70 px-3 py-2 text-xs font-semibold text-coco-dark-text transition-colors hover:border-coco-teal-400/40"
+          >
+            Refresh
+          </button>
+        </div>
+
+        {!isConfigured && !isLoading && (
+          <div className="mt-4 rounded-lg border border-coco-amber-500/20 bg-coco-amber-500/10 p-3">
+            <p className="text-xs leading-relaxed text-coco-amber-500">
+              Stable pool analytics are not configured yet.
+            </p>
+          </div>
+        )}
+
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <PoolMetric label="Indexer status" value={isLoading ? '...' : latestRun?.status ?? (isConfigured ? 'Unknown' : 'Not configured')} />
+          <PoolMetric label="Latest snapshot" value={isLoading ? '...' : latestSnapshotTime} />
+          <PoolMetric
+            label="Indexed events"
+            value={isLoading ? '...' : observability?.eventCount !== undefined ? observability.eventCount.toLocaleString() : 'Unavailable'}
+            mono
+          />
+          <PoolMetric label="Snapshots written" value={isLoading ? '...' : latestRun?.snapshots_written?.toLocaleString() ?? 'Unavailable'} mono />
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-3 rounded-xl border border-coco-dark-border bg-coco-dark-bg/55 p-4 sm:grid-cols-3">
+          <PoolMetric
+            label="Snapshot reserve0"
+            value={snapshot?.reserve0_raw ? formatTokenAmount(BigInt(snapshot.reserve0_raw), 6) : 'Unavailable'}
+            mono
+          />
+          <PoolMetric
+            label="Snapshot reserve1"
+            value={snapshot?.reserve1_raw ? formatTokenAmount(BigInt(snapshot.reserve1_raw), 6) : 'Unavailable'}
+            mono
+          />
+          <PoolMetric
+            label="Snapshot LP supply"
+            value={snapshot?.lp_total_supply_raw ? `${formatTokenAmount(BigInt(snapshot.lp_total_supply_raw), snapshot.lp_decimals ?? lpDecimals)} cSLP` : 'Unavailable'}
+            mono
+          />
+        </div>
+      </Card>
+    </section>
   )
 }
 
