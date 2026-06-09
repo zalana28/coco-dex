@@ -1,18 +1,25 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useAccount } from 'wagmi'
+import { AlertTriangle, Check, Copy, Droplets, ExternalLink, Minus, Plus, X } from 'lucide-react'
 import { Card } from '@/components/common/Card'
 import { TokenIcon } from '@/components/common/TokenIcon'
-import { formatCompact, formatPercentage, formatTokenAmount } from '@/utils/format'
-import { Plus, Minus, Droplets, AlertTriangle, ExternalLink, Copy, Check } from 'lucide-react'
-import { useAccount } from 'wagmi'
-import { usePairReserves } from '@/hooks/usePairReserves'
-import { useLPBalance } from '@/hooks/useLPBalance'
-import { useXyloNetStablePool } from '@/hooks/useXyloNetStablePool'
-import { useCocoStablePool } from '@/hooks/useCocoStablePool'
 import { CocoStableAddLiquidityPanel } from '@/components/pools/CocoStableAddLiquidityPanel'
 import { CocoStableRemoveLiquidityPanel } from '@/components/pools/CocoStableRemoveLiquidityPanel'
+import { useCocoStablePool } from '@/hooks/useCocoStablePool'
+import { useLPBalance } from '@/hooks/useLPBalance'
+import { usePairReserves } from '@/hooks/usePairReserves'
+import { useXyloNetStablePool } from '@/hooks/useXyloNetStablePool'
+import { formatCompact, formatPercentage, formatTokenAmount } from '@/utils/format'
 
 type Tab = 'all' | 'my'
+type PoolId = 'classic' | 'stable'
+type ModalAction = 'select' | 'add' | 'remove'
+
+type LiquidityModalState = {
+  action: ModalAction
+  poolId?: PoolId
+}
 
 type StablePoolObservability = {
   status?: 'not_configured' | string
@@ -66,28 +73,40 @@ function useStablePoolObservability() {
 
 export function PoolsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('all')
+  const [modal, setModal] = useState<LiquidityModalState | null>(null)
   const { address, isConnected } = useAccount()
   const { reserveUsdc, reserveEurc, hasLiquidity, isLoading } = usePairReserves()
-  const { balance: lpBalance, share } = useLPBalance(address)
+  const classicLp = useLPBalance(address)
+  const stablePool = useCocoStablePool(address)
+  const externalStablePool = useXyloNetStablePool(address)
+  const stablePoolObservability = useStablePoolObservability()
+
+  const openNewPosition = () => setModal({ action: 'select' })
+  const openAdd = (poolId: PoolId) => setModal({ action: 'add', poolId })
+  const openRemove = (poolId: PoolId) => setModal({ action: 'remove', poolId })
+  const closeModal = () => setModal(null)
 
   return (
-    <div className="page-fade pt-28 sm:pt-24 pb-12 px-3 sm:px-4 mx-auto max-w-5xl">
-      <div className="flex items-center justify-between mb-6 gap-3">
+    <div className="page-fade mx-auto max-w-6xl px-3 pb-12 pt-28 sm:px-4 sm:pt-24">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.22em] text-coco-teal-400">Liquidity made visible</p>
+          <p className="text-xs uppercase tracking-[0.22em] text-coco-teal-400">Arc Testnet liquidity</p>
           <h1 className="mt-1 text-2xl font-bold text-coco-dark-text">Pools</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-coco-dark-muted">
+            Browse available USDC/EURC pools and manage LP positions without leaving the Pools page.
+          </p>
         </div>
-        <Link
-          to="/pools/add"
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-coco-green-500 text-white text-sm font-semibold hover:bg-coco-green-600 transition-all shadow-lg shadow-coco-green-500/25 hover:-translate-y-0.5"
+        <button
+          type="button"
+          onClick={openNewPosition}
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coco-green-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-coco-green-500/25 transition-all hover:-translate-y-0.5 hover:bg-coco-green-600"
         >
           <Plus className="h-4 w-4" />
           New Position
-        </Link>
+        </button>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-6 p-1 rounded-xl bg-coco-dark-surface/70 border border-coco-dark-border w-fit backdrop-blur-xl">
+      <div className="mb-6 flex w-full gap-1 rounded-xl border border-coco-dark-border bg-coco-dark-surface/70 p-1 backdrop-blur-xl sm:w-fit">
         <TabButton active={activeTab === 'all'} onClick={() => setActiveTab('all')}>All Pools</TabButton>
         <TabButton active={activeTab === 'my'} onClick={() => setActiveTab('my')}>My Positions</TabButton>
       </div>
@@ -98,18 +117,33 @@ export function PoolsPage() {
           reserveEurc={reserveEurc}
           hasLiquidity={hasLiquidity}
           isLoading={isLoading}
-          address={address}
+          classicLpBalance={classicLp.balance}
+          stablePool={stablePool}
+          stableObservability={stablePoolObservability.data}
+          stableObservabilityLoading={stablePoolObservability.loading}
+          externalStablePool={externalStablePool}
+          onAdd={openAdd}
         />
       ) : (
         <MyPositions
           isConnected={isConnected}
-          lpBalance={lpBalance}
-          share={share}
           reserveUsdc={reserveUsdc}
           reserveEurc={reserveEurc}
           hasLiquidity={hasLiquidity}
+          classicLpBalance={classicLp.balance}
+          classicShare={classicLp.share}
+          stablePool={stablePool}
+          onAdd={openAdd}
+          onRemove={openRemove}
         />
       )}
+
+      <LiquidityActionModal
+        modal={modal}
+        stablePool={stablePool}
+        onClose={closeModal}
+        onSelectPool={(poolId) => setModal({ action: 'add', poolId })}
+      />
     </div>
   )
 }
@@ -117,8 +151,9 @@ export function PoolsPage() {
 function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
+      type="button"
       onClick={onClick}
-      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+      className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors sm:flex-none ${
         active
           ? 'bg-coco-green-500/15 text-coco-dark-text'
           : 'text-coco-dark-muted hover:text-coco-dark-text'
@@ -129,171 +164,633 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   )
 }
 
-function AllPools({ reserveUsdc, reserveEurc, hasLiquidity, isLoading, address }: {
-  reserveUsdc: bigint | undefined; reserveEurc: bigint | undefined; hasLiquidity: boolean; isLoading: boolean; address: `0x${string}` | undefined
+function AllPools({
+  reserveUsdc,
+  reserveEurc,
+  hasLiquidity,
+  isLoading,
+  classicLpBalance,
+  stablePool,
+  stableObservability,
+  stableObservabilityLoading,
+  externalStablePool,
+  onAdd,
+}: {
+  reserveUsdc: bigint | undefined
+  reserveEurc: bigint | undefined
+  hasLiquidity: boolean
+  isLoading: boolean
+  classicLpBalance: bigint | undefined
+  stablePool: ReturnType<typeof useCocoStablePool>
+  stableObservability: StablePoolObservability | null
+  stableObservabilityLoading: boolean
+  externalStablePool: ReturnType<typeof useXyloNetStablePool>
+  onAdd: (poolId: PoolId) => void
 }) {
-  const externalStablePool = useXyloNetStablePool(address)
-  const cocoStablePool = useCocoStablePool(address)
-  const stablePoolObservability = useStablePoolObservability()
-  const tvl = hasLiquidity && reserveUsdc && reserveEurc
-    ? (Number(reserveUsdc) / 1e6) + (Number(reserveEurc) / 1e6 * 1.086) // EURC ≈ $1.086
+  const classicTvl = hasLiquidity && reserveUsdc && reserveEurc
+    ? (Number(reserveUsdc) / 1e6) + (Number(reserveEurc) / 1e6 * 1.086)
     : 0
+  const [stableToken0, stableToken1] = stablePool.pool.tokens
+  const stableTvl = (Number(stablePool.reserve0) / 1e6) + (Number(stablePool.reserve1) / 1e6 * 1.086)
 
   return (
-    <div className="space-y-4">
-      <Card className="p-5 hover:-translate-y-0.5 hover:border-coco-green-500/25">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex -space-x-2">
-              <TokenIcon symbol="USDC" color="#2775CA" size="md" />
-              <TokenIcon symbol="EURC" color="#1434CB" size="md" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-coco-dark-text">USDC / EURC</h3>
-              <p className="text-xs text-coco-dark-muted">0.3% fee tier</p>
-            </div>
-          </div>
-          <div className="text-right">
-            {hasLiquidity ? (
-              <p className="text-sm font-medium text-coco-green-500">Active</p>
-            ) : (
-              <p className="text-sm font-medium text-coco-amber-500">No Liquidity</p>
-            )}
-          </div>
-        </div>
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <PoolCard
+          pair="USDC / EURC"
+          poolType="Classic Coco V2"
+          fee="0.30%"
+          tvl={isLoading ? '...' : hasLiquidity ? formatCompact(classicTvl) : '$0'}
+          reserveSummary={isLoading ? '...' : `${formatTokenAmount(reserveUsdc ?? 0n, 6)} USDC / ${formatTokenAmount(reserveEurc ?? 0n, 6)} EURC`}
+          lpBalance={classicLpBalance !== undefined ? formatTokenAmount(classicLpBalance, 18) : 'Connect wallet to read'}
+          badges={['Arc Testnet', hasLiquidity ? 'Active' : 'No Liquidity', 'Routed']}
+          onAdd={() => onAdd('classic')}
+          details={
+            <ClassicPoolDetails
+              reserveUsdc={reserveUsdc}
+              reserveEurc={reserveEurc}
+              hasLiquidity={hasLiquidity}
+              isLoading={isLoading}
+            />
+          }
+        />
 
-        <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-coco-dark-border">
-          <div>
-            <p className="text-xs text-coco-dark-muted">TVL</p>
-            <p className="text-sm font-mono font-medium text-coco-dark-text">
-              {isLoading ? '...' : hasLiquidity ? formatCompact(tvl) : '$0'}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-coco-dark-muted">USDC Reserve</p>
-            <p className="text-sm font-mono font-medium text-coco-dark-text">
-              {isLoading ? '...' : reserveUsdc ? formatTokenAmount(reserveUsdc, 6) : '0'}
-            </p>
-          </div>
-          <div className="flex items-end justify-end gap-2">
-            <Link
-              to="/pools/add"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-coco-green-500/10 text-coco-green-500 text-xs font-medium hover:bg-coco-green-500/20 transition-colors"
-            >
-              <Plus className="h-3 w-3" />
-              Add
-            </Link>
-          </div>
-        </div>
-
-        {!hasLiquidity && !isLoading && (
-          <div className="mt-3 flex items-center gap-2 rounded-lg bg-coco-amber-500/5 border border-coco-amber-500/10 p-2.5">
-            <AlertTriangle className="h-3.5 w-3.5 text-coco-amber-500 shrink-0" />
-            <p className="text-[11px] text-coco-amber-500">This pool has no liquidity. Be the first to add!</p>
-          </div>
-        )}
-      </Card>
-
-      <CocoNativeStablePoolPanel {...cocoStablePool} />
-      <StablePoolObservabilityPanel
-        observability={stablePoolObservability.data}
-        isLoading={stablePoolObservability.loading}
-        lpDecimals={cocoStablePool.lpDecimals}
-        onRefresh={stablePoolObservability.refetch}
-      />
-
-      <ExternalStablePoolsPanel {...externalStablePool} />
+        <PoolCard
+          pair={stablePool.pool.pairLabel}
+          poolType="Native Stable Pool Beta"
+          fee={`${(Number(stablePool.feeBps) / 100).toFixed(2)}%`}
+          tvl={stablePool.isLoading ? '...' : formatCompact(stableTvl)}
+          reserveSummary={stablePool.isLoading ? '...' : `${formatTokenAmount(stablePool.reserve0, stableToken0.decimals)} ${stableToken0.symbol} / ${formatTokenAmount(stablePool.reserve1, stableToken1.decimals)} ${stableToken1.symbol}`}
+          lpBalance={stablePool.userLpBalance !== undefined ? `${formatTokenAmount(stablePool.userLpBalance, stablePool.lpDecimals)} cSLP` : 'Connect wallet to read'}
+          badges={['Arc Testnet', 'LP Beta', 'Unaudited', 'Not Routed', 'Quote-only']}
+          health={<StablePoolHealthBadge observability={stableObservability} isLoading={stableObservabilityLoading} />}
+          onAdd={() => onAdd('stable')}
+          details={
+            <StablePoolAdvancedDetails
+              stablePool={stablePool}
+              observability={stableObservability}
+              observabilityLoading={stableObservabilityLoading}
+              externalStablePool={externalStablePool}
+            />
+          }
+        />
+      </div>
     </div>
   )
 }
 
-function StablePoolObservabilityPanel({
-  observability,
-  isLoading,
-  lpDecimals,
-  onRefresh,
+function PoolCard({
+  pair,
+  poolType,
+  fee,
+  tvl,
+  reserveSummary,
+  lpBalance,
+  badges,
+  health,
+  details,
+  onAdd,
 }: {
-  observability: StablePoolObservability | null
-  isLoading: boolean
-  lpDecimals: number
-  onRefresh: () => void
+  pair: string
+  poolType: string
+  fee: string
+  tvl: string
+  reserveSummary: string
+  lpBalance: string
+  badges: string[]
+  health?: React.ReactNode
+  details: React.ReactNode
+  onAdd: () => void
 }) {
-  const snapshot = observability?.latestSnapshot
-  const latestRun = observability?.latestRun
-  const isConfigured = observability?.status !== 'not_configured' && Boolean(snapshot || latestRun)
-  const latestSnapshotTime = snapshot?.block_timestamp
-    ? new Date(snapshot.block_timestamp).toLocaleString()
-    : 'Unavailable'
-
   return (
-    <section className="pt-2">
-      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-[0.22em] text-coco-teal-400">Separate beta analytics</p>
-          <h2 className="mt-1 text-xl font-semibold text-coco-dark-text">Stable Pool Observability</h2>
+    <Card className="flex min-w-0 flex-col p-5">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex -space-x-2">
+            <TokenIcon symbol="USDC" color="#2775CA" size="md" />
+            <TokenIcon symbol="EURC" color="#1434CB" size="md" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="truncate text-lg font-semibold text-coco-dark-text">{pair}</h2>
+            <p className="text-xs text-coco-dark-muted">{poolType}</p>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Badge>LP Beta</Badge>
-          <Badge>Not routed</Badge>
-          <Badge>Separate indexer</Badge>
+        <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+          {badges.map((badge) => <Badge key={badge}>{badge}</Badge>)}
         </div>
       </div>
 
-      <Card className="p-5 border-coco-amber-500/20 bg-coco-dark-surface/80">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      {health && <div className="mt-3">{health}</div>}
+
+      <div className="mt-4 grid grid-cols-1 gap-3 border-t border-coco-dark-border pt-4 sm:grid-cols-3">
+        <PoolMetric label="TVL / reserves" value={tvl} mono />
+        <PoolMetric label="Fee" value={fee} />
+        <PoolMetric label="Your LP" value={lpBalance} mono />
+      </div>
+      <p className="mt-3 truncate text-xs text-coco-dark-muted">{reserveSummary}</p>
+
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+        <button
+          type="button"
+          onClick={onAdd}
+          className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-coco-green-500/10 px-3 py-2 text-sm font-semibold text-coco-green-500 transition-colors hover:bg-coco-green-500/20"
+        >
+          <Plus className="h-4 w-4" />
+          Add Liquidity
+        </button>
+        <details className="group flex-1">
+          <summary className="inline-flex min-h-10 w-full cursor-pointer list-none items-center justify-center rounded-lg border border-coco-dark-border bg-coco-dark-bg/70 px-3 py-2 text-sm font-semibold text-coco-dark-text transition-colors hover:border-coco-teal-400/30">
+            View Details
+          </summary>
+          <div className="mt-3 rounded-xl border border-coco-dark-border bg-coco-dark-bg/50 p-3">
+            {details}
+          </div>
+        </details>
+      </div>
+    </Card>
+  )
+}
+
+function ClassicPoolDetails({
+  reserveUsdc,
+  reserveEurc,
+  hasLiquidity,
+  isLoading,
+}: {
+  reserveUsdc: bigint | undefined
+  reserveEurc: bigint | undefined
+  hasLiquidity: boolean
+  isLoading: boolean
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <PoolMetric label="Status" value={isLoading ? '...' : hasLiquidity ? 'Active' : 'No Liquidity'} />
+      <PoolMetric label="USDC reserve" value={isLoading ? '...' : formatTokenAmount(reserveUsdc ?? 0n, 6)} mono />
+      <PoolMetric label="EURC reserve" value={isLoading ? '...' : formatTokenAmount(reserveEurc ?? 0n, 6)} mono />
+    </div>
+  )
+}
+
+function StablePoolAdvancedDetails({
+  stablePool,
+  observability,
+  observabilityLoading,
+  externalStablePool,
+}: {
+  stablePool: ReturnType<typeof useCocoStablePool>
+  observability: StablePoolObservability | null
+  observabilityLoading: boolean
+  externalStablePool: ReturnType<typeof useXyloNetStablePool>
+}) {
+  const [token0, token1] = stablePool.pool.tokens
+  const latestRun = observability?.latestRun
+  const snapshot = observability?.latestSnapshot
+  const isConfigured = observability?.status !== 'not_configured' && Boolean(snapshot || latestRun)
+
+  return (
+    <div className="space-y-4">
+      {(stablePool.hasReadError || stablePool.isWrongNetwork) && (
+        <div className="rounded-lg border border-coco-amber-500/20 bg-coco-amber-500/10 p-3">
+          <p className="text-xs leading-relaxed text-coco-amber-500">
+            {stablePool.hasReadError
+              ? 'On-chain data is temporarily unavailable. Displaying last documented Arc Testnet values.'
+              : 'Your wallet is not on Arc Testnet. The panel still reads Arc Testnet data only.'}
+          </p>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <AddressRow label="Pool address" address={stablePool.pool.poolAddress} />
+        <AddressRow label="LP token address" address={stablePool.lpTokenAddress} />
+        <AddressRow label={`${token0.symbol} token`} address={stablePool.token0Address} />
+        <AddressRow label={`${token1.symbol} token`} address={stablePool.token1Address} />
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+        <PoolMetric label="A" value={stablePool.isLoading ? '...' : stablePool.amplificationParameter.toString()} mono />
+        <PoolMetric label="Pool status" value={stablePool.paused ? 'Paused' : 'Live read'} />
+        <PoolMetric label="Total cSLP" value={stablePool.isLoading ? '...' : formatTokenAmount(stablePool.totalSupply, stablePool.lpDecimals)} mono />
+        <PoolMetric label="Router" value="Disabled" />
+      </div>
+
+      <div className="rounded-xl border border-coco-dark-border bg-coco-dark-surface/50 p-3">
+        <p className="text-xs uppercase tracking-[0.18em] text-coco-dark-muted">Sample quote checks</p>
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <PoolMetric
+            label="0.1 USDC -> EURC"
+            value={stablePool.isLoading ? '...' : `${formatTokenAmount(stablePool.quoteUsdcToEurc, token1.decimals)} ${token1.symbol}`}
+            mono
+          />
+          <PoolMetric
+            label="0.1 EURC -> USDC"
+            value={stablePool.isLoading ? '...' : `${formatTokenAmount(stablePool.quoteEurcToUsdc, token0.decimals)} ${token0.symbol}`}
+            mono
+          />
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-coco-amber-500/20 bg-coco-amber-500/5 p-3">
+        <div className="flex flex-wrap gap-2">
+          <Badge>Stable Pool Observability</Badge>
+          <Badge>Separate indexer</Badge>
+          <Badge>Classic TVL excluded</Badge>
+        </div>
+        {!isConfigured && !observabilityLoading && (
+          <p className="mt-3 text-xs leading-relaxed text-coco-amber-500">Stable pool analytics are not configured yet.</p>
+        )}
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <PoolMetric label="Indexer status" value={observabilityLoading ? '...' : latestRun?.status ?? (isConfigured ? 'Unknown' : 'Not configured')} />
+          <PoolMetric label="Indexed events" value={observabilityLoading ? '...' : observability?.eventCount?.toLocaleString() ?? 'Unavailable'} mono />
+          <PoolMetric label="Snapshots written" value={observabilityLoading ? '...' : latestRun?.snapshots_written?.toLocaleString() ?? 'Unavailable'} mono />
+        </div>
+      </div>
+
+      <details>
+        <summary className="cursor-pointer text-sm font-semibold text-coco-dark-text">External liquidity sources</summary>
+        <div className="mt-3 rounded-xl border border-coco-dark-border bg-coco-dark-surface/50 p-3">
+          <ExternalStablePoolDetails externalStablePool={externalStablePool} />
+        </div>
+      </details>
+
+      <div className="flex flex-wrap gap-2">
+        <a href={stablePool.pool.poolArcscanUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-coco-dark-border px-3 py-2 text-xs font-medium text-coco-dark-text hover:border-coco-teal-400/40">
+          View contract
+          <ExternalLink className="h-3 w-3" />
+        </a>
+        <a href={stablePool.pool.lpTokenArcscanUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-coco-dark-border px-3 py-2 text-xs font-medium text-coco-dark-text hover:border-coco-teal-400/40">
+          View LP token
+          <ExternalLink className="h-3 w-3" />
+        </a>
+        <Link to={stablePool.pool.docsPath} className="inline-flex items-center rounded-lg border border-coco-dark-border px-3 py-2 text-xs font-medium text-coco-dark-text hover:border-coco-teal-400/40">
+          View docs
+        </Link>
+      </div>
+    </div>
+  )
+}
+
+function ExternalStablePoolDetails({ externalStablePool }: { externalStablePool: ReturnType<typeof useXyloNetStablePool> }) {
+  const [token0, token1] = externalStablePool.pool.tokens
+  const reserve0 = externalStablePool.reserve0
+  const reserve1 = externalStablePool.reserve1
+  const totalSupply = externalStablePool.totalSupply
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        <Badge>External</Badge>
+        <Badge>Read-only</Badge>
+        <Badge>StableSwap</Badge>
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+        <PoolMetric label="Source" value={externalStablePool.pool.source} />
+        <PoolMetric label="Type" value={externalStablePool.pool.type} />
+        <PoolMetric label="Fee" value={externalStablePool.pool.feeLabel} />
+        <PoolMetric label="Status" value={externalStablePool.hasReadError ? 'Read issue' : 'External pool'} />
+        <PoolMetric label={`${token0.symbol} Reserve`} value={externalStablePool.isLoading ? '...' : reserve0 !== undefined ? formatTokenAmount(reserve0, token0.decimals) : 'Unknown'} mono />
+        <PoolMetric label={`${token1.symbol} Reserve`} value={externalStablePool.isLoading ? '...' : reserve1 !== undefined ? formatTokenAmount(reserve1, token1.decimals) : 'Unknown'} mono />
+        <PoolMetric label="LP Supply" value={externalStablePool.isLoading ? '...' : totalSupply !== undefined ? formatTokenAmount(totalSupply, 18) : 'Unknown'} mono />
+        <PoolMetric label="Your LP" value={externalStablePool.isLoading ? '...' : externalStablePool.userLpBalance !== undefined ? formatTokenAmount(externalStablePool.userLpBalance, 18) : 'Connect wallet to read'} mono />
+      </div>
+      <p className="text-[11px] leading-relaxed text-coco-dark-muted">
+        This detail only reads XyloNet pool state. Liquidity management remains outside Coco DEX.
+      </p>
+    </div>
+  )
+}
+
+function StablePoolHealthBadge({
+  observability,
+  isLoading,
+}: {
+  observability: StablePoolObservability | null
+  isLoading: boolean
+}) {
+  const latestRun = observability?.latestRun
+  const status = isLoading ? 'Checking observability...' : observability?.status === 'not_configured' ? 'Observability not configured' : `Observability ${latestRun?.status ?? 'available'}`
+
+  return (
+    <div className="rounded-lg border border-coco-amber-500/20 bg-coco-amber-500/10 px-3 py-2">
+      <p className="text-xs font-medium text-coco-amber-500">{status}</p>
+      <p className="mt-1 text-[11px] text-coco-dark-muted">Separate beta telemetry. Not merged into classic Coco V2 TVL.</p>
+    </div>
+  )
+}
+
+function MyPositions({
+  isConnected,
+  reserveUsdc,
+  reserveEurc,
+  hasLiquidity,
+  classicLpBalance,
+  classicShare,
+  stablePool,
+  onAdd,
+  onRemove,
+}: {
+  isConnected: boolean
+  reserveUsdc: bigint | undefined
+  reserveEurc: bigint | undefined
+  hasLiquidity: boolean
+  classicLpBalance: bigint | undefined
+  classicShare: number
+  stablePool: ReturnType<typeof useCocoStablePool>
+  onAdd: (poolId: PoolId) => void
+  onRemove: (poolId: PoolId) => void
+}) {
+  const hasClassicPosition = classicLpBalance !== undefined && classicLpBalance > 0n
+  const hasStablePosition = stablePool.userLpBalance !== undefined && stablePool.userLpBalance > 0n
+
+  if (!isConnected || (!hasClassicPosition && !hasStablePosition)) {
+    return (
+      <Card className="p-8 text-center sm:p-12">
+        <Droplets className="mx-auto mb-4 h-12 w-12 text-coco-dark-muted" />
+        <h2 className="text-lg font-medium text-coco-dark-text">{isConnected ? 'No LP positions yet' : 'Connect your wallet'}</h2>
+        <p className="mt-2 text-sm text-coco-dark-muted">
+          {isConnected
+            ? 'Add liquidity to create your first Arc Testnet LP position.'
+            : 'Connect your wallet to view your liquidity positions.'}
+        </p>
+        <button
+          type="button"
+          onClick={() => onAdd('classic')}
+          className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coco-green-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-coco-green-600"
+        >
+          <Plus className="h-4 w-4" />
+          Add Liquidity
+        </button>
+      </Card>
+    )
+  }
+
+  const withdrawableUsdc = hasLiquidity && reserveUsdc ? Number(reserveUsdc) * classicShare / 1e6 : 0
+  const withdrawableEurc = hasLiquidity && reserveEurc ? Number(reserveEurc) * classicShare / 1e6 : 0
+  const stableShare = stablePool.totalSupply > 0n && stablePool.userLpBalance
+    ? Number((stablePool.userLpBalance * 1_000_000n) / stablePool.totalSupply) / 10_000
+    : 0
+  const stableUnderlying0 = stablePool.totalSupply > 0n && stablePool.userLpBalance
+    ? (stablePool.userLpBalance * stablePool.reserve0) / stablePool.totalSupply
+    : 0n
+  const stableUnderlying1 = stablePool.totalSupply > 0n && stablePool.userLpBalance
+    ? (stablePool.userLpBalance * stablePool.reserve1) / stablePool.totalSupply
+    : 0n
+
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      {hasClassicPosition && (
+        <PositionCard
+          pair="USDC / EURC"
+          poolType="Classic Coco V2"
+          lpBalance={formatTokenAmount(classicLpBalance, 18)}
+          poolShare={formatPercentage(classicShare * 100)}
+          underlying={`${withdrawableUsdc.toFixed(4)} USDC / ${withdrawableEurc.toFixed(4)} EURC`}
+          badges={['Arc Testnet', 'Routed']}
+          onAddMore={() => onAdd('classic')}
+          onRemove={() => onRemove('classic')}
+        />
+      )}
+
+      {hasStablePosition && (
+        <PositionCard
+          pair={stablePool.pool.pairLabel}
+          poolType="Native Stable Pool Beta"
+          lpBalance={`${formatTokenAmount(stablePool.userLpBalance ?? 0n, stablePool.lpDecimals)} cSLP`}
+          poolShare={`${stableShare.toFixed(4)}%`}
+          underlying={`${formatTokenAmount(stableUnderlying0, 6)} USDC / ${formatTokenAmount(stableUnderlying1, 6)} EURC`}
+          badges={['LP Beta', 'Unaudited', 'Not Routed', 'Quote-only']}
+          onAddMore={() => onAdd('stable')}
+          onRemove={() => onRemove('stable')}
+        />
+      )}
+    </div>
+  )
+}
+
+function PositionCard({
+  pair,
+  poolType,
+  lpBalance,
+  poolShare,
+  underlying,
+  badges,
+  onAddMore,
+  onRemove,
+}: {
+  pair: string
+  poolType: string
+  lpBalance: string
+  poolShare: string
+  underlying: string
+  badges: string[]
+  onAddMore: () => void
+  onRemove: () => void
+}) {
+  return (
+    <Card className="p-5">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex -space-x-2">
+            <TokenIcon symbol="USDC" color="#2775CA" size="md" />
+            <TokenIcon symbol="EURC" color="#1434CB" size="md" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="truncate font-semibold text-coco-dark-text">{pair}</h2>
+            <p className="text-xs text-coco-dark-muted">{poolType}</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap justify-end gap-1.5">
+          {badges.map((badge) => <Badge key={badge}>{badge}</Badge>)}
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-3 border-t border-coco-dark-border pt-4 sm:grid-cols-3">
+        <PoolMetric label="LP balance" value={lpBalance} mono />
+        <PoolMetric label="Pool share" value={poolShare} />
+        <PoolMetric label="Estimated assets" value={underlying} mono />
+      </div>
+
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+        <button
+          type="button"
+          onClick={onAddMore}
+          className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-coco-green-500/10 px-3 py-2 text-sm font-semibold text-coco-green-500 transition-colors hover:bg-coco-green-500/20"
+        >
+          <Plus className="h-4 w-4" />
+          Add More
+        </button>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-coco-red-500/10 px-3 py-2 text-sm font-semibold text-coco-red-500 transition-colors hover:bg-coco-red-500/20"
+        >
+          <Minus className="h-4 w-4" />
+          Remove
+        </button>
+      </div>
+    </Card>
+  )
+}
+
+function LiquidityActionModal({
+  modal,
+  stablePool,
+  onClose,
+  onSelectPool,
+}: {
+  modal: LiquidityModalState | null
+  stablePool: ReturnType<typeof useCocoStablePool>
+  onClose: () => void
+  onSelectPool: (poolId: PoolId) => void
+}) {
+  if (!modal) return null
+
+  const title = modal.action === 'select'
+    ? 'New Position'
+    : modal.action === 'remove'
+      ? 'Remove Liquidity'
+      : 'Add Liquidity'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/65 px-3 py-3 backdrop-blur-sm sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="liquidity-modal-title">
+      <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-coco-dark-border bg-coco-dark-surface p-4 shadow-2xl sm:p-5">
+        <div className="mb-4 flex items-start justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold text-coco-dark-text">Arc Testnet stable pool telemetry</p>
-            <p className="mt-1 text-xs leading-relaxed text-coco-dark-muted">
-              Stable pool analytics are separate from classic Coco V2 pair analytics and do not affect routed TVL.
-            </p>
+            <p className="text-xs uppercase tracking-[0.22em] text-coco-teal-400">Pools action</p>
+            <h2 id="liquidity-modal-title" className="mt-1 text-xl font-semibold text-coco-dark-text">{title}</h2>
           </div>
           <button
             type="button"
-            onClick={onRefresh}
-            className="w-fit rounded-lg border border-coco-dark-border bg-coco-dark-bg/70 px-3 py-2 text-xs font-semibold text-coco-dark-text transition-colors hover:border-coco-teal-400/40"
+            onClick={onClose}
+            className="inline-grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-coco-dark-border text-coco-dark-muted transition-colors hover:border-coco-teal-400/35 hover:text-coco-dark-text"
+            aria-label="Close liquidity modal"
           >
-            Refresh
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        {!isConfigured && !isLoading && (
-          <div className="mt-4 rounded-lg border border-coco-amber-500/20 bg-coco-amber-500/10 p-3">
-            <p className="text-xs leading-relaxed text-coco-amber-500">
-              Stable pool analytics are not configured yet.
-            </p>
+        {modal.action === 'select' && <PoolTypeSelector onSelect={onSelectPool} />}
+        {modal.action === 'add' && modal.poolId === 'classic' && <ClassicRouteAction action="add" />}
+        {modal.action === 'remove' && modal.poolId === 'classic' && <ClassicRouteAction action="remove" />}
+        {modal.action === 'add' && modal.poolId === 'stable' && <StableAddModalContent stablePool={stablePool} />}
+        {modal.action === 'remove' && modal.poolId === 'stable' && <StableRemoveModalContent stablePool={stablePool} />}
+      </div>
+    </div>
+  )
+}
+
+function PoolTypeSelector({ onSelect }: { onSelect: (poolId: PoolId) => void }) {
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <button
+        type="button"
+        onClick={() => onSelect('classic')}
+        className="rounded-xl border border-coco-dark-border bg-coco-dark-bg/60 p-4 text-left transition-colors hover:border-coco-green-500/40"
+      >
+        <div className="flex items-center gap-3">
+          <div className="flex -space-x-2">
+            <TokenIcon symbol="USDC" color="#2775CA" size="md" />
+            <TokenIcon symbol="EURC" color="#1434CB" size="md" />
           </div>
-        )}
-
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <PoolMetric label="Indexer status" value={isLoading ? '...' : latestRun?.status ?? (isConfigured ? 'Unknown' : 'Not configured')} />
-          <PoolMetric label="Latest snapshot" value={isLoading ? '...' : latestSnapshotTime} />
-          <PoolMetric
-            label="Indexed events"
-            value={isLoading ? '...' : observability?.eventCount !== undefined ? observability.eventCount.toLocaleString() : 'Unavailable'}
-            mono
-          />
-          <PoolMetric label="Snapshots written" value={isLoading ? '...' : latestRun?.snapshots_written?.toLocaleString() ?? 'Unavailable'} mono />
+          <div>
+            <h3 className="font-semibold text-coco-dark-text">Classic Coco V2 Pool</h3>
+            <p className="text-xs text-coco-dark-muted">Routed USDC/EURC liquidity</p>
+          </div>
         </div>
-
-        <div className="mt-4 grid grid-cols-1 gap-3 rounded-xl border border-coco-dark-border bg-coco-dark-bg/55 p-4 sm:grid-cols-3">
-          <PoolMetric
-            label="Snapshot reserve0"
-            value={snapshot?.reserve0_raw ? formatTokenAmount(BigInt(snapshot.reserve0_raw), 6) : 'Unavailable'}
-            mono
-          />
-          <PoolMetric
-            label="Snapshot reserve1"
-            value={snapshot?.reserve1_raw ? formatTokenAmount(BigInt(snapshot.reserve1_raw), 6) : 'Unavailable'}
-            mono
-          />
-          <PoolMetric
-            label="Snapshot LP supply"
-            value={snapshot?.lp_total_supply_raw ? `${formatTokenAmount(BigInt(snapshot.lp_total_supply_raw), snapshot.lp_decimals ?? lpDecimals)} cSLP` : 'Unavailable'}
-            mono
-          />
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Badge>Arc Testnet</Badge>
+          <Badge>0.30%</Badge>
+          <Badge>Routed</Badge>
         </div>
-      </Card>
-    </section>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => onSelect('stable')}
+        className="rounded-xl border border-coco-amber-500/25 bg-coco-amber-500/5 p-4 text-left transition-colors hover:border-coco-amber-500/45"
+      >
+        <div className="flex items-center gap-3">
+          <div className="flex -space-x-2">
+            <TokenIcon symbol="USDC" color="#2775CA" size="md" />
+            <TokenIcon symbol="EURC" color="#1434CB" size="md" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-coco-dark-text">Native Stable Pool Beta</h3>
+            <p className="text-xs text-coco-dark-muted">Tiny Arc Testnet LP Beta only</p>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Badge>LP Beta</Badge>
+          <Badge>Unaudited</Badge>
+          <Badge>Not Routed</Badge>
+          <Badge>Quote-only</Badge>
+        </div>
+      </button>
+    </div>
+  )
+}
+
+function ClassicRouteAction({ action }: { action: 'add' | 'remove' }) {
+  const href = action === 'add' ? '/pools/add' : '/pools/remove'
+
+  return (
+    <div className="rounded-xl border border-coco-dark-border bg-coco-dark-bg/60 p-4">
+      <p className="text-sm leading-6 text-coco-dark-muted">
+        Classic Coco V2 liquidity uses the existing dedicated {action === 'add' ? 'add' : 'remove'} flow.
+      </p>
+      <Link
+        to={href}
+        className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coco-green-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-coco-green-600"
+      >
+        Continue to Classic Coco V2
+      </Link>
+    </div>
+  )
+}
+
+function StableAddModalContent({ stablePool }: { stablePool: ReturnType<typeof useCocoStablePool> }) {
+  return (
+    <div className="space-y-4">
+      <StableBetaWarning />
+      <CocoStableAddLiquidityPanel
+        reserve0={stablePool.reserve0}
+        reserve1={stablePool.reserve1}
+        totalSupply={stablePool.totalSupply}
+        lpDecimals={stablePool.lpDecimals}
+        amplificationParameter={stablePool.amplificationParameter}
+        paused={stablePool.paused}
+        onRefreshPool={stablePool.refetch}
+      />
+    </div>
+  )
+}
+
+function StableRemoveModalContent({ stablePool }: { stablePool: ReturnType<typeof useCocoStablePool> }) {
+  return (
+    <div className="space-y-4">
+      <StableBetaWarning />
+      <CocoStableRemoveLiquidityPanel
+        reserve0={stablePool.reserve0}
+        reserve1={stablePool.reserve1}
+        totalSupply={stablePool.totalSupply}
+        userLpBalance={stablePool.userLpBalance}
+        lpDecimals={stablePool.lpDecimals}
+        paused={stablePool.paused}
+        onRefreshPool={stablePool.refetch}
+      />
+    </div>
+  )
+}
+
+function StableBetaWarning() {
+  return (
+    <div className="rounded-xl border border-coco-amber-500/20 bg-coco-amber-500/10 p-3">
+      <div className="flex items-start gap-2">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-coco-amber-500" />
+        <p className="text-xs leading-relaxed text-coco-amber-500">
+          Coco Native Stable Pool V1 is Arc Testnet LP Beta. Use tiny test amounts only. Unaudited. Not Routed. Quote-only for swaps.
+        </p>
+      </div>
+    </div>
   )
 }
 
@@ -302,15 +799,6 @@ function Badge({ children }: { children: React.ReactNode }) {
     <span className="rounded-md border border-coco-teal-400/25 bg-coco-teal-400/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-coco-teal-300">
       {children}
     </span>
-  )
-}
-
-function BetaStatusItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0 rounded-lg border border-coco-dark-border bg-coco-dark-bg/60 p-3">
-      <p className="text-[11px] text-coco-dark-muted">{label}</p>
-      <p className="mt-1 truncate text-xs font-semibold text-coco-dark-text">{value}</p>
-    </div>
   )
 }
 
@@ -348,428 +836,11 @@ function AddressRow({ label, address }: { label: string; address: string }) {
   )
 }
 
-function CocoNativeStablePoolPanel({
-  pool,
-  token0Address,
-  token1Address,
-  lpTokenAddress,
-  reserve0,
-  reserve1,
-  feeBps,
-  amplificationParameter,
-  paused,
-  totalSupply,
-  lpDecimals,
-  userLpBalance,
-  quoteInput,
-  quoteUsdcToEurc,
-  quoteEurcToUsdc,
-  isLoading,
-  hasReadError,
-  isWrongNetwork,
-  refetch,
-}: ReturnType<typeof useCocoStablePool>) {
-  const [token0, token1] = pool.tokens
-  const feeLabel = `${(Number(feeBps) / 100).toFixed(2)}%`
-
-  return (
-    <section className="pt-2">
-      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-[0.22em] text-coco-teal-400">Coco liquidity</p>
-          <h2 className="mt-1 text-xl font-semibold text-coco-dark-text">Coco Native Stable Pool</h2>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Badge>Arc Testnet</Badge>
-          <Badge>{pool.status}</Badge>
-          <Badge>Unaudited</Badge>
-          <Badge>Not routed</Badge>
-        </div>
-      </div>
-
-      <Card className="p-5 border-blue-500/20 bg-coco-dark-surface/80">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex -space-x-2">
-              <TokenIcon symbol={token0.symbol} color={token0.logoColor} size="md" />
-              <TokenIcon symbol={token1.symbol} color={token1.logoColor} size="md" />
-            </div>
-            <div className="min-w-0">
-              <h3 className="truncate font-semibold text-coco-dark-text">{pool.pairLabel}</h3>
-              <p className="text-xs text-coco-dark-muted">{pool.typeLabel}</p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2 sm:justify-end">
-            <a
-              href={pool.poolArcscanUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-coco-dark-border bg-coco-dark-bg/70 px-3 py-1.5 text-xs font-medium text-coco-dark-text transition-colors hover:border-coco-teal-400/40 hover:text-coco-teal-300"
-            >
-              View contract
-              <ExternalLink className="h-3 w-3" />
-            </a>
-            <a
-              href={pool.lpTokenArcscanUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-coco-dark-border bg-coco-dark-bg/70 px-3 py-1.5 text-xs font-medium text-coco-dark-text transition-colors hover:border-coco-teal-400/40 hover:text-coco-teal-300"
-            >
-              View LP token
-              <ExternalLink className="h-3 w-3" />
-            </a>
-            <Link
-              to={pool.docsPath}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-coco-dark-border bg-coco-dark-bg/70 px-3 py-1.5 text-xs font-medium text-coco-dark-text transition-colors hover:border-coco-teal-400/40 hover:text-coco-teal-300"
-            >
-              View docs
-            </Link>
-          </div>
-        </div>
-
-        {(hasReadError || isWrongNetwork) && (
-          <div className="mt-4 rounded-lg border border-coco-amber-500/20 bg-coco-amber-500/10 p-3">
-            <p className="text-xs leading-relaxed text-coco-amber-500">
-              {hasReadError
-                ? 'On-chain data is temporarily unavailable. Displaying last documented Arc Testnet values.'
-                : 'Your wallet is not on Arc Testnet. The panel still reads Arc Testnet data only.'}
-            </p>
-          </div>
-        )}
-
-        <div className="mt-4 rounded-xl border border-blue-400/20 bg-blue-400/5 p-4">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.18em] text-blue-300">LP Beta status</p>
-              <p className="mt-1 text-sm text-coco-dark-text">
-                Add/remove liquidity enabled on Arc Testnet. Smart router usage is still disabled.
-              </p>
-            </div>
-            <p className="text-xs font-semibold text-blue-300">Not production-ready</p>
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-            <BetaStatusItem label="Add liquidity" value="Enabled" />
-            <BetaStatusItem label="Remove liquidity" value="Enabled" />
-            <BetaStatusItem label="Router usage" value="Disabled" />
-            <BetaStatusItem label="Analytics/indexer" value="Not enabled" />
-            <BetaStatusItem label="Network" value="Arc Testnet" />
-            <BetaStatusItem label="Audit" value="Not audited" />
-          </div>
-        </div>
-
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <AddressRow label="Pool address" address={pool.poolAddress} />
-          <AddressRow label="LP token address" address={lpTokenAddress} />
-          <AddressRow label={`${token0.symbol} token`} address={token0Address} />
-          <AddressRow label={`${token1.symbol} token`} address={token1Address} />
-        </div>
-
-        <div className="mt-4 grid grid-cols-2 gap-3 border-t border-coco-dark-border pt-4 sm:grid-cols-4">
-          <PoolMetric label="Type" value={pool.typeLabel} />
-          <PoolMetric label="Fee" value={isLoading ? '...' : feeLabel} mono />
-          <PoolMetric label="A" value={isLoading ? '...' : amplificationParameter.toString()} mono />
-          <PoolMetric label="Status" value={paused ? 'Paused' : 'Live read'} />
-        </div>
-
-        <div className="mt-4 grid grid-cols-1 gap-3 rounded-xl border border-coco-dark-border bg-coco-dark-bg/55 p-4 sm:grid-cols-2 lg:grid-cols-4">
-          <PoolMetric
-            label={`${token0.symbol} Reserve`}
-            value={isLoading ? '...' : `${formatTokenAmount(reserve0, token0.decimals)} ${token0.symbol}`}
-            mono
-          />
-          <PoolMetric
-            label={`${token1.symbol} Reserve`}
-            value={isLoading ? '...' : `${formatTokenAmount(reserve1, token1.decimals)} ${token1.symbol}`}
-            mono
-          />
-          <PoolMetric
-            label="Total LP supply"
-            value={isLoading ? '...' : `${formatTokenAmount(totalSupply, lpDecimals)} cSLP`}
-            mono
-          />
-          <PoolMetric
-            label="Your cSLP"
-            value={isLoading ? '...' : userLpBalance !== undefined ? `${formatTokenAmount(userLpBalance, lpDecimals)} cSLP` : 'Connect wallet to read'}
-            mono
-          />
-        </div>
-
-        <div className="mt-4 rounded-xl border border-coco-dark-border bg-coco-dark-bg/55 p-4">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.18em] text-coco-dark-muted">Sample quotes</p>
-              <p className="mt-1 text-sm font-medium text-coco-dark-text">Read-only getAmountOut checks</p>
-            </div>
-            <p className="font-mono text-xs text-coco-dark-muted">Input: {formatTokenAmount(quoteInput, 6)}</p>
-          </div>
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <PoolMetric
-              label="0.1 USDC -> EURC"
-              value={isLoading ? '...' : `${formatTokenAmount(quoteUsdcToEurc, token1.decimals)} ${token1.symbol}`}
-              mono
-            />
-            <PoolMetric
-              label="0.1 EURC -> USDC"
-              value={isLoading ? '...' : `${formatTokenAmount(quoteEurcToUsdc, token0.decimals)} ${token0.symbol}`}
-              mono
-            />
-          </div>
-        </div>
-
-        <div className="mt-3 rounded-lg border border-coco-amber-500/20 bg-coco-amber-500/10 p-3">
-          <p className="text-xs leading-relaxed text-coco-amber-500">
-            CocoStablePool V1 is live as an Arc Testnet LP Beta. You can add and remove testnet liquidity, but this pool is not used by the smart router yet.
-          </p>
-        </div>
-
-        <CocoStableAddLiquidityPanel
-          reserve0={reserve0}
-          reserve1={reserve1}
-          totalSupply={totalSupply}
-          lpDecimals={lpDecimals}
-          amplificationParameter={amplificationParameter}
-          paused={paused}
-          onRefreshPool={refetch}
-        />
-
-        <CocoStableRemoveLiquidityPanel
-          reserve0={reserve0}
-          reserve1={reserve1}
-          totalSupply={totalSupply}
-          userLpBalance={userLpBalance}
-          lpDecimals={lpDecimals}
-          paused={paused}
-          onRefreshPool={refetch}
-        />
-      </Card>
-    </section>
-  )
-}
-
-function ExternalStablePoolsPanel({
-  pool,
-  reserve0,
-  reserve1,
-  totalSupply,
-  userLpBalance,
-  isLoading,
-  hasReadError,
-}: ReturnType<typeof useXyloNetStablePool>) {
-  const [token0, token1] = pool.tokens
-  const hasReserves = reserve0 !== undefined && reserve1 !== undefined
-  const tvl = hasReserves
-    ? (Number(reserve0) / 1e6) + (Number(reserve1) / 1e6 * 1.086)
-    : 0
-
-  return (
-    <section className="pt-2">
-      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-[0.22em] text-coco-teal-400">External liquidity</p>
-          <h2 className="mt-1 text-xl font-semibold text-coco-dark-text">External Stable Pools</h2>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Badge>External</Badge>
-          <Badge>Read-only</Badge>
-          <Badge>StableSwap</Badge>
-        </div>
-      </div>
-
-      <Card className="p-5 border-coco-teal-400/20 bg-coco-dark-surface/80">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex -space-x-2">
-              <TokenIcon symbol={token0.symbol} color={token0.logoColor} size="md" />
-              <TokenIcon symbol={token1.symbol} color={token1.logoColor} size="md" />
-            </div>
-            <div className="min-w-0">
-              <h3 className="truncate font-semibold text-coco-dark-text">{pool.pairLabel}</h3>
-              <p className="text-xs text-coco-dark-muted">XyloNet StableSwap - external pool</p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2 sm:justify-end">
-            <a
-              href={pool.xylonetUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-coco-dark-border bg-coco-dark-bg/70 px-3 py-1.5 text-xs font-medium text-coco-dark-text transition-colors hover:border-coco-teal-400/40 hover:text-coco-teal-300"
-            >
-              View on XyloNet
-              <ExternalLink className="h-3 w-3" />
-            </a>
-            <a
-              href={pool.arcscanUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-coco-dark-border bg-coco-dark-bg/70 px-3 py-1.5 text-xs font-medium text-coco-dark-text transition-colors hover:border-coco-teal-400/40 hover:text-coco-teal-300"
-            >
-              Arcscan
-              <ExternalLink className="h-3 w-3" />
-            </a>
-          </div>
-        </div>
-
-        <div className="mt-4 grid grid-cols-2 gap-3 border-t border-coco-dark-border pt-4 sm:grid-cols-4">
-          <PoolMetric label="Source" value={pool.source} />
-          <PoolMetric label="Type" value={pool.type} />
-          <PoolMetric label="Fee" value={pool.feeLabel} />
-          <PoolMetric label="Status" value={hasReadError ? 'Read issue' : 'External pool'} />
-        </div>
-
-        <div className="mt-4 grid grid-cols-1 gap-3 rounded-xl border border-coco-dark-border bg-coco-dark-bg/55 p-4 sm:grid-cols-2 lg:grid-cols-4">
-          <PoolMetric label="TVL" value={isLoading ? '...' : hasReserves ? formatCompact(tvl) : 'Unknown'} mono />
-          <PoolMetric
-            label={`${token0.symbol} Reserve`}
-            value={isLoading ? '...' : reserve0 !== undefined ? formatTokenAmount(reserve0, token0.decimals) : 'Unknown'}
-            mono
-          />
-          <PoolMetric
-            label={`${token1.symbol} Reserve`}
-            value={isLoading ? '...' : reserve1 !== undefined ? formatTokenAmount(reserve1, token1.decimals) : 'Unknown'}
-            mono
-          />
-          <PoolMetric
-            label="LP Supply"
-            value={isLoading ? '...' : totalSupply !== undefined ? formatTokenAmount(totalSupply, 18) : 'Unknown'}
-            mono
-          />
-        </div>
-
-        <div className="mt-3 rounded-lg border border-coco-teal-400/15 bg-coco-teal-400/5 p-3">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs font-medium text-coco-dark-text">Your XyloNet LP balance</p>
-            <p className="font-mono text-xs text-coco-dark-text">
-              {isLoading ? '...' : userLpBalance !== undefined ? formatTokenAmount(userLpBalance, 18) : 'Connect wallet to read'}
-            </p>
-          </div>
-          <p className="mt-2 text-[11px] leading-relaxed text-coco-dark-muted">
-            This panel only reads XyloNet pool state. Liquidity management remains outside Coco DEX.
-          </p>
-        </div>
-      </Card>
-    </section>
-  )
-}
-
 function PoolMetric({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="min-w-0">
       <p className="text-xs text-coco-dark-muted">{label}</p>
       <p className={`mt-1 truncate text-sm font-medium text-coco-dark-text ${mono ? 'font-mono' : ''}`}>{value}</p>
-    </div>
-  )
-}
-
-function MyPositions({ isConnected, lpBalance, share, reserveUsdc, reserveEurc, hasLiquidity }: {
-  isConnected: boolean; lpBalance: bigint | undefined; share: number; reserveUsdc: bigint | undefined; reserveEurc: bigint | undefined; hasLiquidity: boolean
-}) {
-  if (!isConnected) {
-    return (
-      <Card className="p-12 text-center">
-        <Droplets className="h-12 w-12 text-coco-dark-muted mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-coco-dark-text">Connect your wallet</h3>
-        <p className="mt-2 text-sm text-coco-dark-muted">Connect your wallet to view your liquidity positions.</p>
-      </Card>
-    )
-  }
-
-  const hasPosition = lpBalance !== undefined && lpBalance > BigInt(0)
-
-  if (!hasPosition) {
-    return (
-      <Card className="p-12 text-center">
-        <Droplets className="h-12 w-12 text-coco-dark-muted mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-coco-dark-text">You do not have a position in this pool yet.</h3>
-        <p className="mt-2 text-sm text-coco-dark-muted">Add liquidity to the USDC/EURC pool to start earning trading fees.</p>
-        <Link
-          to="/pools/add"
-          className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-coco-green-500 text-white text-sm font-medium hover:bg-coco-green-600 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          Add Liquidity
-        </Link>
-      </Card>
-    )
-  }
-
-  // Calculate user's withdrawable amounts:
-  // userUSDC = reserveUSDC * userLP / totalSupply
-  // userEURC = reserveEURC * userLP / totalSupply
-  const withdrawableUsdc = hasLiquidity && reserveUsdc
-    ? Number(reserveUsdc) * share / 1e6
-    : 0
-  const withdrawableEurc = hasLiquidity && reserveEurc
-    ? Number(reserveEurc) * share / 1e6
-    : 0
-
-  // LP balance formatted (18 decimals for LP tokens)
-  const lpFormatted = lpBalance ? (Number(lpBalance) / 1e18).toFixed(6) : '0'
-
-  return (
-    <div className="space-y-4">
-      {/* Position Card */}
-      <Card className="p-5">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex -space-x-2">
-              <TokenIcon symbol="USDC" color="#2775CA" size="md" />
-              <TokenIcon symbol="EURC" color="#1434CB" size="md" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-coco-dark-text">USDC / EURC</h3>
-              <p className="text-xs text-coco-dark-muted">Your Position</p>
-            </div>
-          </div>
-          <div className="text-right">
-            <p className="text-sm font-medium text-coco-green-500">{formatPercentage(share * 100)}</p>
-            <p className="text-[10px] text-coco-dark-muted">Pool Share</p>
-          </div>
-        </div>
-
-        {/* Position Details */}
-        <div className="mt-4 space-y-3 pt-4 border-t border-coco-dark-border">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-coco-dark-muted">LP Tokens</span>
-            <span className="text-sm font-mono text-coco-dark-text">{lpFormatted}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-coco-dark-muted">Withdrawable USDC</span>
-            <span className="text-sm font-mono text-coco-dark-text">{withdrawableUsdc.toFixed(4)}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-coco-dark-muted">Withdrawable EURC</span>
-            <span className="text-sm font-mono text-coco-dark-text">{withdrawableEurc.toFixed(4)}</span>
-          </div>
-        </div>
-
-        {/* Fee Explanation */}
-        <div className="mt-4 rounded-lg bg-coco-dark-bg/75 border border-coco-dark-border p-3">
-          <p className="text-[11px] text-coco-dark-muted leading-relaxed">
-            Fees are included in your withdrawable liquidity. Coco DEX uses a V2-style AMM where 0.3% trading fees stay inside the pool and increase the value of your LP tokens. To collect fees, remove liquidity.
-          </p>
-        </div>
-
-        {/* Actions */}
-        <div className="mt-4 flex gap-2">
-          <Link
-            to="/pools/add"
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-coco-green-500/10 text-coco-green-500 text-sm font-medium hover:bg-coco-green-500/20 transition-colors"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Add More
-          </Link>
-          <Link
-            to="/pools/remove"
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-coco-red-500/10 text-coco-red-500 text-sm font-medium hover:bg-coco-red-500/20 transition-colors"
-          >
-            <Minus className="h-3.5 w-3.5" />
-            <span>Remove</span>
-          </Link>
-        </div>
-      </Card>
     </div>
   )
 }
