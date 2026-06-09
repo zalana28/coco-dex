@@ -8,6 +8,7 @@ import { buildSynthraRouteQuote, getSynthraV3QuoteRequest, isSynthraPairSupporte
 import { buildXyloNetRouteQuote, isXyloNetPairSupported, XYLONET_ROUTER_ABI } from '@/lib/router/xylonetAdapter'
 import { buildUnitFlowRouteQuote, getUnitFlowV25QuoteRequest, isUnitFlowPairSupported, UNITFLOW_V25_ROUTER_ABI } from '@/lib/router/unitflowAdapter'
 import type { RouteQuote } from '@/lib/router/types'
+import { isCocoStablePoolExecutableRoute } from '@/lib/router/cocoStablePoolGuard'
 
 type UseAggregatedQuotesParams = {
   tokenIn: Token
@@ -112,6 +113,7 @@ export function useAggregatedQuotes({
     : undefined
 
   return useMemo(() => {
+    const includeCocoStablePoolRoute = isCocoStablePoolExecutableRoute()
     const baseQuotes = [
       getCocoRouteQuote({ tokenIn, tokenOut, amountIn, reserveUsdc, reserveEurc, slippageBps }),
       buildXyloNetRouteQuote({
@@ -145,7 +147,10 @@ export function useAggregatedQuotes({
         isLoading: isSynthraLoading,
         error: synthraError,
       }),
-    ].filter((quote): quote is RouteQuote => Boolean(quote))
+    ].filter((quote): quote is RouteQuote => {
+      if (!quote) return false
+      return includeCocoStablePoolRoute || quote.id !== 'coco-stable-usdc-eurc-v1'
+    })
 
     const selectableQuotes = baseQuotes.filter((quote) => quote.availabilityStatus === 'available' && quote.amountOut > BigInt(0))
 
