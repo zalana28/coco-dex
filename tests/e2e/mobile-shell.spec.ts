@@ -1,6 +1,12 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 const routes = ['/', '/swap', '/pools', '/analytics', '/docs']
+
+async function openStableLiquidityModal(page: Page) {
+  await page.goto('/pools')
+  await page.getByRole('button', { name: 'New Position' }).click()
+  await page.getByRole('button', { name: /Native Stable Pool Beta/i }).click()
+}
 
 test.describe('mobile shell', () => {
   for (const route of routes) {
@@ -50,6 +56,7 @@ test.describe('mobile shell', () => {
 
     await page.getByRole('button', { name: 'New Position' }).click()
     await expect(page.getByRole('dialog')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Close liquidity modal', exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: /Classic Coco V2 Pool/i })).toBeVisible()
     await expect(page.getByRole('button', { name: /Native Stable Pool Beta/i })).toBeVisible()
 
@@ -57,6 +64,39 @@ test.describe('mobile shell', () => {
     await expect(page.getByText('Coco Native Stable Pool V1 is Arc Testnet LP Beta. Use tiny test amounts only. Unaudited. Not Routed. Quote-only for swaps.')).toBeVisible()
     await expect(page.getByText('Slippage tolerance').first()).toBeVisible()
     await expect(page.getByText('Min cSLP out')).toBeVisible()
+  })
+
+  test('liquidity modal closes with X, Escape, and backdrop', async ({ page }) => {
+    await openStableLiquidityModal(page)
+
+    const dialog = page.getByRole('dialog', { name: /Add Liquidity/i })
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole('button', { name: 'Close liquidity modal', exact: true })).toBeVisible()
+
+    await dialog.getByRole('button', { name: 'Close liquidity modal', exact: true }).click()
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+
+    await openStableLiquidityModal(page)
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+
+    await openStableLiquidityModal(page)
+    await page.mouse.click(8, 8)
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+  })
+
+  test('liquidity modal keeps close button visible after internal scroll', async ({ page }) => {
+    await openStableLiquidityModal(page)
+
+    const dialog = page.getByRole('dialog', { name: /Add Liquidity/i })
+    await expect(dialog).toBeVisible()
+
+    await page.getByTestId('liquidity-modal-scroll').evaluate((element) => {
+      element.scrollTop = element.scrollHeight
+    })
+
+    await expect(dialog.getByRole('button', { name: 'Close liquidity modal', exact: true })).toBeVisible()
+    await expect(page.getByText('LP Beta').first()).toBeVisible()
   })
 
   test('shows positions empty state and opens details drawer from pool card', async ({ page }) => {
@@ -67,8 +107,13 @@ test.describe('mobile shell', () => {
 
     await page.getByRole('button', { name: 'Pools' }).click()
     await page.getByRole('button', { name: 'Details' }).nth(1).click()
-    await expect(page.getByRole('dialog', { name: /USDC \/ EURC Stable Pool Beta/i })).toBeVisible()
+    const drawer = page.getByRole('dialog', { name: /USDC \/ EURC Stable Pool Beta/i })
+    await expect(drawer).toBeVisible()
+    await expect(drawer.getByRole('button', { name: 'Close pool details' })).toBeVisible()
     await expect(page.getByText('Stable Pool Observability')).toBeVisible()
     await expect(page.getByText('External liquidity sources')).toBeVisible()
+
+    await drawer.getByRole('button', { name: 'Close pool details' }).click()
+    await expect(page.getByRole('dialog')).toHaveCount(0)
   })
 })

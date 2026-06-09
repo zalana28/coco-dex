@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount, useChainId, usePublicClient, useWriteContract } from 'wagmi'
 import { AlertTriangle, MinusCircle, RefreshCw } from 'lucide-react'
 import { TransactionProgressPanel } from '@/components/transactions/TransactionProgressPanel'
@@ -198,6 +198,7 @@ export function CocoStableRemoveLiquidityPanel({
   lpDecimals,
   paused,
   onRefreshPool,
+  onPendingChange,
 }: {
   reserve0: bigint
   reserve1: bigint
@@ -206,6 +207,7 @@ export function CocoStableRemoveLiquidityPanel({
   lpDecimals: number
   paused: boolean
   onRefreshPool: () => void
+  onPendingChange?: (isPending: boolean) => void
 }) {
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
@@ -233,8 +235,13 @@ export function CocoStableRemoveLiquidityPanel({
   const activeTxHash = activeStep?.txHash
   const isStepConfirming = activeStep?.status === 'submitted' || activeStep?.status === 'pending_onchain'
   const isStepWaitingForWallet = activeStep?.status === 'waiting_wallet_confirmation'
+  const isTransactionPending = isWalletPending || isStepConfirming || isStepWaitingForWallet
   const activeStepTimedOut = activeStep?.type ? timedOutSteps[activeStep.type] === true : false
   const showRecovery = !!activeTxHash && isStepConfirming
+
+  useEffect(() => {
+    onPendingChange?.(isTransactionPending)
+  }, [isTransactionPending, onPendingChange])
   const expectedOut = useMemo(() => estimateRemoveOut({
     lpAmount: lpAmountRaw,
     reserve0,
@@ -604,13 +611,18 @@ export function CocoStableRemoveLiquidityPanel({
         <SlippageSelector valueBps={slippageBps} onChange={setSlippageBps} />
       </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-3 rounded-xl border border-coco-dark-border bg-coco-dark-surface/55 p-3 sm:grid-cols-2 lg:grid-cols-4">
-        <RemoveMetric label="Current USDC reserve" value={`${formatTokenAmount(reserve0, token0.decimals)} ${token0.symbol}`} />
-        <RemoveMetric label="Current EURC reserve" value={`${formatTokenAmount(reserve1, token1.decimals)} ${token1.symbol}`} />
-        <RemoveMetric label="LP holder" value={address ? truncateAddress(address) : 'Connect wallet'} mono />
-        <RemoveMetric label="Expected output" value={expectedOutputLabel} mono />
-        <RemoveMetric label="Minimum output" value={minimumOutputLabel} mono />
-      </div>
+      <details className="mt-4 rounded-xl border border-coco-dark-border bg-coco-dark-surface/55 p-3">
+        <summary className="cursor-pointer text-sm font-semibold text-coco-dark-text focus:outline-none focus:ring-2 focus:ring-coco-teal-400/45">
+          Details
+        </summary>
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <RemoveMetric label="Current USDC reserve" value={`${formatTokenAmount(reserve0, token0.decimals)} ${token0.symbol}`} />
+          <RemoveMetric label="Current EURC reserve" value={`${formatTokenAmount(reserve1, token1.decimals)} ${token1.symbol}`} />
+          <RemoveMetric label="LP holder" value={address ? truncateAddress(address) : 'Connect wallet'} mono />
+          <RemoveMetric label="Expected output" value={expectedOutputLabel} mono />
+          <RemoveMetric label="Minimum output" value={minimumOutputLabel} mono />
+        </div>
+      </details>
 
       <div className="mt-3 rounded-lg border border-coco-amber-500/20 bg-coco-amber-500/10 p-3">
         <div className="flex items-start gap-2">
