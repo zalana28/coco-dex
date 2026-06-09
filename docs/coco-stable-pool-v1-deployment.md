@@ -2,13 +2,13 @@
 
 ## Status
 
-CocoStablePool V1 has a prototype deployment on Arc Testnet for verification. Initial tiny liquidity has been added after deployment, so the pool is no longer empty. The prototype remains unaudited, testnet-only, and not connected to the frontend, router, analytics, or indexer.
+CocoStablePool V1 has a prototype deployment on Arc Testnet for verification. Initial tiny liquidity has been added after deployment, so the pool is no longer empty. The prototype remains unaudited, Arc Testnet only, not routed, and not indexed by analytics.
 
-Initial liquidity tooling exists in `contracts/script/AddInitialLiquidityCocoStablePool.s.sol`, and the first manual seed transaction is documented in `docs/coco-stable-pool-v1-initial-liquidity.md`. Frontend, router, analytics, and indexer integration remain out of scope.
+Initial liquidity tooling exists in `contracts/script/AddInitialLiquidityCocoStablePool.s.sol`, and the first manual seed transaction is documented in `docs/coco-stable-pool-v1-initial-liquidity.md`. The Pools page exposes the LP Beta add/remove surface for tiny Arc Testnet verification amounts. Router, analytics, and indexer integration remain out of scope for V1.
 
 ## Arc Testnet Deployment Record
 
-CocoStablePool V1 was deployed on Arc Testnet for prototype verification. It is not audited, has no liquidity yet, is not connected to the frontend or router, is not connected to analytics or the indexer, and must be treated as testnet-only.
+CocoStablePool V1 was deployed on Arc Testnet for prototype verification. It is not audited, has only tiny verification liquidity, is visible through the Pools page LP Beta flow, is not routed, is not connected to analytics or the indexer, and must be treated as Arc Testnet only.
 
 ### Deployment
 
@@ -90,7 +90,7 @@ forge script script/DeployCocoStablePool.s.sol:DeployCocoStablePool \
   --broadcast
 ```
 
-Do not broadcast from a wallet containing mainnet funds. This deployment path is Arc Testnet only.
+Broadcast only from an Arc Testnet deployment wallet. This deployment path is Arc Testnet only.
 
 ## Read-Only Inspection
 
@@ -120,8 +120,8 @@ The inspector reads token addresses, LP token, balances, fee, amplification para
 
 - Testnet only.
 - Unaudited prototype.
-- Do not use mainnet funds.
+- Use Arc Testnet funds only.
 - Do not commit private keys.
 - Do not commit `.env.local`.
 - Do not add frontend ABI/address exports in the deployment PR.
-- Do not market as production-ready or mainnet-ready.
+- Do not market as production-ready.

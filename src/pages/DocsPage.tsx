@@ -33,6 +33,7 @@ const sectionLinks = [
   { id: 'approvals', label: 'Approvals' },
   { id: 'swap-flow', label: 'Swap Flow' },
   { id: 'liquidity', label: 'Liquidity' },
+  { id: 'stable-pool', label: 'Stable Pool' },
   { id: 'analytics', label: 'Analytics' },
   { id: 'walletconnect', label: 'Mobile' },
   { id: 'troubleshooting', label: 'Troubleshooting' },
@@ -56,7 +57,7 @@ const overviewCards = [
   },
   {
     title: 'Testnet only',
-    description: 'Coco DEX currently targets Arc Testnet. It is not a mainnet application.',
+    description: 'Coco DEX currently targets Arc Testnet only.',
   },
 ]
 
@@ -428,12 +429,29 @@ export function DocsPage() {
               </div>
             </DocSection>
 
+            <DocSection id="stable-pool" eyebrow="LP Beta" title="Coco Native Stable Pool" icon={<ShieldAlert />}>
+              <div className="grid gap-4 md:grid-cols-2">
+                <GlassCard className="border-coco-amber-500/20 bg-coco-amber-500/10">
+                  <h3 className="text-lg font-semibold text-coco-dark-text">Arc Testnet LP Beta</h3>
+                  <p className="mt-3 text-sm leading-6 text-coco-dark-muted">
+                    Coco Native Stable Pool V1 supports tiny test add/remove liquidity flows on the Pools page. It is unaudited, not routed, and not indexed in analytics yet.
+                  </p>
+                </GlassCard>
+                <GlassCard>
+                  <h3 className="text-lg font-semibold text-coco-dark-text">Readiness docs</h3>
+                  <p className="mt-3 text-sm leading-6 text-coco-dark-muted">
+                    See `docs/stable-pool-readiness.md`, `docs/stable-pool-v2-plan.md`, and `docs/release-checklist.md` in the repository for release notes and beta exit criteria.
+                  </p>
+                </GlassCard>
+              </div>
+            </DocSection>
+
             <DocSection id="analytics" eyebrow="Analytics" title="Indexed protocol activity" icon={<BarChart3 />}>
               <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
                 <GlassCard>
                   <h3 className="text-lg font-semibold text-coco-dark-text">What analytics can show</h3>
                   <p className="mt-3 text-sm leading-6 text-coco-dark-muted">
-                    Coco DEX has indexed analytics for TVL, volume, trades, activity, and route or pool analytics where available in the current app.
+                    Coco DEX has indexed analytics for the classic Coco V2 pair, including TVL, volume, trades, and activity where available in the current app. Coco Native Stable Pool V1 is not indexed yet.
                   </p>
                 </GlassCard>
                 <GlassCard>
@@ -472,7 +490,7 @@ export function DocsPage() {
 
             <DocSection id="security" eyebrow="Security Notes" title="Testnet, approvals, and secrets" icon={<ShieldAlert />}>
               <div className="grid gap-4 md:grid-cols-2">
-                <Feature title="Testnet status" detail="Coco DEX is testnet software. Do not treat it as mainnet deployment guidance." />
+                <Feature title="Testnet status" detail="Coco DEX is Arc Testnet software. Use Arc Testnet tokens and Arc Testnet transaction links only." />
                 <Feature title="Verify before signing" detail="Always verify the selected route and minimum received before approving or swapping." />
                 <Feature title="External approvals" detail="External routes require separate approvals or route-specific wallet permissions." />
                 <Feature title="Key hygiene" detail="Never share seed phrases or private keys. API keys and secrets must never be committed." />
