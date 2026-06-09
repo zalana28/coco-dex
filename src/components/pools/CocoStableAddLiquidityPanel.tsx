@@ -162,6 +162,7 @@ export function CocoStableAddLiquidityPanel({
   amplificationParameter,
   paused,
   onRefreshPool,
+  onPendingChange,
 }: {
   reserve0: bigint
   reserve1: bigint
@@ -170,6 +171,7 @@ export function CocoStableAddLiquidityPanel({
   amplificationParameter: bigint
   paused: boolean
   onRefreshPool: () => void
+  onPendingChange?: (isPending: boolean) => void
 }) {
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
@@ -241,6 +243,11 @@ export function CocoStableAddLiquidityPanel({
   const isStepConfirming = activeStep?.status === 'submitted' || activeStep?.status === 'pending_onchain'
   const isStepWaitingForWallet = activeStep?.status === 'waiting_wallet_confirmation'
   const activeTxHash = activeStep?.txHash
+  const isTransactionPending = isWalletPending || isStepConfirming || isStepWaitingForWallet
+
+  useEffect(() => {
+    onPendingChange?.(isTransactionPending)
+  }, [isTransactionPending, onPendingChange])
   const estimatedLpOut = useMemo(() => estimateLpOut({
     amount0: amount0Raw,
     amount1: amount1Raw,
@@ -673,16 +680,21 @@ export function CocoStableAddLiquidityPanel({
         <SlippageSelector valueBps={slippageBps} onChange={setSlippageBps} />
       </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-3 rounded-xl border border-coco-dark-border bg-coco-dark-surface/55 p-3 sm:grid-cols-2 lg:grid-cols-4">
-        <InfoMetric label="Current USDC reserve" value={`${formatTokenAmount(reserve0, 6)} USDC`} />
-        <InfoMetric label="Current EURC reserve" value={`${formatTokenAmount(reserve1, 6)} EURC`} />
-        <InfoMetric label="LP recipient" value={address ? truncateAddress(address) : 'Connect wallet'} mono />
-        <InfoMetric
-          label="Estimated cSLP out"
-          value={hasEstimatedLpOut ? `${formatTokenAmount(estimatedLpOut, lpDecimals)} cSLP` : 'Unavailable'}
-          mono
-        />
-      </div>
+      <details className="mt-4 rounded-xl border border-coco-dark-border bg-coco-dark-surface/55 p-3">
+        <summary className="cursor-pointer text-sm font-semibold text-coco-dark-text focus:outline-none focus:ring-2 focus:ring-coco-teal-400/45">
+          Details
+        </summary>
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <InfoMetric label="Current USDC reserve" value={`${formatTokenAmount(reserve0, 6)} USDC`} />
+          <InfoMetric label="Current EURC reserve" value={`${formatTokenAmount(reserve1, 6)} EURC`} />
+          <InfoMetric label="LP recipient" value={address ? truncateAddress(address) : 'Connect wallet'} mono />
+          <InfoMetric
+            label="Estimated cSLP out"
+            value={hasEstimatedLpOut ? `${formatTokenAmount(estimatedLpOut, lpDecimals)} cSLP` : 'Unavailable'}
+            mono
+          />
+        </div>
+      </details>
 
       <div className="mt-3 rounded-lg border border-coco-amber-500/20 bg-coco-amber-500/10 p-3">
         <div className="flex items-start gap-2">
