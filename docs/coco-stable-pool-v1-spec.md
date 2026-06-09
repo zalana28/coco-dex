@@ -4,11 +4,11 @@
 
 CocoStablePool V1 is a planned native stablecoin AMM for Coco DEX on Arc Testnet. The initial target pair is USDC/EURC.
 
-The goal is to offer lower-slippage stablecoin swaps than a basic constant-product pool when assets are trading close to their expected range. V1 is testnet-only at first. It is not audited and must not be marketed as production-ready or mainnet-ready.
+The goal is to offer lower-slippage stablecoin swaps than a basic constant-product pool when assets are trading close to their expected range. V1 is Arc Testnet only. It is not audited and must not be marketed as production-ready.
 
 ## LP Beta Status
 
-CocoStablePool V1 is live as an Arc Testnet LP Beta. Initial tiny liquidity has been added, basic quote checks passed for both USDC -> EURC and EURC -> USDC, and the Pools page now supports tested Add Liquidity and Remove Liquidity UI flows. The pool is not used by the router, is not indexed by analytics, remains unaudited, is not production-ready, and is testnet-only. The implementation uses simplified stable-swap-inspired math and still needs deeper review, fuzzing, invariant testing, and integration planning before any broader use.
+CocoStablePool V1 is live as an Arc Testnet LP Beta. Initial tiny liquidity has been added, basic quote checks passed for both USDC -> EURC and EURC -> USDC, and the Pools page supports tested Add Liquidity and Remove Liquidity UI flows. The pool is not used by the router, is not indexed by analytics, remains unaudited, is not production-ready, and is Arc Testnet only. The implementation uses simplified stable-swap-inspired math and still needs deeper review, fuzzing, invariant testing, and integration planning before any broader use.
 
 ## Current On-Chain Status
 
@@ -20,8 +20,8 @@ CocoStablePool V1 is live as an Arc Testnet LP Beta. Initial tiny liquidity has 
 - Testnet-only Add Liquidity and Remove Liquidity UI flows have been added and tested for the Pools page beta flow.
 - Add liquidity uses separate exact USDC and EURC approvals before calling `addLiquidity`.
 - Remove liquidity burns cSLP through `removeLiquidity` and does not require LP approval.
-- Remove liquidity auto-fills minimum outputs from expected proportional output with a default 0.5% slippage buffer; users can override those values manually.
-- The cSLP decimal and min-output Remove Liquidity UX has been fixed.
+- Remove liquidity derives minimum outputs from expected proportional output with the selected slippage tolerance.
+- The frontend reads cSLP decimals dynamically from the LP token and falls back to 18 decimals.
 - Transaction progress and RPC rate-limit handling have been added for the Add Liquidity and Remove Liquidity flows.
 - The pool is marked LP Beta on Arc Testnet.
 - Quote-only router readiness diagnostics are available through `npm run debug:coco-stable-quote`.
@@ -348,7 +348,7 @@ Future phases:
 - Verify contract on Arcscan if possible.
 - Publish addresses in docs only after deployment.
 - Update `.env.example` only when integration starts.
-- Do not deploy mainnet.
+- Do not deploy outside the reviewed Arc Testnet plan.
 - Do not market as audited.
 
 ## Risk Disclosure

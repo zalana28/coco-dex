@@ -10,13 +10,15 @@ Coco DEX is a smart-routing DEX interface for Arc Testnet stablecoin swaps. It c
 - Liquidity: users can add and remove liquidity in Coco pools.
 - Analytics: indexed protocol data is exposed through the analytics page and serverless API routes.
 
-## Planned native stable pool
+## Coco Native Stable Pool LP Beta
 
-CocoStablePool V1 is planned as a future native Coco stable pool for Arc Testnet. It is not live yet, and no Coco stable pool contract is currently implemented by this specification. The External Stable Pools panel is read-only and does not mean Coco owns or controls external pools.
+CocoStablePool V1 is live on Arc Testnet as an LP Beta. The Pools page shows the pool and supports tiny test add/remove liquidity flows. It remains unaudited, not routed, not indexed in analytics yet, and not production-ready.
 
-## Not mainnet
+Read the current readiness status in `stable-pool-readiness.md` and the V2 design plan in `stable-pool-v2-plan.md`.
 
-The current app is testnet software. Documentation, UI labels, and developer setup should use careful Arc Testnet wording unless a future release explicitly adds mainnet support.
+## Arc Testnet only
+
+The current app is Arc Testnet software. Documentation, UI labels, and developer setup should use careful Arc Testnet wording.
 
 ## User flow
 
@@ -49,7 +51,10 @@ Approvals are route-specific. Coco, XyloNet, UnitFlow, and Synthra can require d
 - `routing.md`: route behavior and route-specific caveats.
 - `approvals.md`: DeFi approval model and Coco DEX route spenders.
 - `analytics.md`: indexed analytics behavior and lag expectations.
+- `stable-pool-readiness.md`: Coco Native Stable Pool V1 beta status and release-readiness notes.
+- `stable-pool-v2-plan.md`: future rate-aware V2 plan.
+- `release-checklist.md`: Arc Testnet MVP release checks.
 - `troubleshooting.md`: common wallet, route, and transaction failures.
 - `circle-future-integrations.md`: Circle ideas documented as future integrations only.
-- `coco-stable-pool-v1-spec.md`: planned native Coco stable pool specification.
+- `coco-stable-pool-v1-spec.md`: Coco Native Stable Pool V1 specification and current beta notes.
 - `developer-setup.md`: local setup, env vars, and verification commands.

@@ -1,6 +1,6 @@
 # Coco DEX
 
-A lightweight Arc Testnet AMM for swapping USDC/EURC, providing liquidity, and tracking real indexed analytics.
+Coco DEX is an Arc Testnet DEX MVP for USDC/EURC swaps, route comparison, liquidity workflows, and indexed analytics for the classic Coco V2 pair.
 
 - **Live demo:** https://coco-dex.vercel.app
 - **Docs:** https://coco-dex.vercel.app/docs
@@ -8,20 +8,31 @@ A lightweight Arc Testnet AMM for swapping USDC/EURC, providing liquidity, and t
 
 ---
 
-## Features
+## Public Arc Testnet MVP Features
 
-- Swap USDC <-> EURC with real-time quotes
-- Add liquidity to the USDC/EURC pool
-- Remove liquidity with withdrawable LP amount display
-- LP position tracking with pool share percentage
+- Swap USDC <-> EURC with real-time Arc Testnet quotes
+- Compare Coco, XyloNet, UnitFlow, and Synthra routes before execution
+- Add and remove liquidity for the classic Coco V2 USDC/EURC pool
+- Track LP positions and pool share for connected wallets
 - V2-style LP fee explanation (0.3% per trade)
 - Arc Testnet network guard (blocks transactions on wrong chain)
 - Transaction progress panel with tx hashes and explorer links
-- Real analytics powered by Supabase indexer
+- Analytics powered by the Supabase indexer for the classic Coco V2 pair
 - External cron-based analytics sync (every 15 minutes)
 - Max approval mode for streamlined repeat swaps
 - Public `/docs` page and markdown developer docs
-- CocoStablePool V1 specification in `docs/coco-stable-pool-v1-spec.md`
+
+## Coco Native Stable Pool LP Beta
+
+Coco Native Stable Pool V1 is visible on the Pools page as an Arc Testnet LP Beta. It supports tiny test add/remove liquidity flows for verification, but it remains:
+
+- Unaudited.
+- Not routed by the smart router.
+- Not indexed in analytics yet.
+- Not production-ready.
+- Arc Testnet only.
+
+Read the current status in `docs/stable-pool-readiness.md` and the future V2 plan in `docs/stable-pool-v2-plan.md`.
 
 ## Tech Stack
 
@@ -49,9 +60,9 @@ Frontend (React/Vite)
                               (External cron every 15 min)
 ```
 
-- **Swap/Liquidity:** Frontend connects wallet via Wagmi, sends transactions to Arc Testnet contracts via Viem.
-- **Analytics:** Vercel serverless functions read indexed data from Supabase. An external cron service calls `/api/cron/indexer` to index new blockchain events.
-- **Indexer:** Reads Pair contract logs (Swap, Mint, Burn, Sync) using `viem.getLogs()`, stores them in Supabase with block timestamps.
+- **Swap/Liquidity:** Frontend connects wallet via Wagmi and sends transactions to Arc Testnet contracts via Viem.
+- **Analytics:** Vercel serverless functions read indexed classic Coco V2 pair data from Supabase. An external cron service calls `/api/cron/indexer` to index new blockchain events.
+- **Indexer:** Reads classic Pair contract logs (Swap, Mint, Burn, Sync) using `viem.getLogs()`, stores them in Supabase with block timestamps, and does not index Coco Native Stable Pool V1 yet.
 
 ## Environment Variables
 
@@ -150,7 +161,7 @@ curl https://coco-dex.vercel.app/api/circle/health
 - [ ] More token pairs
 - [ ] Better APR / fee yield estimates
 - [ ] Health / status dashboard
-- [ ] Mainnet readiness checklist
+- [ ] Arc Testnet release checklist
 - [ ] Mobile responsive improvements
 
 ## License

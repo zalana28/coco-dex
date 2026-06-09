@@ -216,7 +216,7 @@ Do not connect the pool to frontend, router, analytics, or indexer before inspec
 
 - Testnet only.
 - Unaudited prototype.
-- Do not use mainnet funds.
+- Use Arc Testnet funds only.
 - Do not commit private keys or `.env.local`.
 - Do not commit broadcast artifacts as deployment proof.
 - Do not connect frontend/router before inspection.

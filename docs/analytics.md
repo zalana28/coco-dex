@@ -1,6 +1,8 @@
 # Analytics
 
-Coco DEX includes indexed analytics for protocol activity. Analytics are user-facing but depend on backend indexing, database availability, and cron timing.
+Coco DEX includes indexed analytics for classic Coco V2 pair activity on Arc Testnet. Analytics are user-facing but depend on backend indexing, database availability, and cron timing.
+
+Coco Native Stable Pool V1 is not indexed in analytics yet. Stable pool TVL, add/remove activity, and swap events must stay out of public analytics until a separate schema/source plan is implemented.
 
 ## What analytics can show
 
@@ -14,7 +16,7 @@ Depending on the currently indexed data, the app may show:
 - pool analytics;
 - token analytics;
 - recent activity;
-- route or pool-related analytics where available;
+- route or classic Coco V2 pool-related analytics where available;
 - indexer health and lag.
 
 ## Architecture
