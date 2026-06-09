@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '../_lib/supabaseAdmin.js'
 import { getArcClient, PAIR_ADDRESS, USDC_IS_TOKEN0 } from '../_lib/arcClient.js'
 import { fetchPairLogs, computeSwapVolumeUsd, computeTvlUsd } from '../_lib/dexEvents.js'
 import type { DexEventRow } from '../_lib/dexEvents.js'
+import { runStablePoolIndexer } from '../_lib/stablePoolIndexer.js'
 
 const BATCH_SIZE = 2000n
 const FEE_RATE = 0.003 // 0.3%
@@ -70,6 +71,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const toBlockMax = currentBlock
     let totalInserted = 0
     let timestampedBlocks = 0
+    let stablePoolRun: Awaited<ReturnType<typeof runStablePoolIndexer>> | { status: 'failed'; error: string } | null = null
     let latestReserve0: bigint | null = null
     let latestReserve1: bigint | null = null
 
@@ -240,6 +242,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .update({ last_indexed_block: Number(toBlockMax), updated_at: new Date().toISOString() })
       .eq('id', 'arc_testnet')
 
+    try {
+      stablePoolRun = await runStablePoolIndexer({ supabase, client })
+    } catch (stablePoolError) {
+      console.error('Stable pool indexer error:', stablePoolError)
+      stablePoolRun = {
+        status: 'failed',
+        error: stablePoolError instanceof Error ? stablePoolError.message : String(stablePoolError),
+      }
+    }
+
     return res.status(200).json({
       message: 'Indexer run complete',
       fromBlock: Number(effectiveLastBlock + 1n),
@@ -247,6 +259,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       insertedEvents: totalInserted,
       updatedEvents: updatedTimestamps,
       timestampedBlocks,
+      stablePool: stablePoolRun,
       latestIndexedBlock: Number(toBlockMax),
       lagBlocks: 0,
       durationMs: Date.now() - startTime,

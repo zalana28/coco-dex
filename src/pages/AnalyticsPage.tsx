@@ -57,6 +57,24 @@ interface HealthData {
   timestamp: string
 }
 
+interface StablePoolSummary {
+  status?: 'not_configured' | string
+  poolAddress?: string
+  routed?: boolean
+  latestSnapshot?: {
+    block_timestamp?: string | null
+    reserve0_raw?: string
+    reserve1_raw?: string
+    lp_total_supply_raw?: string
+    lp_decimals?: number
+  } | null
+  eventCount?: number
+  latestRun?: {
+    status?: string
+    snapshots_written?: number
+  } | null
+}
+
 function useFetch<T>(url: string) {
   const [state, setState] = useState<{ data: T | null; loading: boolean; error: string | null }>({ data: null, loading: true, error: null })
   const [trigger, setTrigger] = useState(0)
@@ -84,6 +102,7 @@ export function AnalyticsPage() {
   const { data: activity, loading: activityLoading, refetch: refetchActivity } = useFetch<ActivityEvent[]>('/api/analytics/activity?limit=20')
   const { data: tvlChart, refetch: refetchChart } = useFetch<TvlPoint[]>('/api/analytics/tvl-chart?range=7d')
   const { data: health } = useFetch<HealthData>('/api/health')
+  const { data: stablePoolSummary, refetch: refetchStablePool } = useFetch<StablePoolSummary>('/api/analytics/stable-pool/summary')
 
   const [refreshing, setRefreshing] = useState(false)
 
@@ -94,8 +113,9 @@ export function AnalyticsPage() {
     refetchTokens()
     refetchActivity()
     refetchChart()
+    refetchStablePool()
     setTimeout(() => setRefreshing(false), 1000)
-  }, [refetchSummary, refetchPools, refetchTokens, refetchActivity, refetchChart])
+  }, [refetchSummary, refetchPools, refetchTokens, refetchActivity, refetchChart, refetchStablePool])
 
   const isEmpty = !summaryLoading && summary && summary.totalTrades === 0
 
@@ -177,6 +197,36 @@ export function AnalyticsPage() {
         ) : (
           <div className="h-56 rounded-xl bg-coco-dark-bg/75 border border-coco-dark-border flex items-center justify-center">
             <p className="text-sm text-coco-dark-muted">{isEmpty ? 'No data yet' : chartData.length === 1 ? 'Need more data points for chart' : 'Loading chart...'}</p>
+          </div>
+        )}
+      </Card>
+
+      <Card className="p-5 mb-8 border-coco-amber-500/20 bg-coco-dark-surface/80">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.18em] text-coco-amber-500">Separate beta analytics</p>
+            <h2 className="mt-1 text-lg font-semibold text-coco-dark-text">Coco Native Stable Pool</h2>
+            <p className="mt-2 text-xs leading-relaxed text-coco-dark-muted">
+              LP Beta. Unaudited. Not routed. Stable pool telemetry is separate and not included in classic Coco V2 TVL.
+            </p>
+          </div>
+          <span className="w-fit rounded-full bg-coco-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-coco-amber-500">
+            {stablePoolSummary?.status === 'not_configured' ? 'Not configured' : stablePoolSummary?.latestRun?.status ?? 'Unknown'}
+          </span>
+        </div>
+        {stablePoolSummary?.status === 'not_configured' ? (
+          <p className="mt-4 rounded-lg border border-coco-amber-500/20 bg-coco-amber-500/10 p-3 text-xs text-coco-amber-500">
+            Stable pool analytics are not configured yet.
+          </p>
+        ) : (
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <MetricCard icon={<Activity />} label="Stable Events" value={(stablePoolSummary?.eventCount ?? 0).toLocaleString()} />
+            <MetricCard icon={<BarChart3 />} label="Snapshots" value={(stablePoolSummary?.latestRun?.snapshots_written ?? 0).toLocaleString()} />
+            <MetricCard
+              icon={<DollarSign />}
+              label="LP Supply Raw"
+              value={stablePoolSummary?.latestSnapshot?.lp_total_supply_raw ?? 'Unavailable'}
+            />
           </div>
         )}
       </Card>

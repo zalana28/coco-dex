@@ -42,5 +42,7 @@ test.describe('mobile shell', () => {
     await expect(page.getByRole('button', { name: '50%' })).toBeVisible()
     await expect(page.getByRole('button', { name: '75%' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Max' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Stable Pool Observability' })).toBeVisible()
+    await expect(page.getByText('Stable pool analytics are not configured yet.')).toBeVisible()
   })
 })
