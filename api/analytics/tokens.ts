@@ -1,8 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getSupabaseAdmin } from '../_lib/supabaseAdmin.js'
+import { getNotConfiguredPayload, getSupabaseAdmin, isSupabaseConfigured } from '../_lib/supabaseAdmin.js'
 import { getTokenData } from '../_lib/analyticsQueries.js'
 
 export default async function handler(_req: VercelRequest, res: VercelResponse) {
+  if (!isSupabaseConfigured()) {
+    return res.status(200).json(getNotConfiguredPayload())
+  }
+
   try {
     const supabase = getSupabaseAdmin()
     const tokens = await getTokenData(supabase)
