@@ -1,0 +1,6 @@
+# Exclude test files from Vercel deployment.
+# Vercel counts every .ts file under api/ as a Serverless Function, and test
+# files would push us over the Hobby plan's 12-function limit. CI still runs
+# these via vitest — they're only ignored for the Vercel build.
+**/*.test.ts
+**/*.spec.ts
