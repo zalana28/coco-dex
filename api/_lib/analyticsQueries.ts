@@ -29,31 +29,16 @@ export async function getSummary(supabase: SupabaseClient) {
   const volume24h = recent?.reduce((sum, e) => sum + (e.volume_usd || 0), 0) ?? 0
   const fees24h = recent?.reduce((sum, e) => sum + (e.fee_usd || 0), 0) ?? 0
 
-  // fix(4): use server-side aggregation instead of fetching all rows
-  const { data: totalsData } = await supabase
-    .rpc('get_swap_totals')
-    .single()
-    .catch(() => ({ data: null }))
+  // fix(4): cap total swaps at 1000 rows to prevent unbounded table scans
+  const { data: totals } = await supabase
+    .from('dex_events')
+    .select('volume_usd, fee_usd')
+    .eq('event_type', 'swap')
+    .limit(1000)
 
-  // fallback: if RPC not available, cap at 1000 rows
-  let totalVolume: number
-  let totalFees: number
-  let totalTrades: number
-
-  if (totalsData) {
-    totalVolume = totalsData.total_volume ?? 0
-    totalFees = totalsData.total_fees ?? 0
-    totalTrades = totalsData.total_trades ?? 0
-  } else {
-    const { data: totals } = await supabase
-      .from('dex_events')
-      .select('volume_usd, fee_usd')
-      .eq('event_type', 'swap')
-      .limit(1000)
-    totalVolume = totals?.reduce((sum, e) => sum + (e.volume_usd || 0), 0) ?? 0
-    totalFees = totals?.reduce((sum, e) => sum + (e.fee_usd || 0), 0) ?? 0
-    totalTrades = totals?.length ?? 0
-  }
+  const totalVolume = totals?.reduce((sum, e) => sum + (e.volume_usd || 0), 0) ?? 0
+  const totalFees = totals?.reduce((sum, e) => sum + (e.fee_usd || 0), 0) ?? 0
+  const totalTrades = totals?.length ?? 0
 
   return {
     tvl: latestSnapshot?.tvl_usd ?? 0,
