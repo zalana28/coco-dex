@@ -36,9 +36,9 @@ export async function getSummary(supabase: SupabaseClient) {
     .catch(() => ({ data: null }))
 
   // fallback: if RPC not available, cap at 1000 rows
-  let totalVolume = 0
-  let totalFees = 0
-  let totalTrades = 0
+  let totalVolume: number
+  let totalFees: number
+  let totalTrades: number
 
   if (totalsData) {
     totalVolume = totalsData.total_volume ?? 0
