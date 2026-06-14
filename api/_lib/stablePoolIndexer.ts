@@ -43,7 +43,8 @@ export async function runStablePoolIndexer({
   const startedAt = new Date().toISOString()
   let eventsIndexed = 0
   let snapshotsWritten = 0
-  let fromBlock: bigint | null = null
+  // fix(1): use runStartBlock captured once before loop — never overwritten mid-run
+  let runStartBlock: bigint | null = null
   let toBlockMax: bigint | null = null
 
   const { data: runInsert } = await supabase
@@ -64,7 +65,7 @@ export async function runStablePoolIndexer({
     const effectiveLastBlock = lastBlock < STABLE_POOL_DEPLOYMENT_BLOCK ? STABLE_POOL_DEPLOYMENT_BLOCK - 1n : lastBlock
     let nextFromBlock = effectiveLastBlock + 1n
     const finalToBlock = currentBlock
-    fromBlock = nextFromBlock
+    runStartBlock = nextFromBlock
     toBlockMax = finalToBlock
 
     const tsCache = new Map<bigint, string>()
@@ -101,7 +102,8 @@ export async function runStablePoolIndexer({
         eventsIndexed += rows.length
       }
 
-      await supabase.from('stable_pool_reserve_snapshots').insert({
+      // fix(2): check errors on reserve snapshot insert
+      const { error: reserveSnapshotError } = await supabase.from('stable_pool_reserve_snapshots').insert({
         pool_address: snapshot.pool_address,
         chain_id: snapshot.chain_id,
         snapshot_type: 'reserve',
@@ -114,9 +116,11 @@ export async function runStablePoolIndexer({
         lp_total_supply_raw: snapshot.lp_total_supply_raw,
         lp_decimals: snapshot.lp_decimals,
       })
+      if (reserveSnapshotError) throw reserveSnapshotError
       snapshotsWritten++
 
-      await supabase.from('stable_pool_lp_snapshots').insert({
+      // fix(2): check errors on lp snapshot insert
+      const { error: lpSnapshotError } = await supabase.from('stable_pool_lp_snapshots').insert({
         pool_address: snapshot.pool_address,
         chain_id: snapshot.chain_id,
         snapshot_type: 'lp_supply',
@@ -126,10 +130,11 @@ export async function runStablePoolIndexer({
         lp_total_supply_raw: snapshot.lp_total_supply_raw,
         lp_decimals: snapshot.lp_decimals,
       })
+      if (lpSnapshotError) throw lpSnapshotError
       snapshotsWritten++
 
       nextFromBlock = toBlock + 1n
-      fromBlock = nextFromBlock
+      // fix(1): removed `fromBlock = nextFromBlock` — runStartBlock is never overwritten
     }
 
     const finishedAt = new Date().toISOString()
@@ -161,7 +166,8 @@ export async function runStablePoolIndexer({
         .update({
           finished_at: new Date().toISOString(),
           status: 'failed',
-          from_block: fromBlock === null ? null : Number(fromBlock),
+          // fix(1): always points to the actual run start, not next batch
+          from_block: runStartBlock === null ? null : Number(runStartBlock),
           to_block: toBlockMax === null ? null : Number(toBlockMax),
           events_indexed: eventsIndexed,
           snapshots_written: snapshotsWritten,

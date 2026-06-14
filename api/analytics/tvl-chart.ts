@@ -1,8 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getSupabaseAdmin } from '../_lib/supabaseAdmin.js'
+import { getNotConfiguredPayload, getSupabaseAdmin, isSupabaseConfigured } from '../_lib/supabaseAdmin.js'
 import { getTvlChart } from '../_lib/analyticsQueries.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (!isSupabaseConfigured()) {
+    return res.status(200).json(getNotConfiguredPayload())
+  }
+
   try {
     const range = (req.query.range as string) || '7d'
     const supabase = getSupabaseAdmin()
