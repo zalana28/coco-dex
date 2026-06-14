@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { COCO_STABLE_POOL_ADDRESS, EURC_ADDRESS, USDC_ADDRESS } from './arcClient'
-import { mapStablePoolLogsToRows, type StablePoolSnapshot } from './stablePoolEvents'
+import { COCO_STABLE_POOL_ADDRESS, EURC_ADDRESS, USDC_ADDRESS } from './arcClient.js'
+import { mapStablePoolLogsToRows, type StablePoolSnapshot } from './stablePoolEvents.js'
 
 const snapshot: StablePoolSnapshot = {
   pool_address: COCO_STABLE_POOL_ADDRESS.toLowerCase(),
