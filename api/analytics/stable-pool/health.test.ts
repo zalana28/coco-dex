@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import handler from './health'
+import handler from './health.js'
 
 function createMockResponse() {
   const json = vi.fn()
