@@ -29,15 +29,31 @@ export async function getSummary(supabase: SupabaseClient) {
   const volume24h = recent?.reduce((sum, e) => sum + (e.volume_usd || 0), 0) ?? 0
   const fees24h = recent?.reduce((sum, e) => sum + (e.fee_usd || 0), 0) ?? 0
 
-  // Totals
-  const { data: totals } = await supabase
-    .from('dex_events')
-    .select('volume_usd, fee_usd')
-    .eq('event_type', 'swap')
+  // fix(4): use server-side aggregation instead of fetching all rows
+  const { data: totalsData } = await supabase
+    .rpc('get_swap_totals')
+    .single()
+    .catch(() => ({ data: null }))
 
-  const totalVolume = totals?.reduce((sum, e) => sum + (e.volume_usd || 0), 0) ?? 0
-  const totalFees = totals?.reduce((sum, e) => sum + (e.fee_usd || 0), 0) ?? 0
-  const totalTrades = totals?.length ?? 0
+  // fallback: if RPC not available, cap at 1000 rows
+  let totalVolume = 0
+  let totalFees = 0
+  let totalTrades = 0
+
+  if (totalsData) {
+    totalVolume = totalsData.total_volume ?? 0
+    totalFees = totalsData.total_fees ?? 0
+    totalTrades = totalsData.total_trades ?? 0
+  } else {
+    const { data: totals } = await supabase
+      .from('dex_events')
+      .select('volume_usd, fee_usd')
+      .eq('event_type', 'swap')
+      .limit(1000)
+    totalVolume = totals?.reduce((sum, e) => sum + (e.volume_usd || 0), 0) ?? 0
+    totalFees = totals?.reduce((sum, e) => sum + (e.fee_usd || 0), 0) ?? 0
+    totalTrades = totals?.length ?? 0
+  }
 
   return {
     tvl: latestSnapshot?.tvl_usd ?? 0,
@@ -100,7 +116,11 @@ export async function getTokenData(supabase: SupabaseClient) {
   const reserveUsdc = snapshot ? Number(snapshot.reserve_usdc) / DIVISOR : 0
   const reserveEurc = snapshot ? Number(snapshot.reserve_eurc) / DIVISOR : 0
 
-  // Price derived from reserves
+  // fix(3): guard against division by zero — fall back to 1.08 when either reserve is empty
+  const eurcPrice =
+    reserveUsdc > 0 && reserveEurc > 0
+      ? reserveUsdc / reserveEurc
+      : 1.08
 
   return [
     {
@@ -113,9 +133,9 @@ export async function getTokenData(supabase: SupabaseClient) {
     {
       symbol: 'EURC',
       name: 'Euro Coin',
-      price: reserveUsdc > 0 ? Number(reserveUsdc) / Number(reserveEurc || 1) : 1.08,
+      price: eurcPrice,
       reserve: reserveEurc,
-      tvl: reserveEurc * (reserveUsdc > 0 ? reserveUsdc / (reserveEurc || 1) : 1.08),
+      tvl: reserveEurc * eurcPrice,
     },
   ]
 }
