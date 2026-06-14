@@ -193,8 +193,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const { error } = await supabase
           .from('dex_events')
           .upsert(rows, { onConflict: 'tx_hash,log_index', ignoreDuplicates: true })
-        if (error) console.error('Insert error:', error)
-        else totalInserted += rows.length
+        // fix(6): throw on upsert error instead of silently swallowing it
+        if (error) throw error
+        totalInserted += rows.length
       }
 
       fromBlock = toBlock + 1n
