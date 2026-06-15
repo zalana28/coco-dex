@@ -11,6 +11,7 @@ import { buildXyloNetRouteQuote, isXyloNetPairSupported, XYLONET_ROUTER_ABI } fr
 import { buildUnitFlowRouteQuote, getUnitFlowV25QuoteRequest, isUnitFlowPairSupported, UNITFLOW_V25_ROUTER_ABI } from '@/lib/router/unitflowAdapter'
 import type { RouteQuote } from '@/lib/router/types'
 import { ROUTER_SHADOW_MODE_CONFIG } from '@/lib/router/routerConfig'
+import { selectBestRoute } from '@/lib/router/selectBestRoute'
 
 type UseAggregatedQuotesParams = {
   tokenIn: Token
@@ -207,10 +208,19 @@ export function useAggregatedQuotes({
       }
     })
 
+    // Auto best-route selection (pure helper). Ranks by highest output among
+    // executable, healthy, fresh, available routes. Never selects the stable
+    // pool route while nativeStable.execute is false.
+    const selection = selectBestRoute({ quotes, nowMs: quoteTimestamp })
+
     return {
       quotes,
-      bestQuote,
-      selectedQuote: quotes.find((quote) => quote.source === 'coco' && quote.availabilityStatus === 'available' && quote.executionStatus === 'executable') ?? bestQuote,
+      bestQuote: selection.bestRoute,
+      alternativeRoutes: selection.alternativeRoutes,
+      blockedRoutes: selection.blockedRoutes,
+      noExecutableRouteReason: selection.reason,
+      // The default selected route IS the best executable route (auto-select).
+      selectedQuote: selection.bestRoute,
       isLoading: isXyloNetLoading || isUnitFlowLoading || isSynthraLoading || isCocoStableLoading,
       xylonetError,
       unitflowError,

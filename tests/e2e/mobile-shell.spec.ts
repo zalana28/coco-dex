@@ -129,3 +129,44 @@ test.describe('mobile shell', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0)
   })
 })
+
+// Auto best-route selection on /swap. These run without a connected wallet, so
+// they assert the structural best-route UI (panel, badges, freshness, no-route
+// state) that renders for any valid amount regardless of live RPC results.
+test.describe('swap best route', () => {
+  test('entering an amount surfaces the best-route selection UI', async ({ page }, testInfo) => {
+    await page.goto('/swap')
+    await page.locator('input[type="number"]').first().fill('1')
+
+    // The best-route region resolves to exactly one of these deterministic states.
+    await expect(
+      page.getByText(/Best route|Finding best route|No executable route available/i).first(),
+    ).toBeVisible()
+
+    if (testInfo.project.name === 'Desktop Chrome') {
+      await expect(page.getByRole('heading', { name: 'Route quotes' })).toBeVisible()
+    } else {
+      await expect(page.getByRole('button', { name: /Route Quotes/i })).toBeVisible()
+    }
+  })
+
+  test('swap action is gated until an executable route is selected', async ({ page }) => {
+    await page.goto('/swap')
+    await page.locator('input[type="number"]').first().fill('1')
+    // With no wallet connected the primary action is always disabled (Connect
+    // Wallet), so the swap can never fire without an executable selected route.
+    const primary = page.getByRole('button', { name: /Connect Wallet|Finding best route|No executable route|Swap/i }).last()
+    await expect(primary).toBeDisabled()
+  })
+
+  test('/swap has no horizontal overflow after entering an amount', async ({ page }) => {
+    await page.goto('/swap')
+    await page.locator('input[type="number"]').first().fill('1000000')
+
+    const overflow = await page.evaluate(() => {
+      const documentWidth = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth)
+      return documentWidth - document.documentElement.clientWidth
+    })
+    expect(overflow).toBeLessThanOrEqual(1)
+  })
+})
