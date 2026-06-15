@@ -162,6 +162,7 @@ export function CocoStableAddLiquidityPanel({
   amplificationParameter,
   paused,
   onRefreshPool,
+  onPendingChange,
 }: {
   reserve0: bigint
   reserve1: bigint
@@ -170,6 +171,8 @@ export function CocoStableAddLiquidityPanel({
   amplificationParameter: bigint
   paused: boolean
   onRefreshPool: () => void
+  /** Reports active wallet confirmation/broadcast so the parent modal can block close only while truly pending. */
+  onPendingChange?: (isPending: boolean) => void
 }) {
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
@@ -241,6 +244,16 @@ export function CocoStableAddLiquidityPanel({
   const isStepConfirming = activeStep?.status === 'submitted' || activeStep?.status === 'pending_onchain'
   const isStepWaitingForWallet = activeStep?.status === 'waiting_wallet_confirmation'
   const activeTxHash = activeStep?.txHash
+
+  // Active wallet confirmation/broadcast: the only state where the parent modal
+  // may block its close paths. All other states stay closable.
+  const isTransactionPending = isWalletPending || isStepWaitingForWallet || isStepConfirming
+  useEffect(() => {
+    onPendingChange?.(isTransactionPending)
+  }, [isTransactionPending, onPendingChange])
+  useEffect(() => {
+    return () => onPendingChange?.(false)
+  }, [onPendingChange])
   const estimatedLpOut = useMemo(() => estimateLpOut({
     amount0: amount0Raw,
     amount1: amount1Raw,

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { useAccount } from 'wagmi'
 import { AlertTriangle, Check, Copy, Droplets, ExternalLink, Minus, Plus, X } from 'lucide-react'
@@ -782,6 +783,79 @@ function PoolDetailsDrawer({
   )
 }
 
+const focusableDialogSelector = [
+  'a[href]',
+  'button:not([disabled])',
+  'textarea:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',')
+
+function getFocusableDialogElements(container: HTMLElement) {
+  return Array.from(container.querySelectorAll<HTMLElement>(focusableDialogSelector)).filter(
+    (element) => element.getClientRects().length > 0 && !element.getAttribute('aria-hidden'),
+  )
+}
+
+function useDialogShell({
+  isOpen,
+  onClose,
+  dialogRef,
+  initialFocusRef,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  dialogRef: RefObject<HTMLElement | null>
+  initialFocusRef: RefObject<HTMLElement | null>
+}) {
+  useEffect(() => {
+    if (!isOpen) return
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    requestAnimationFrame(() => {
+      const container = dialogRef.current
+      const initialFocus = initialFocusRef.current ?? (container ? getFocusableDialogElements(container)[0] : undefined)
+      initialFocus?.focus()
+    })
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose()
+        return
+      }
+
+      if (event.key !== 'Tab' || !dialogRef.current) return
+
+      const focusableElements = getFocusableDialogElements(dialogRef.current)
+      if (focusableElements.length === 0) {
+        event.preventDefault()
+        return
+      }
+
+      const firstElement = focusableElements[0]!
+      const lastElement = focusableElements[focusableElements.length - 1]!
+      const activeElement = document.activeElement
+
+      if (event.shiftKey && activeElement === firstElement) {
+        event.preventDefault()
+        lastElement.focus()
+      } else if (!event.shiftKey && activeElement === lastElement) {
+        event.preventDefault()
+        firstElement.focus()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [dialogRef, initialFocusRef, isOpen, onClose])
+}
+
 function LiquidityActionModal({
   modal,
   stablePool,
@@ -793,16 +867,39 @@ function LiquidityActionModal({
   onClose: () => void
   onSelectPool: (poolId: PoolId) => void
 }) {
-  useEffect(() => {
-    if (!modal) return
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const [isTransactionPending, setIsTransactionPending] = useState(false)
+  const [closeBlockedMessage, setCloseBlockedMessage] = useState<string | null>(null)
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+  // Close is blocked ONLY while a real wallet confirmation/broadcast is active.
+  // Every other state stays closable so the user can never be trapped.
+  const requestClose = useCallback(() => {
+    if (isTransactionPending) {
+      setCloseBlockedMessage('Transaction pending. Wait for wallet confirmation or on-chain status before closing this modal.')
+      return
     }
 
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [modal, onClose])
+    setCloseBlockedMessage(null)
+    onClose()
+  }, [isTransactionPending, onClose])
+
+  const handlePendingChange = useCallback((isPending: boolean) => {
+    setIsTransactionPending(isPending)
+    if (!isPending) setCloseBlockedMessage(null)
+  }, [])
+
+  // Reset transient close-block messaging whenever the modal target changes /
+  // closes, so a reopened modal starts cleanly without a refresh.
+  useEffect(() => {
+    if (!modal) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsTransactionPending(false)
+      setCloseBlockedMessage(null)
+    }
+  }, [modal])
+
+  useDialogShell({ isOpen: Boolean(modal), onClose: requestClose, dialogRef, initialFocusRef: closeButtonRef })
 
   if (!modal) return null
 
@@ -812,31 +909,65 @@ function LiquidityActionModal({
       ? 'Remove Liquidity'
       : 'Add Liquidity'
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/65 px-3 py-3 backdrop-blur-sm sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="liquidity-modal-title">
-      <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-coco-dark-border bg-coco-dark-surface p-4 shadow-2xl sm:p-5">
-        <div className="mb-4 flex items-start justify-between gap-3">
+  const closeAriaLabel = modal.action === 'remove' ? 'Close remove liquidity modal' : 'Close liquidity modal'
+
+  return createPortal(
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/65 px-0 py-0 backdrop-blur-sm sm:items-center sm:p-6">
+      <button type="button" className="absolute inset-0 cursor-default" aria-label="Dismiss liquidity modal overlay" onClick={requestClose} />
+      <div
+        ref={dialogRef}
+        className="relative z-10 flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-coco-dark-border bg-coco-dark-surface shadow-2xl sm:max-h-[calc(100dvh-96px)] sm:max-w-[820px] sm:rounded-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="liquidity-modal-title"
+      >
+        {/* Sticky header — X stays visible no matter how far the body scrolls */}
+        <div className="sticky top-0 z-20 flex items-start justify-between gap-3 border-b border-coco-dark-border bg-coco-dark-surface/95 p-4 backdrop-blur sm:p-5">
           <div>
             <p className="text-xs uppercase tracking-[0.22em] text-coco-teal-400">Pools action</p>
             <h2 id="liquidity-modal-title" className="mt-1 text-xl font-semibold text-coco-dark-text">{title}</h2>
           </div>
           <button
+            ref={closeButtonRef}
             type="button"
-            onClick={onClose}
-            className="inline-grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-coco-dark-border text-coco-dark-muted transition-colors hover:border-coco-teal-400/35 hover:text-coco-dark-text"
-            aria-label="Close liquidity modal"
+            onClick={requestClose}
+            className="inline-grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-coco-dark-border text-coco-dark-muted transition-colors hover:border-coco-teal-400/35 hover:text-coco-dark-text focus:outline-none focus:ring-2 focus:ring-coco-teal-400/45"
+            aria-label={closeAriaLabel}
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        {modal.action === 'select' && <PoolTypeSelector onSelect={onSelectPool} />}
-        {modal.action === 'add' && modal.poolId === 'classic' && <ClassicRouteAction action="add" />}
-        {modal.action === 'remove' && modal.poolId === 'classic' && <ClassicRouteAction action="remove" />}
-        {modal.action === 'add' && modal.poolId === 'stable' && <StableAddModalContent stablePool={stablePool} />}
-        {modal.action === 'remove' && modal.poolId === 'stable' && <StableRemoveModalContent stablePool={stablePool} />}
+        {closeBlockedMessage && (
+          <div className="border-b border-coco-amber-500/20 bg-coco-amber-500/10 px-4 py-2 text-xs font-medium text-coco-amber-500 sm:px-5">
+            {closeBlockedMessage}
+          </div>
+        )}
+
+        {/* Scrollable body */}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5" data-testid="liquidity-modal-scroll">
+          {modal.action === 'select' && <PoolTypeSelector onSelect={onSelectPool} />}
+          {modal.action === 'add' && modal.poolId === 'classic' && <ClassicRouteAction action="add" />}
+          {modal.action === 'remove' && modal.poolId === 'classic' && <ClassicRouteAction action="remove" />}
+          {modal.action === 'add' && modal.poolId === 'stable' && <StableAddModalContent stablePool={stablePool} onPendingChange={handlePendingChange} />}
+          {modal.action === 'remove' && modal.poolId === 'stable' && <StableRemoveModalContent stablePool={stablePool} onPendingChange={handlePendingChange} />}
+        </div>
+
+        {/* Sticky footer — always-available secondary close that is never replaced
+            by a transaction link. Disabled only while truly pending. */}
+        <div className="sticky bottom-0 z-20 flex items-center justify-end gap-3 border-t border-coco-dark-border bg-coco-dark-surface/95 p-4 backdrop-blur sm:p-5">
+          <button
+            type="button"
+            onClick={requestClose}
+            disabled={isTransactionPending}
+            className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-coco-dark-border bg-coco-dark-bg/70 px-4 py-2 text-sm font-semibold text-coco-dark-text transition-colors hover:border-coco-teal-400/30 focus:outline-none focus:ring-2 focus:ring-coco-teal-400/45 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+          >
+            {isTransactionPending ? 'Transaction pending…' : 'Close'}
+          </button>
+        </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -909,7 +1040,13 @@ function ClassicRouteAction({ action }: { action: 'add' | 'remove' }) {
   )
 }
 
-function StableAddModalContent({ stablePool }: { stablePool: ReturnType<typeof useCocoStablePool> }) {
+function StableAddModalContent({
+  stablePool,
+  onPendingChange,
+}: {
+  stablePool: ReturnType<typeof useCocoStablePool>
+  onPendingChange: (isPending: boolean) => void
+}) {
   return (
     <div className="space-y-4">
       <StableBetaWarning />
@@ -921,12 +1058,19 @@ function StableAddModalContent({ stablePool }: { stablePool: ReturnType<typeof u
         amplificationParameter={stablePool.amplificationParameter}
         paused={stablePool.paused}
         onRefreshPool={stablePool.refetch}
+        onPendingChange={onPendingChange}
       />
     </div>
   )
 }
 
-function StableRemoveModalContent({ stablePool }: { stablePool: ReturnType<typeof useCocoStablePool> }) {
+function StableRemoveModalContent({
+  stablePool,
+  onPendingChange,
+}: {
+  stablePool: ReturnType<typeof useCocoStablePool>
+  onPendingChange: (isPending: boolean) => void
+}) {
   return (
     <div className="space-y-4">
       <StableBetaWarning />
@@ -938,6 +1082,7 @@ function StableRemoveModalContent({ stablePool }: { stablePool: ReturnType<typeo
         lpDecimals={stablePool.lpDecimals}
         paused={stablePool.paused}
         onRefreshPool={stablePool.refetch}
+        onPendingChange={onPendingChange}
       />
     </div>
   )
