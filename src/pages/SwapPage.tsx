@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react'
 import { Card } from '@/components/common/Card'
 import { TokenIcon } from '@/components/common/TokenIcon'
 import { TransactionProgressPanel } from '@/components/transactions/TransactionProgressPanel'
-import { Settings, ArrowDownUp, ChevronDown, Info, AlertTriangle, Wifi, Shield } from 'lucide-react'
+import { Settings, ArrowDownUp, ChevronDown, Info, AlertTriangle, Wifi, Shield, Zap } from 'lucide-react'
 import { USDC, EURC } from '@/config/tokens'
 import { ROUTER_ADDRESS } from '@/config/contracts'
 import { XYLONET_ROUTER_ADDRESS } from '@/config/externalDexes'
@@ -21,11 +21,13 @@ import type { ApprovalMode } from '@/hooks/useSettings'
 import { useTransactionProgress } from '@/hooks/useTransactionProgress'
 import { useCheckReceipt } from '@/hooks/useCheckReceipt'
 import { useAggregatedQuotes } from '@/hooks/useAggregatedQuotes'
+import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { formatTokenAmount, parseTokenAmount } from '@/utils/format'
 import { getAmountOut, calculatePriceImpact, calculateMinimumReceived } from '@/utils/price'
 import type { Token } from '@/types/token'
 import type { TransactionType } from '@/types/transactions'
 import type { RouteQuote } from '@/lib/router/types'
+import { isQuoteStale } from '@/lib/router/selectBestRoute'
 
 export function SwapPage() {
   const { address, isConnected } = useAccount()
@@ -36,7 +38,12 @@ export function SwapPage() {
   const [fromAmount, setFromAmount] = useState('')
   const [showSettings, setShowSettings] = useState(false)
   const [showQuotesMobile, setShowQuotesMobile] = useState(false)
-  const [selectedRouteId, setSelectedRouteId] = useState<string>('coco-usdc-eurc')
+  const [showAllRoutes, setShowAllRoutes] = useState(false)
+  // Manual route override. null = follow the auto-selected best route.
+  // Reset to null whenever amount/token pair changes or the chosen route
+  // becomes unavailable, so the UI returns to "best route" by default.
+  const [manualRouteId, setManualRouteId] = useState<string | null>(null)
+  const [routeChangedWarning, setRouteChangedWarning] = useState(false)
   const { slippage, slippageBps, setSlippage, getDeadlineTimestamp, deadline, setDeadline, approvalMode, setApprovalMode } = useTransactionSettings()
   const hasValidFromAmount = fromAmount.trim() !== '' && Number.isFinite(Number(fromAmount)) && Number(fromAmount) > 0
 
@@ -55,6 +62,15 @@ export function SwapPage() {
     if (!fromAmount || parseFloat(fromAmount) <= 0) return BigInt(0)
     return parseTokenAmount(fromAmount, fromToken.decimals)
   }, [fromAmount, fromToken.decimals])
+
+  // Debounced amount drives quote fetching: refresh ~350ms after typing stops
+  // rather than on every keystroke. While the two differ, quotes are "settling".
+  const debouncedFromAmount = useDebouncedValue(fromAmount, 350)
+  const debouncedFromAmountRaw = useMemo(() => {
+    if (!debouncedFromAmount || parseFloat(debouncedFromAmount) <= 0) return BigInt(0)
+    return parseTokenAmount(debouncedFromAmount, fromToken.decimals)
+  }, [debouncedFromAmount, fromToken.decimals])
+  const isDebouncing = hasValidFromAmount && debouncedFromAmount !== fromAmount
 
   // Compute Coco output from live reserves — direction-aware (used as fallback for Coco route)
   const { cocoAmountRaw, cocoPriceImpact, cocoMinReceivedRaw, cocoRate } = useMemo(() => {
@@ -83,19 +99,59 @@ export function SwapPage() {
   }, [hasLiquidity, fromAmountRaw, reserveUsdc, reserveEurc, fromToken, slippageBps])
 
 
-  const { quotes, bestQuote, selectedQuote, isLoading: quotesLoading, comingSoonSources } = useAggregatedQuotes({
+  const { quotes, bestQuote, noExecutableRouteReason, isLoading: quotesLoading, comingSoonSources } = useAggregatedQuotes({
     tokenIn: fromToken,
     tokenOut: toToken,
-    amountIn: fromAmountRaw,
+    amountIn: debouncedFromAmountRaw,
     reserveUsdc,
     reserveEurc,
     slippageBps,
   })
 
+  // "Finding best route…" while debouncing or quotes are in flight for a valid amount.
+  const isFindingRoute = hasValidFromAmount && (isDebouncing || quotesLoading)
+
+  // Auto-select model:
+  // - manualRouteId === null → follow bestQuote (auto best route).
+  // - manualRouteId set → honor it only while that route is still executable+available.
+  //   Otherwise fall back to bestQuote (handles "manual route became unavailable").
   const activeQuote = useMemo(() => {
-    const quote = quotes.find((candidate) => candidate.id === selectedRouteId)
-    return quote?.availabilityStatus === 'available' ? quote : selectedQuote
-  }, [quotes, selectedRouteId, selectedQuote])
+    if (manualRouteId) {
+      const manual = quotes.find((candidate) => candidate.id === manualRouteId)
+      if (
+        manual &&
+        manual.availabilityStatus === 'available' &&
+        manual.executionStatus === 'executable' &&
+        manual.amountOut > BigInt(0)
+      ) {
+        return manual
+      }
+    }
+    return bestQuote
+  }, [quotes, manualRouteId, bestQuote])
+
+  const isManualSelection = Boolean(manualRouteId) && activeQuote?.id === manualRouteId && activeQuote?.id !== bestQuote?.id
+
+  // Reset manual override when amount or token pair changes → return to best route.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setManualRouteId(null)
+    setRouteChangedWarning(false)
+  }, [debouncedFromAmountRaw, fromToken.address, toToken.address])
+
+  // Ticking clock for quote-freshness display. Avoids calling Date.now() during
+  // render (impure) while keeping the "Fresh quote" / "Quote stale" label live.
+  const [clockMs, setClockMs] = useState(() => Date.now())
+  useEffect(() => {
+    const handle = window.setInterval(() => setClockMs(Date.now()), 5_000)
+    return () => window.clearInterval(handle)
+  }, [])
+
+  // Selecting a route from the list (only executable routes are selectable).
+  const handleSelectRoute = useCallback((quoteId: string) => {
+    setManualRouteId(quoteId)
+    setRouteChangedWarning(false)
+  }, [])
 
   // ─── Route-aware display values ───
   // When a route is selected, all displayed swap details come from activeQuote.
@@ -222,7 +278,7 @@ export function SwapPage() {
     clearSimulationError()
     clearUnitFlowSimulationError()
     clearSynthraSimulationError()
-  }, [clearSimulationError, clearUnitFlowSimulationError, clearSynthraSimulationError, selectedRouteId, fromAmountRaw, activeQuote?.minAmountOut, fromToken.address, toToken.address])
+  }, [clearSimulationError, clearUnitFlowSimulationError, clearSynthraSimulationError, manualRouteId, fromAmountRaw, activeQuote?.minAmountOut, fromToken.address, toToken.address])
 
   // Transaction progress tracking (strict sequential)
   const txProgress = useTransactionProgress()
@@ -365,7 +421,9 @@ export function SwapPage() {
     resetXyloNetSwap()
     resetUnitFlowSwap()
     resetSynthraSwap()
-    setSelectedRouteId('coco-usdc-eurc')
+    // Return to auto best-route selection for the new direction.
+    setManualRouteId(null)
+    setRouteChangedWarning(false)
   }, [fromToken, toToken, cocoAmountRaw, txProgress, resetApproval, resetCocoSwap, resetXyloNetSwap, resetUnitFlowSwap, resetSynthraSwap])
 
   // Button state machine
@@ -376,7 +434,8 @@ export function SwapPage() {
     if (!hasLiquidity && !isXyloNetRoute && !isUnitFlowRoute && !isSynthraRoute) return { text: 'Pool has no liquidity', disabled: true, action: 'no-liquidity' as const }
     if (!fromAmount || parseFloat(fromAmount) <= 0) return { text: 'Enter an amount', disabled: true, action: 'enter' as const }
     if (fromBalance !== undefined && fromAmountRaw > fromBalance) return { text: 'Insufficient balance', disabled: true, action: 'insufficient' as const }
-    if (!activeQuote) return { text: 'Route unavailable', disabled: true, action: 'route-unavailable' as const }
+    if (isFindingRoute && !activeQuote) return { text: 'Finding best route…', disabled: true, action: 'finding-route' as const }
+    if (!activeQuote) return { text: noExecutableRouteReason ?? 'No executable route available for this amount', disabled: true, action: 'no-executable-route' as const }
     if (activeQuote.executionStatus === 'non_executable') return { text: 'Route is quote only', disabled: true, action: 'route-not-executable' as const }
     if (isApproving || isApprovalConfirming) return { text: `Approving ${fromToken.symbol}...`, disabled: true, action: 'approving' as const }
     if (needsApproval) return { text: `Approve ${fromToken.symbol}`, disabled: false, action: 'approve' as const }
@@ -408,7 +467,7 @@ export function SwapPage() {
       disabled: false,
       action: 'swap' as const,
     }
-  }, [isConnected, isWrongNetwork, isSwitching, reservesLoading, hasLiquidity, fromAmount, fromBalance, fromAmountRaw, activeQuote, isApproving, isApprovalConfirming, needsApproval, fromToken.symbol, isSwapping, isSwapConfirming, isXyloNetRoute, isUnitFlowRoute, isSynthraRoute, xyloNetSimulationError, unitFlowSimulationError, synthraSimulationError])
+  }, [isConnected, isWrongNetwork, isSwitching, reservesLoading, hasLiquidity, fromAmount, fromBalance, fromAmountRaw, activeQuote, isFindingRoute, noExecutableRouteReason, isApproving, isApprovalConfirming, needsApproval, fromToken.symbol, isSwapping, isSwapConfirming, isXyloNetRoute, isUnitFlowRoute, isSynthraRoute, xyloNetSimulationError, unitFlowSimulationError, synthraSimulationError])
 
   const handleButtonClick = () => {
     if (buttonState.action === 'switch-network') {
@@ -438,6 +497,31 @@ export function SwapPage() {
         txProgress.markSubmitted(approveType, hash)
       })
     } else if (buttonState.action === 'swap' && address) {
+      // ─── Requote-before-execute guard ───
+      // Never execute on a stale/non-executable quote, and surface a review
+      // prompt if a better route appeared since selection. The aggregator
+      // auto-refreshes quotes; here we re-validate the chosen route first.
+      if (!activeQuote || activeQuote.executionStatus !== 'executable' || activeQuote.amountOut <= BigInt(0)) {
+        console.warn('[SwapPage] BLOCKED: selected route is no longer executable')
+        setRouteChangedWarning(true)
+        return
+      }
+      if (isQuoteStale(activeQuote, Date.now())) {
+        console.warn('[SwapPage] BLOCKED: selected route quote is stale; refresh before swapping')
+        setRouteChangedWarning(true)
+        return
+      }
+      // If following auto-select and a meaningfully better route now exists,
+      // ask the user to review the updated best route before swapping.
+      if (
+        !isManualSelection &&
+        bestQuote &&
+        activeQuote.id !== bestQuote.id &&
+        bestQuote.amountOut > activeQuote.amountOut
+      ) {
+        setRouteChangedWarning(true)
+        return
+      }
       // Start or continue flow with just swap step
       const swapLabel = isUnitFlowRoute
         ? 'Swap via UnitFlow'
@@ -728,6 +812,36 @@ export function SwapPage() {
               </div>
             )}
 
+            {/* Best route card — compact summary near the swap action */}
+            {hasValidFromAmount && (
+              <BestRouteCard
+                isFinding={isFindingRoute}
+                bestQuote={bestQuote}
+                activeQuote={activeQuote}
+                isManualSelection={isManualSelection}
+                noExecutableRouteReason={noExecutableRouteReason}
+                outputSymbol={toToken.symbol}
+                nowMs={clockMs}
+              />
+            )}
+
+            {/* Best route changed — review prompt before swapping */}
+            {routeChangedWarning && (
+              <div className="mt-3 flex items-start gap-2.5 rounded-xl bg-coco-amber-500/10 border border-coco-amber-500/25 p-3.5 shadow-coco-1">
+                <AlertTriangle className="h-4 w-4 text-coco-amber-500 shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-coco-amber-500">Best route changed. Review updated route before swapping.</p>
+                  <button
+                    type="button"
+                    onClick={() => { setManualRouteId(null); setRouteChangedWarning(false) }}
+                    className="mt-1 text-[11px] font-medium text-coco-teal-400 hover:text-coco-teal-300"
+                  >
+                    Use best route
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Swap Button */}
             <button
               disabled={buttonState.disabled}
@@ -782,10 +896,13 @@ export function SwapPage() {
                 quotes={quotes}
                 bestQuoteId={bestQuote?.id}
                 selectedQuoteId={activeQuote?.id}
-                isLoading={quotesLoading}
+                isLoading={isFindingRoute}
                 comingSoonSources={comingSoonSources}
                 outputSymbol={toToken.symbol}
-                onSelectQuote={setSelectedRouteId}
+                onSelectQuote={handleSelectRoute}
+                showAllRoutes={showAllRoutes}
+                onToggleAllRoutes={() => setShowAllRoutes((value) => !value)}
+                noExecutableRouteReason={noExecutableRouteReason}
               />
             ) : (
               <div className="rounded-xl bg-coco-dark-bg/75 border border-coco-dark-border p-4 text-xs text-coco-dark-muted">
@@ -831,6 +948,75 @@ function TokenInput({
   )
 }
 
+const ROUTE_DISPLAY_NAME: Record<RouteQuote['source'], string> = {
+  coco: 'Coco',
+  coco_stable: 'Coco Native Stable',
+  xylonet: 'XyloNet',
+  unitflow: 'UnitFlow',
+  synthra: 'Synthra',
+}
+
+function BestRouteCard({
+  isFinding,
+  bestQuote,
+  activeQuote,
+  isManualSelection,
+  noExecutableRouteReason,
+  outputSymbol,
+  nowMs,
+}: {
+  isFinding: boolean
+  bestQuote?: RouteQuote
+  activeQuote?: RouteQuote
+  isManualSelection: boolean
+  noExecutableRouteReason?: string
+  outputSymbol: string
+  nowMs: number
+}) {
+  if (isFinding && !activeQuote) {
+    return (
+      <div className="mt-4 flex items-center gap-2.5 rounded-xl border border-coco-dark-border bg-coco-dark-bg/75 p-3.5 text-xs text-coco-dark-muted shadow-inner">
+        <Zap className="h-4 w-4 shrink-0 animate-pulse text-coco-teal-400" />
+        <span>Finding best route…</span>
+      </div>
+    )
+  }
+
+  if (!activeQuote) {
+    return (
+      <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-coco-amber-500/25 bg-coco-amber-500/5 p-3.5 text-xs text-coco-amber-500 shadow-inner">
+        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+        <span>{noExecutableRouteReason ?? 'No executable route available for this amount'}</span>
+      </div>
+    )
+  }
+
+  const stale = isQuoteStale(activeQuote, nowMs)
+  const isAutoBest = !isManualSelection && bestQuote?.id === activeQuote.id
+
+  return (
+    <div className="mt-4 rounded-xl border border-coco-green-500/25 bg-coco-green-500/5 p-3.5 shadow-inner">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded-full bg-coco-green-500/15 px-2 py-0.5 text-[10px] font-semibold text-coco-green-500">
+              <Zap className="h-3 w-3" />
+              {isAutoBest ? 'Best route' : 'Selected route'}
+            </span>
+            <span className="truncate text-sm font-semibold text-coco-dark-text">{ROUTE_DISPLAY_NAME[activeQuote.source]}</span>
+            {isFinding && <span className="text-[10px] text-coco-dark-muted">refreshing…</span>}
+          </div>
+          <p className="mt-1 truncate text-[11px] text-coco-dark-muted">{activeQuote.routePath.join(' → ')}</p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="font-mono text-base text-coco-dark-text">{activeQuote.amountOutFormatted} {outputSymbol}</p>
+          <p className="text-[11px] text-coco-dark-muted">{stale ? 'Quote stale' : 'Fresh quote'}</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function QuotesPanel({
   quotes,
   bestQuoteId,
@@ -839,6 +1025,9 @@ function QuotesPanel({
   comingSoonSources,
   outputSymbol,
   onSelectQuote,
+  showAllRoutes,
+  onToggleAllRoutes,
+  noExecutableRouteReason,
 }: {
   quotes: RouteQuote[]
   bestQuoteId?: string
@@ -847,6 +1036,9 @@ function QuotesPanel({
   comingSoonSources: Array<{ source: 'unitflow' | 'synthra'; label: string }>
   outputSymbol: string
   onSelectQuote: (quoteId: string) => void
+  showAllRoutes: boolean
+  onToggleAllRoutes: () => void
+  noExecutableRouteReason?: string
 }) {
   const routeDetailBySource: Record<RouteQuote['source'], string> = {
     coco: 'Direct pool',
@@ -856,15 +1048,29 @@ function QuotesPanel({
     synthra: 'V3 route',
   }
 
+  // Executable routes first (sorted best-first by output), blocked/quote-only below.
+  const executableQuotes = quotes
+    .filter((q) => q.availabilityStatus === 'available' && q.executionStatus === 'executable' && q.amountOut > BigInt(0))
+    .sort((a, b) => (a.amountOut === b.amountOut ? 0 : a.amountOut > b.amountOut ? -1 : 1))
+  const otherQuotes = quotes.filter((q) => !executableQuotes.includes(q))
+  const hasExecutable = executableQuotes.length > 0
+  const orderedQuotes = [...executableQuotes, ...(showAllRoutes ? otherQuotes : [])]
+
   return (
     <div className="rounded-xl bg-coco-dark-bg/75 border border-coco-dark-border p-3 space-y-2.5">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold text-coco-dark-text">Route quotes</h3>
-          <p className="text-[11px] text-coco-dark-muted">Best quote is highlighted. Compare before swapping.</p>
+          <p className="text-[11px] text-coco-dark-muted">Best executable route is auto-selected. Compare before swapping.</p>
         </div>
-        {isLoading && <span className="text-[11px] text-coco-dark-muted">Refreshing...</span>}
+        {isLoading && <span className="text-[11px] text-coco-dark-muted">Finding best route…</span>}
       </div>
+
+      {!hasExecutable && !isLoading && (
+        <div className="rounded-lg border border-coco-amber-500/25 bg-coco-amber-500/5 p-3 text-xs text-coco-amber-500">
+          {noExecutableRouteReason ?? 'No executable route available for this amount'}
+        </div>
+      )}
 
       <div className="space-y-2">
         {quotes.length === 0 && (
@@ -873,7 +1079,7 @@ function QuotesPanel({
           </div>
         )}
 
-        {quotes.map((quote) => {
+        {orderedQuotes.map((quote) => {
           const isBest = quote.id === bestQuoteId
           const isSelected = quote.id === selectedQuoteId
           const isAvailable = quote.availabilityStatus === 'available'
@@ -904,10 +1110,12 @@ function QuotesPanel({
             <button
               key={quote.id}
               type="button"
-              aria-disabled={!isAvailable}
+              // Only executable routes are selectable. Quote-only / shadow /
+              // unavailable routes are informational and cannot be selected/executed.
+              aria-disabled={!isExecutable}
               aria-pressed={isSelected}
               onClick={() => {
-                if (isAvailable) onSelectQuote(quote.id)
+                if (isExecutable) onSelectQuote(quote.id)
               }}
               className={`w-full rounded-lg border p-2.5 text-left transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/40 ${
                 isSelected
@@ -927,9 +1135,10 @@ function QuotesPanel({
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`text-sm font-medium ${isUnavailable ? 'text-coco-dark-muted' : 'text-coco-dark-text'}`}>{quote.label}</span>
-                    {isBest && <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-medium text-blue-400">Best quote</span>}
+                    {isBest && isExecutable && <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-medium text-blue-400">Best route</span>}
                     <span className="rounded-full bg-coco-dark-border/55 px-2 py-0.5 text-[10px] font-medium text-coco-dark-muted">{routeTypeLabel}</span>
                     {isExecutable && <span className="rounded-full bg-coco-green-500/15 px-2 py-0.5 text-[10px] font-medium text-coco-green-500">Executable</span>}
+                    {quote.source === 'coco_stable' && <span className="rounded-full bg-coco-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-coco-amber-500">Shadow</span>}
                     {isQuoteOnly && <span className="rounded-full bg-coco-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-coco-amber-500">Quote only</span>}
                     {isLoadingQuote && <span className="rounded-full bg-coco-dark-border/60 px-2 py-0.5 text-[10px] font-medium text-coco-dark-muted">Loading</span>}
                     {isUnavailable && <span className="rounded-full bg-coco-red-500/15 px-2 py-0.5 text-[10px] font-medium text-coco-red-500">Unavailable</span>}
@@ -957,6 +1166,18 @@ function QuotesPanel({
             </button>
           )
         })}
+
+        {otherQuotes.length > 0 && (
+          <button
+            type="button"
+            onClick={onToggleAllRoutes}
+            aria-expanded={showAllRoutes}
+            className="flex w-full items-center justify-between gap-2 rounded-lg border border-coco-dark-border bg-coco-dark-surface/70 px-3 py-2 text-left text-[11px] font-medium text-coco-dark-muted transition-colors hover:border-coco-teal-400/30 hover:text-coco-dark-text focus:outline-none focus:ring-2 focus:ring-coco-teal-400/40"
+          >
+            <span>{showAllRoutes ? 'Hide other routes' : `View all routes (${otherQuotes.length} quote-only / unavailable)`}</span>
+            <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${showAllRoutes ? 'rotate-180' : ''}`} />
+          </button>
+        )}
 
         {comingSoonSources.map((source) => (
           <button
