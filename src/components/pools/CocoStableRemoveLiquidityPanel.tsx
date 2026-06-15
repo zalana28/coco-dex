@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount, useChainId, usePublicClient, useWriteContract } from 'wagmi'
 import { AlertTriangle, MinusCircle, RefreshCw } from 'lucide-react'
 import { TransactionProgressPanel } from '@/components/transactions/TransactionProgressPanel'
@@ -198,6 +198,7 @@ export function CocoStableRemoveLiquidityPanel({
   lpDecimals,
   paused,
   onRefreshPool,
+  onPendingChange,
 }: {
   reserve0: bigint
   reserve1: bigint
@@ -206,6 +207,13 @@ export function CocoStableRemoveLiquidityPanel({
   lpDecimals: number
   paused: boolean
   onRefreshPool: () => void
+  /**
+   * Reports whether a real wallet confirmation/broadcast is actively in flight.
+   * The parent modal blocks its close paths only while this is true, so the
+   * user can always escape every non-pending state (estimate unavailable,
+   * insufficient cSLP, rejected, failed, success, idle).
+   */
+  onPendingChange?: (isPending: boolean) => void
 }) {
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
@@ -235,6 +243,20 @@ export function CocoStableRemoveLiquidityPanel({
   const isStepWaitingForWallet = activeStep?.status === 'waiting_wallet_confirmation'
   const activeStepTimedOut = activeStep?.type ? timedOutSteps[activeStep.type] === true : false
   const showRecovery = !!activeTxHash && isStepConfirming
+
+  // Active wallet confirmation/broadcast = the only state in which the parent
+  // modal is allowed to block its close paths. Everything else (estimate
+  // unavailable, insufficient cSLP, rejected, failed, success, idle) must stay
+  // closable so the user is never trapped.
+  const isTransactionPending = isWalletPending || isStepWaitingForWallet || isStepConfirming
+  useEffect(() => {
+    onPendingChange?.(isTransactionPending)
+  }, [isTransactionPending, onPendingChange])
+  // Ensure the parent is not left in a "pending" lock if this panel unmounts
+  // mid-flight (e.g. modal force-closed). Reset on unmount only.
+  useEffect(() => {
+    return () => onPendingChange?.(false)
+  }, [onPendingChange])
   const expectedOut = useMemo(() => estimateRemoveOut({
     lpAmount: lpAmountRaw,
     reserve0,
@@ -604,13 +626,20 @@ export function CocoStableRemoveLiquidityPanel({
         <SlippageSelector valueBps={slippageBps} onChange={setSlippageBps} />
       </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-3 rounded-xl border border-coco-dark-border bg-coco-dark-surface/55 p-3 sm:grid-cols-2 lg:grid-cols-4">
-        <RemoveMetric label="Current USDC reserve" value={`${formatTokenAmount(reserve0, token0.decimals)} ${token0.symbol}`} />
-        <RemoveMetric label="Current EURC reserve" value={`${formatTokenAmount(reserve1, token1.decimals)} ${token1.symbol}`} />
-        <RemoveMetric label="LP holder" value={address ? truncateAddress(address) : 'Connect wallet'} mono />
-        <RemoveMetric label="Expected output" value={expectedOutputLabel} mono />
-        <RemoveMetric label="Minimum output" value={minimumOutputLabel} mono />
-      </div>
+      <details className="group mt-4 rounded-xl border border-coco-dark-border bg-coco-dark-surface/55 p-3">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-xs font-semibold text-coco-dark-text">
+          <span>Advanced details</span>
+          <span className="text-[11px] font-normal text-coco-dark-muted group-open:hidden">Show</span>
+          <span className="hidden text-[11px] font-normal text-coco-dark-muted group-open:inline">Hide</span>
+        </summary>
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <RemoveMetric label="Current USDC reserve" value={`${formatTokenAmount(reserve0, token0.decimals)} ${token0.symbol}`} />
+          <RemoveMetric label="Current EURC reserve" value={`${formatTokenAmount(reserve1, token1.decimals)} ${token1.symbol}`} />
+          <RemoveMetric label="LP holder" value={address ? truncateAddress(address) : 'Connect wallet'} mono />
+          <RemoveMetric label="Expected output" value={expectedOutputLabel} mono />
+          <RemoveMetric label="Minimum output" value={minimumOutputLabel} mono />
+        </div>
+      </details>
 
       <div className="mt-3 rounded-lg border border-coco-amber-500/20 bg-coco-amber-500/10 p-3">
         <div className="flex items-start gap-2">
