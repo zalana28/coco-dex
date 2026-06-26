@@ -696,6 +696,7 @@ export function SwapPage() {
             tokenOut: toToken,
             amountIn: fromAmountRaw,
             amountOutMin: activeQuote?.minAmountOut ?? minReceivedRaw,
+            account: address,
             to: address,
             deadline: getDeadlineTimestamp(),
           },
