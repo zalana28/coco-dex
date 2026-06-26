@@ -38,6 +38,7 @@ export function useSwap() {
       tokenOut: Token
       amountIn: bigint
       amountOutMin: bigint
+      account: `0x${string}`
       to: `0x${string}`
       deadline: number
     },
@@ -49,7 +50,7 @@ export function useSwap() {
       return 'WRONG_NETWORK'
     }
 
-    const { tokenIn, tokenOut, amountIn, amountOutMin, to, deadline } = params
+    const { tokenIn, tokenOut, amountIn, amountOutMin, account, to, deadline } = params
 
     writeContract(
       {
@@ -63,6 +64,7 @@ export function useSwap() {
           to,
           BigInt(deadline),
         ],
+        account,
         chainId: ARC_CHAIN_ID, // Explicit chain target
       },
       {
