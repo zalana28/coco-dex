@@ -122,6 +122,7 @@ describe('cron indexer reliability', () => {
     expect(res.statusCode).toBe(500)
     expect(res.body).toEqual({ error: 'Indexer failed' })
     const serialized = JSON.stringify(log.mock.calls)
+    expect(serialized).toContain('eth-mainnet.g.alchemy.com')
     expect(serialized).not.toContain('super-secret-key')
     expect(serialized).not.toContain('hidden-token')
     expect(serialized).not.toContain('Authorization')

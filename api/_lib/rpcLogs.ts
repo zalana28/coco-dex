@@ -41,7 +41,7 @@ export function sanitizeRpcError(error: unknown) {
 }
 
 function isRangeTooLarge(error: unknown) {
-  return /(?:block|query|log|response).{0,60}(?:range|size).{0,60}(?:too large|exceed|maximum|max|up to)|(?:maximum|max|up to).{0,20}\d+.{0,20}blocks|more than.{0,20}blocks/i.test(messageOf(error))
+  return /(?:block|query|log|response).{0,60}(?:range|size).{0,60}(?:too large|exceed|maximum|max|up to)|(?:maximum|max|up to).{0,20}\d+.{0,20}blocks|more than.{0,20}blocks|query returned more than \d+ results/i.test(messageOf(error))
 }
 
 function retryCategory(error: unknown): RetryCategory | null {
@@ -79,7 +79,9 @@ async function fetchRange<TLog>(
       return await client.getLogs({ ...query, fromBlock, toBlock })
     } catch (error) {
       if (isRangeTooLarge(error)) {
-        if (fromBlock === toBlock) throw new Error('RPC eth_getLogs rejected a single-block range (range_too_large)', { cause: error })
+        // Raw provider errors may contain credentials; do not retain them as causes.
+        // eslint-disable-next-line preserve-caught-error
+        if (fromBlock === toBlock) throw new Error('RPC eth_getLogs rejected a single-block range (range_too_large)')
         const midpoint = fromBlock + (toBlock - fromBlock) / 2n
         const left = await fetchRange(client, query, fromBlock, midpoint, options)
         const right = await fetchRange(client, query, midpoint + 1n, toBlock, options)
@@ -87,7 +89,8 @@ async function fetchRange<TLog>(
       }
 
       const category = retryCategory(error)
-      if (!category) throw new Error('RPC eth_getLogs failed (non_retryable)', { cause: error })
+      // eslint-disable-next-line preserve-caught-error -- raw provider errors may contain credentials
+      if (!category) throw new Error('RPC eth_getLogs failed (non_retryable)')
       if (attempt === options.maxAttempts) {
         options.log({
           event: 'rpc_get_logs_failed',
@@ -98,7 +101,8 @@ async function fetchRange<TLog>(
           category,
           retryCount: attempt - 1,
         })
-        throw new Error(`RPC eth_getLogs failed after ${attempt} attempts (${category})`, { cause: error })
+        // eslint-disable-next-line preserve-caught-error -- raw provider errors may contain credentials
+        throw new Error(`RPC eth_getLogs failed after ${attempt} attempts (${category})`)
       }
 
       const delayMs = backoffDelay(attempt, options.baseDelayMs, options.maxDelayMs, options.random)

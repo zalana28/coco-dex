@@ -187,23 +187,46 @@ describe('resilient eth_getLogs ranges', () => {
     expect(sleep.mock.calls).toEqual([[125], [250]])
   })
 
-  it('redacts RPC credentials from retry logs and exhausted errors', async () => {
-    const secretUrl = 'https://eth-mainnet.g.alchemy.com/v2/super-secret-api-key'
-    const getLogs = vi.fn().mockRejectedValue(new Error(`429 from ${secretUrl} Authorization: Bearer top-secret`))
+  it('redacts credentials from logs and the complete thrown error chain', async () => {
+    const secretUrl = 'https://user:password@eth-mainnet.g.alchemy.com/v2/super-secret-api-key?token=query-secret'
+    const rawError = new Error(`429 from ${secretUrl} Authorization: Bearer top-secret`)
+    const getLogs = vi.fn().mockRejectedValue(rawError)
     const entries: Record<string, unknown>[] = []
 
-    await expect(fetchLogsResilient(
-      { getLogs } as never,
-      { address: baseLog.address as `0x${string}`, events: [] },
-      1n,
-      10n,
-      { maxAttempts: 2, sleep: async () => undefined, random: () => 0, providerUrl: secretUrl, log: (entry: Record<string, unknown>) => entries.push(entry) },
-    )).rejects.toThrow('RPC eth_getLogs failed after 2 attempts (rate_limit)')
+    let thrown: unknown
+    try {
+      await fetchLogsResilient(
+        { getLogs } as never,
+        { address: baseLog.address as `0x${string}`, events: [] },
+        1n,
+        10n,
+        { maxAttempts: 2, sleep: async () => undefined, random: () => 0, providerUrl: secretUrl, log: (entry: Record<string, unknown>) => entries.push(entry) },
+      )
+    } catch (error) {
+      thrown = error
+    }
 
-    const serialized = JSON.stringify(entries)
+    expect(thrown).toBeInstanceOf(Error)
+    expect((thrown as Error).message).toBe('RPC eth_getLogs failed after 2 attempts (rate_limit)')
+    const causeMessages: string[] = []
+    for (let current = thrown; current instanceof Error; current = current.cause) causeMessages.push(current.message)
+    const serialized = JSON.stringify({ entries, causeMessages })
     expect(serialized).toContain('eth-mainnet.g.alchemy.com')
-    expect(serialized).not.toContain('super-secret-api-key')
-    expect(serialized).not.toContain('top-secret')
-    expect(serialized).not.toContain('Authorization')
+    for (const secret of ['super-secret-api-key', 'query-secret', 'top-secret', 'password', 'Authorization']) {
+      expect(serialized).not.toContain(secret)
+    }
+  })
+
+  it('splits result-count limit errors', async () => {
+    const successful: Array<[bigint, bigint]> = []
+    const getLogs = vi.fn(async ({ fromBlock, toBlock }: { fromBlock: bigint; toBlock: bigint }) => {
+      if (fromBlock === 1n && toBlock === 10n) throw new Error('query returned more than 10000 results')
+      successful.push([fromBlock, toBlock])
+      return []
+    })
+
+    await fetchLogsResilient({ getLogs } as never, { address: baseLog.address as `0x${string}`, events: [] }, 1n, 10n)
+
+    expect(successful).toEqual([[1n, 5n], [6n, 10n]])
   })
 })
