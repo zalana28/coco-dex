@@ -106,24 +106,37 @@ npm run lint        # eslint
 
 ## Analytics / Indexer Setup
 
-1. **Run Supabase migration:**
-   Apply `supabase/migrations/001_analytics_schema.sql` to your Supabase project.
+1. **Run Supabase migrations in order:**
+   Apply `001_analytics_schema.sql`, `002_stable_pool_observability.sql`,
+   `003_pool_snapshots_unique.sql`, then `004_indexer_reliability.sql`.
+   Migration 004 installs the transactional chunk-persistence RPC and the
+   expiring database-backed lock required by the endpoint.
 
 2. **Set Vercel environment variables:**
-   Add `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`, and `ARC_TESTNET_RPC_URL` in Vercel project settings.
+   Required: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`, and
+   `ARC_TESTNET_RPC_URL`. Optional bounded-run settings (defaults shown):
+   `INDEXER_BATCH_SIZE=500`, `INDEXER_MAX_BLOCKS_PER_RUN=2000`, and
+   `INDEXER_CONFIRMATION_BLOCKS=12`.
 
-3. **Run initial backfill:**
+3. **Run initial backfill only when deliberately bootstrapping a new database:**
    ```bash
    npm run indexer:backfill
    ```
 
-4. **Set up external cron:**
-   Configure a cron service (e.g., cron-job.org) to call:
+4. **Use exactly one scheduler (recommended: cron-job.org):**
+   Vercel Cron is intentionally absent from `vercel.json`. Configure cron-job.org
+   every 5-15 minutes with method `GET` and this mandatory header:
    ```
-   GET https://coco-dex.vercel.app/api/cron/indexer
    Authorization: Bearer <CRON_SECRET>
    ```
-   Recommended interval: every 5-15 minutes.
+   Do not also enable Vercel Cron. User-Agent headers are never trusted.
+
+   Production smoke test (the response never includes secrets or internal errors):
+   ```bash
+   curl --fail-with-body \
+     -H "Authorization: Bearer ${CRON_SECRET}" \
+     https://coco-dex.vercel.app/api/cron/indexer
+   ```
 
 5. **Health check:**
    ```

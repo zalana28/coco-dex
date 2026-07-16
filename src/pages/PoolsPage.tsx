@@ -127,9 +127,9 @@ export function PoolsPage() {
         stableObservabilityLoading={stablePoolObservability.loading}
       />
 
-      <div className="mb-5 mt-5 flex w-full gap-1 rounded-xl border border-coco-dark-border bg-coco-dark-surface/70 p-1 backdrop-blur-xl">
-        <TabButton active={activeTab === 'positions'} onClick={() => setActiveTab('positions')}>My Positions</TabButton>
-        <TabButton active={activeTab === 'pools'} onClick={() => setActiveTab('pools')}>Pools</TabButton>
+      <div role="tablist" aria-label="Liquidity views" className="mb-5 mt-5 flex w-full gap-1 rounded-xl border border-coco-dark-border bg-coco-dark-surface/70 p-1 backdrop-blur-xl">
+        <TabButton active={activeTab === 'positions'} controls="positions-panel" onClick={() => setActiveTab('positions')}>My Positions</TabButton>
+        <TabButton active={activeTab === 'pools'} controls="pools-panel" onClick={() => setActiveTab('pools')}>Pools</TabButton>
       </div>
 
       {activeTab === 'pools' ? (
@@ -146,19 +146,21 @@ export function PoolsPage() {
           onDetails={setDetailsPool}
         />
       ) : (
-        <MyPositions
-          isConnected={isConnected}
-          reserveUsdc={reserveUsdc}
-          reserveEurc={reserveEurc}
-          hasLiquidity={hasLiquidity}
-          classicLpBalance={classicLp.balance}
-          classicShare={classicLp.share}
-          stablePool={stablePool}
-          onAdd={openAdd}
-          onRemove={openRemove}
-          onDetails={setDetailsPool}
-          onNewPosition={openNewPosition}
-        />
+        <div id="positions-panel" role="tabpanel">
+          <MyPositions
+            isConnected={isConnected}
+            reserveUsdc={reserveUsdc}
+            reserveEurc={reserveEurc}
+            hasLiquidity={hasLiquidity}
+            classicLpBalance={classicLp.balance}
+            classicShare={classicLp.share}
+            stablePool={stablePool}
+            onAdd={openAdd}
+            onRemove={openRemove}
+            onDetails={setDetailsPool}
+            onNewPosition={openNewPosition}
+          />
+        </div>
       )}
 
       <LiquidityActionModal
@@ -213,10 +215,13 @@ function SummaryTile({ label, value }: { label: string; value: string }) {
   )
 }
 
-function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function TabButton({ active, controls, onClick, children }: { active: boolean; controls: string; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       type="button"
+      role="tab"
+      aria-selected={active}
+      aria-controls={controls}
       onClick={onClick}
       className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors sm:flex-none ${
         active
@@ -259,7 +264,7 @@ function PoolsTab({
   const stableTvl = (Number(stablePool.reserve0) / 1e6) + (Number(stablePool.reserve1) / 1e6 * 1.086)
 
   return (
-    <div className="space-y-5">
+    <div id="pools-panel" role="tabpanel" data-testid="pools-panel" className="space-y-5">
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <PoolCard
           pair="USDC / EURC"
@@ -315,7 +320,7 @@ function PoolCard({
 }) {
   return (
     <Card className="flex min-w-0 flex-col p-5">
-      <div className="flex min-w-0 items-start justify-between gap-3">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex -space-x-2">
             <TokenIcon symbol="USDC" color="#2775CA" size="md" />
