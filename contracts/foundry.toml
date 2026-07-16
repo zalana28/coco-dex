@@ -10,6 +10,18 @@ optimizer = true
 optimizer_runs = 200
 evm_version = "paris"
 
+[fmt]
+ignore = [
+    "stable/**",
+    "test/CocoDex.t.sol",
+    "test/CocoStablePool.t.sol",
+    "test/CocoStablePoolFuzz.t.sol",
+    "test/CocoStablePoolInvariant.t.sol",
+    "script/DeployCocoStablePool.s.sol",
+    "script/AddInitialLiquidityCocoStablePool.s.sol",
+    "script/InspectCocoStablePool.s.sol",
+]
+
 # Suppress block-timestamp lint warning for the deadline modifier.
 # The deadline comparison against block.timestamp is intentional and standard
 # for DEX routers (same pattern as Uniswap V2). Validator timestamp manipulation

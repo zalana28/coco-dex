@@ -33,6 +33,7 @@ contract CocoRouter {
     }
 
     constructor(address _factory) {
+        require(_factory != address(0), "CocoRouter: ZERO_FACTORY");
         factory = _factory;
     }
 
@@ -52,12 +53,16 @@ contract CocoRouter {
         address to,
         uint256 deadline
     ) external ensure(deadline) returns (uint256 amountA, uint256 amountB, uint256 liquidity) {
-        // Compute optimal amounts
-        (amountA, amountB) = _calculateLiquidityAmounts(
-            tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin
-        );
+        CocoLibrary.sortTokens(tokenA, tokenB);
+        require(to != address(0), "CocoRouter: INVALID_TO");
+        require(amountADesired > 0 && amountBDesired > 0, "CocoRouter: INSUFFICIENT_DESIRED_AMOUNT");
 
-        address pair = CocoLibrary.pairFor(factory, tokenA, tokenB);
+        address pair = ICocoFactory(factory).getPair(tokenA, tokenB);
+        // Compute optimal amounts
+        (amountA, amountB) =
+            _calculateLiquidityAmounts(pair, tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin);
+
+        if (pair == address(0)) pair = ICocoFactory(factory).createPair(tokenA, tokenB);
         _safeTransferFrom(tokenA, msg.sender, pair, amountA);
         _safeTransferFrom(tokenB, msg.sender, pair, amountB);
         liquidity = CocoPair(pair).mint(to);
@@ -76,6 +81,8 @@ contract CocoRouter {
         address to,
         uint256 deadline
     ) external ensure(deadline) returns (uint256 amountA, uint256 amountB) {
+        require(to != address(0), "CocoRouter: INVALID_TO");
+        require(liquidity > 0, "CocoRouter: INSUFFICIENT_LIQUIDITY");
         address pair = CocoLibrary.pairFor(factory, tokenA, tokenB);
         // Transfer LP tokens to the pair (check return value for safety)
         require(CocoPair(pair).transferFrom(msg.sender, pair, liquidity), "CocoRouter: LP_TRANSFER_FAILED");
@@ -99,6 +106,9 @@ contract CocoRouter {
         address to,
         uint256 deadline
     ) external ensure(deadline) returns (uint256[] memory amounts) {
+        require(amountIn > 0, "CocoRouter: INSUFFICIENT_INPUT_AMOUNT");
+        require(to != address(0), "CocoRouter: INVALID_TO");
+        _validatePath(path);
         amounts = CocoLibrary.getAmountsOut(factory, amountIn, path);
         require(amounts[amounts.length - 1] >= amountOutMin, "CocoRouter: INSUFFICIENT_OUTPUT_AMOUNT");
         address pair = CocoLibrary.pairFor(factory, path[0], path[1]);
@@ -116,6 +126,10 @@ contract CocoRouter {
         address to,
         uint256 deadline
     ) external ensure(deadline) returns (uint256[] memory amounts) {
+        require(amountOut > 0, "CocoRouter: INSUFFICIENT_OUTPUT_AMOUNT");
+        require(amountInMax > 0, "CocoRouter: INSUFFICIENT_INPUT_AMOUNT");
+        require(to != address(0), "CocoRouter: INVALID_TO");
+        _validatePath(path);
         amounts = CocoLibrary.getAmountsIn(factory, amountOut, path);
         require(amounts[0] <= amountInMax, "CocoRouter: EXCESSIVE_INPUT_AMOUNT");
         address pair = CocoLibrary.pairFor(factory, path[0], path[1]);
@@ -133,33 +147,22 @@ contract CocoRouter {
         return CocoLibrary.getAmountOut(amountIn, reserveIn, reserveOut);
     }
 
-    function getAmountsOut(uint256 amountIn, address[] calldata path)
-        external
-        view
-        returns (uint256[] memory amounts)
-    {
+    function getAmountsOut(uint256 amountIn, address[] calldata path) external view returns (uint256[] memory amounts) {
         return CocoLibrary.getAmountsOut(factory, amountIn, path);
     }
 
-    function getAmountsIn(uint256 amountOut, address[] calldata path)
-        external
-        view
-        returns (uint256[] memory amounts)
-    {
+    function getAmountsIn(uint256 amountOut, address[] calldata path) external view returns (uint256[] memory amounts) {
         return CocoLibrary.getAmountsIn(factory, amountOut, path);
     }
 
-    function quote(uint256 amountA, uint256 reserveA, uint256 reserveB)
-        external
-        pure
-        returns (uint256 amountB)
-    {
+    function quote(uint256 amountA, uint256 reserveA, uint256 reserveB) external pure returns (uint256 amountB) {
         return CocoLibrary.quote(amountA, reserveA, reserveB);
     }
 
     // ========== INTERNAL ==========
 
     function _calculateLiquidityAmounts(
+        address pair,
         address tokenA,
         address tokenB,
         uint256 amountADesired,
@@ -167,17 +170,15 @@ contract CocoRouter {
         uint256 amountAMin,
         uint256 amountBMin
     ) internal view returns (uint256 amountA, uint256 amountB) {
-        address pair = ICocoFactory(factory).getPair(
-            tokenA < tokenB ? tokenA : tokenB,
-            tokenA < tokenB ? tokenB : tokenA
-        );
-
         if (pair == address(0)) {
-            // First liquidity provider — use desired amounts as-is
+            require(amountADesired >= amountAMin, "CocoRouter: INSUFFICIENT_A_AMOUNT");
+            require(amountBDesired >= amountBMin, "CocoRouter: INSUFFICIENT_B_AMOUNT");
             (amountA, amountB) = (amountADesired, amountBDesired);
         } else {
             (uint256 reserveA, uint256 reserveB) = CocoLibrary.getReserves(factory, tokenA, tokenB);
             if (reserveA == 0 && reserveB == 0) {
+                require(amountADesired >= amountAMin, "CocoRouter: INSUFFICIENT_A_AMOUNT");
+                require(amountBDesired >= amountBMin, "CocoRouter: INSUFFICIENT_B_AMOUNT");
                 (amountA, amountB) = (amountADesired, amountBDesired);
             } else {
                 uint256 amountBOptimal = CocoLibrary.quote(amountADesired, reserveA, reserveB);
@@ -192,6 +193,9 @@ contract CocoRouter {
                 }
             }
         }
+
+        require(amountA >= amountAMin, "CocoRouter: INSUFFICIENT_A_AMOUNT");
+        require(amountB >= amountBMin, "CocoRouter: INSUFFICIENT_B_AMOUNT");
     }
 
     function _swap(uint256[] memory amounts, address[] memory path, address _to) internal {
@@ -199,18 +203,34 @@ contract CocoRouter {
             (address input, address output) = (path[i], path[i + 1]);
             (address token0,) = CocoLibrary.sortTokens(input, output);
             uint256 amountOut = amounts[i + 1];
-            (uint256 amount0Out, uint256 amount1Out) = input == token0
-                ? (uint256(0), amountOut)
-                : (amountOut, uint256(0));
+            (uint256 amount0Out, uint256 amount1Out) =
+                input == token0 ? (uint256(0), amountOut) : (amountOut, uint256(0));
             address to = i < path.length - 2 ? CocoLibrary.pairFor(factory, output, path[i + 2]) : _to;
             CocoPair(CocoLibrary.pairFor(factory, input, output)).swap(amount0Out, amount1Out, to);
         }
     }
 
+    function _validatePath(address[] calldata path) private pure {
+        require(path.length >= 2, "CocoRouter: INVALID_PATH");
+        for (uint256 i = 0; i < path.length; i++) {
+            require(path[i] != address(0), "CocoRouter: ZERO_ADDRESS");
+            if (i > 0) require(path[i - 1] != path[i], "CocoRouter: IDENTICAL_ADDRESSES");
+        }
+    }
+
     function _safeTransferFrom(address token, address from, address to, uint256 value) private {
-        (bool success, bytes memory data) = token.call(
-            abi.encodeWithSelector(0x23b872dd, from, to, value) // transferFrom(address,address,uint256)
-        );
-        require(success && (data.length == 0 || abi.decode(data, (bool))), "CocoRouter: TRANSFER_FAILED");
+        (bool success, bytes memory data) =
+            token.call(
+                abi.encodeWithSelector(0x23b872dd, from, to, value) // transferFrom(address,address,uint256)
+            );
+        require(success && _didTransferSucceed(data), "CocoRouter: TRANSFER_FAILED");
+    }
+
+    function _didTransferSucceed(bytes memory data) private pure returns (bool succeeded) {
+        if (data.length == 0) return true;
+        if (data.length < 32) return false;
+        assembly ("memory-safe") {
+            succeeded := eq(mload(add(data, 32)), 1)
+        }
     }
 }

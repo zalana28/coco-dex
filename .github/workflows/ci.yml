@@ -7,6 +7,39 @@ on:
     branches: [main]
 
 jobs:
+  contracts:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: contracts
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install contract dependencies
+        run: npm ci
+        working-directory: ${{ github.workspace }}
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a
+        with:
+          version: v1.7.1
+
+      - name: Check formatting
+        run: forge fmt --check
+
+      - name: Build contracts
+        run: forge build
+
+      - name: Test contracts
+        run: forge test -vvv
+
   build-and-test:
     runs-on: ubuntu-latest
 

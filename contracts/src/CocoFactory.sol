@@ -10,6 +10,8 @@ import "./CocoPair.sol";
  *      Inspired by Uniswap V2 Factory design. Clean implementation for Coco DEX.
  */
 contract CocoFactory {
+    /// @notice Reserved protocol-fee recipient setting. Classic Coco V2 pairs do not
+    /// currently read this value or mint protocol LP fees, so changing it has no effect.
     address public feeTo;
     address public feeToSetter;
 
