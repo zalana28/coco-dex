@@ -122,8 +122,9 @@ contract CocoPairTest is Test {
         other.mint(address(specialPair), 10_000);
         specialPair.mint(lp);
         special.setTransferBehavior(TransferBehaviorERC20.Behavior.ReturnNoData);
-        special.mint(address(specialPair), 1_000);
-        specialPair.swap(0, 900, trader);
+        other.mint(address(specialPair), 1_000);
+        specialPair.swap(900, 0, trader);
+        assertEq(special.balanceOf(trader), 900);
     }
 
     function testSafeTransferRejectsFalseAndRevert() public {

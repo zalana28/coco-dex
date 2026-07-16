@@ -27,7 +27,7 @@ for LPs. `CocoFactory.feeTo` is currently inactive: pairs do not track `kLast`
 or mint protocol LP fees. Configuring `feeTo` therefore does not collect a
 protocol fee.
 
-Classic Coco V2 contracts accept ERC-20 tokens only. On Arc, callers must use
+Classic Coco V2 contracts accept standard, non-fee-on-transfer ERC-20 tokens only. On Arc, callers must use
 the ERC-20 USDC balance and its token-native decimals; native gas-token USDC
 amounts are not interchangeable. The router has no payable, wrapping, or
 native-USDC entry points.

@@ -66,6 +66,16 @@ contract CocoFactoryTest is Test {
         factory.createPair(address(tokenA), address(tokenA));
     }
 
+    function testFeeToSettingsAreAuthorizedButInactive() public {
+        address recipient = makeAddr("feeRecipient");
+        factory.setFeeTo(recipient);
+        assertEq(factory.feeTo(), recipient);
+
+        vm.prank(makeAddr("unauthorized"));
+        vm.expectRevert("CocoFactory: FORBIDDEN");
+        factory.setFeeTo(makeAddr("otherRecipient"));
+    }
+
     function testFuzzPairMappingIsSymmetric(address first, address second) public {
         vm.assume(first != address(0) && second != address(0) && first != second);
         vm.assume(first.code.length == 0 && second.code.length == 0);

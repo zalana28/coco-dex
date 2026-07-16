@@ -227,6 +227,7 @@ contract CocoRouterCorrectnessTest is Test {
         _assertRouterTransferFromFailure(TransferBehaviorERC20.Behavior.RevertCall);
         _assertRouterTransferFromFailure(TransferBehaviorERC20.Behavior.ReturnShort);
         _assertRouterTransferFromFailure(TransferBehaviorERC20.Behavior.ReturnMalformedBool);
+        _assertSecondRouterTransferFromFailure();
     }
 
     function _assertRouterTransferFromFailure(TransferBehaviorERC20.Behavior behavior) private {
@@ -242,6 +243,25 @@ contract CocoRouterCorrectnessTest is Test {
         router.addLiquidity(address(special), address(other), 10_000, 10_000, 0, 0, user, DEADLINE);
         vm.stopPrank();
         assertEq(factory.getPair(address(special), address(other)), address(0));
+    }
+
+    function _assertSecondRouterTransferFromFailure() private {
+        MockERC20 first = new MockERC20("First", "FIRST", 18);
+        TransferBehaviorERC20 second = new TransferBehaviorERC20();
+        first.mint(user, 100_000);
+        second.mint(user, 100_000);
+
+        uint256 firstBalanceBefore = first.balanceOf(user);
+        vm.startPrank(user);
+        first.approve(address(router), type(uint256).max);
+        second.approve(address(router), type(uint256).max);
+        second.setTransferFromBehavior(TransferBehaviorERC20.Behavior.ReturnFalse);
+        vm.expectRevert("CocoRouter: TRANSFER_FAILED");
+        router.addLiquidity(address(first), address(second), 10_000, 10_000, 0, 0, user, DEADLINE);
+        vm.stopPrank();
+
+        assertEq(first.balanceOf(user), firstBalanceBefore);
+        assertEq(factory.getPair(address(first), address(second)), address(0));
     }
 
     function _addLiquidity(address first, address second, uint256 firstAmount, uint256 secondAmount) private {
