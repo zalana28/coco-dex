@@ -86,8 +86,8 @@ describe('cron indexer reliability', () => {
     process.env.INDEXER_CONFIRMATION_BLOCKS = '0'
     const indexerStore = store()
     await invoke(dependencies(indexerStore, { getBlockNumber: vi.fn().mockResolvedValue(CURSOR + 4n) }))
-    expect(indexerStore.persistChunk).toHaveBeenNthCalledWith(1, [], CURSOR + 2n, undefined)
-    expect(indexerStore.persistChunk).toHaveBeenNthCalledWith(2, [], CURSOR + 4n, undefined)
+    expect(indexerStore.persistChunk).toHaveBeenNthCalledWith(1, '00000000-0000-0000-0000-000000000001', [], CURSOR + 2n, undefined)
+    expect(indexerStore.persistChunk).toHaveBeenNthCalledWith(2, '00000000-0000-0000-0000-000000000001', [], CURSOR + 4n, undefined)
   })
 
   it('does not attempt a later checkpoint when event persistence fails', async () => {
@@ -128,5 +128,11 @@ describe('Supabase-backed store', () => {
   it('surfaces an acquire-lock RPC error', async () => {
     const rpc = vi.fn().mockResolvedValue({ data: null, error: { message: 'rpc failure' } })
     await expect(createSupabaseIndexerStore({ rpc } as never).acquireLock('token')).rejects.toThrow('Supabase acquire lock failed')
+  })
+
+  it('passes the lock token when atomically persisting a chunk', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: 0, error: null })
+    await createSupabaseIndexerStore({ rpc } as never).persistChunk('owner-token', [], CURSOR)
+    expect(rpc).toHaveBeenCalledWith('persist_indexer_chunk', expect.objectContaining({ p_lock_token: 'owner-token' }))
   })
 })

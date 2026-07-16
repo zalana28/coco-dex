@@ -25,7 +25,7 @@ export interface IndexerStore {
   acquireLock(token: string): Promise<boolean>
   releaseLock(token: string): Promise<void>
   getCursor(): Promise<bigint>
-  persistChunk(rows: DexEventRow[], toBlock: bigint, snapshot?: PoolSnapshot): Promise<number | undefined>
+  persistChunk(token: string, rows: DexEventRow[], toBlock: bigint, snapshot?: PoolSnapshot): Promise<number | undefined>
 }
 
 export interface IndexerDependencies {
@@ -82,8 +82,10 @@ export function createSupabaseIndexerStore(supabase: SupabaseClient): IndexerSto
       }
       return BigInt(data.last_indexed_block)
     },
-    async persistChunk(rows, toBlock, snapshot) {
+    async persistChunk(token, rows, toBlock, snapshot) {
       const { data, error } = await supabase.rpc('persist_indexer_chunk', {
+        p_lock_name: LOCK_NAME,
+        p_lock_token: token,
         p_state_id: INDEXER_STATE_ID,
         p_events: rows,
         p_last_indexed_block: Number(toBlock),
@@ -182,7 +184,7 @@ export function createIndexerHandler(deps: IndexerDependencies) {
           const toBlock = fromBlock + batchSize - 1n < runHead ? fromBlock + batchSize - 1n : runHead
           const chunkStarted = deps.now()
           const { rows, snapshot } = await deps.fetchRows(fromBlock, toBlock)
-          const inserted = await store.persistChunk(rows, toBlock, snapshot)
+          const inserted = await store.persistChunk(token, rows, toBlock, snapshot)
           insertedEvents += inserted ?? 0
           lastProcessed = toBlock
           deps.log({ event: 'indexer_chunk_committed', fromBlock: Number(fromBlock), toBlock: Number(toBlock), safeHead: Number(safeHead), lagBlocks: Number(safeHead - toBlock), insertedEvents: inserted ?? 0, durationMs: deps.now() - chunkStarted })

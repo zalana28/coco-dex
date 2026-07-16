@@ -11,11 +11,14 @@ describe('indexer reliability migration', () => {
     expect(migration).toContain('ON CONFLICT (lock_name) DO UPDATE')
     expect(migration).toContain('GRANT EXECUTE ON FUNCTION acquire_indexer_lock')
     expect(migration).toContain('TO service_role')
+    expect(migration).toContain('REVOKE ALL ON TABLE indexer_locks FROM PUBLIC, anon, authenticated')
   })
 
   it('persists idempotent events and cursor in one transaction', () => {
     expect(migration).toContain('CREATE OR REPLACE FUNCTION persist_indexer_chunk')
     expect(migration).toContain('ON CONFLICT (tx_hash, log_index) DO NOTHING')
     expect(migration).toMatch(/INSERT INTO dex_events[\s\S]*UPDATE indexer_state/)
+    expect(migration).toMatch(/persist_indexer_chunk\([\s\S]*p_lock_token UUID/)
+    expect(migration).toMatch(/FROM indexer_locks[\s\S]*lock_token = p_lock_token[\s\S]*expires_at > NOW\(\)/)
   })
 })

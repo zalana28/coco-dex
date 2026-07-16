@@ -72,6 +72,8 @@ $$;
 -- Inserts events idempotently and advances the cursor in the same transaction.
 -- If any event or snapshot write fails, PostgreSQL rolls back the cursor update.
 CREATE OR REPLACE FUNCTION persist_indexer_chunk(
+  p_lock_name TEXT,
+  p_lock_token UUID,
   p_state_id TEXT,
   p_events JSONB,
   p_last_indexed_block BIGINT,
@@ -85,6 +87,17 @@ DECLARE
   inserted_count INTEGER := 0;
   current_cursor BIGINT;
 BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM indexer_locks
+    WHERE lock_name = p_lock_name
+      AND lock_token = p_lock_token
+      AND expires_at > NOW()
+    FOR UPDATE
+  ) THEN
+    RAISE EXCEPTION 'indexer lock is not owned or has expired';
+  END IF;
+
   SELECT last_indexed_block INTO current_cursor
   FROM indexer_state
   WHERE id = p_state_id
@@ -145,7 +158,9 @@ $$;
 
 REVOKE ALL ON FUNCTION acquire_indexer_lock(TEXT, UUID, INTEGER) FROM PUBLIC;
 REVOKE ALL ON FUNCTION release_indexer_lock(TEXT, UUID) FROM PUBLIC;
-REVOKE ALL ON FUNCTION persist_indexer_chunk(TEXT, JSONB, BIGINT, JSONB) FROM PUBLIC;
+REVOKE ALL ON TABLE indexer_locks FROM PUBLIC, anon, authenticated;
+GRANT ALL ON TABLE indexer_locks TO service_role;
+REVOKE ALL ON FUNCTION persist_indexer_chunk(TEXT, UUID, TEXT, JSONB, BIGINT, JSONB) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION acquire_indexer_lock(TEXT, UUID, INTEGER) TO service_role;
 GRANT EXECUTE ON FUNCTION release_indexer_lock(TEXT, UUID) TO service_role;
-GRANT EXECUTE ON FUNCTION persist_indexer_chunk(TEXT, JSONB, BIGINT, JSONB) TO service_role;
+GRANT EXECUTE ON FUNCTION persist_indexer_chunk(TEXT, UUID, TEXT, JSONB, BIGINT, JSONB) TO service_role;
