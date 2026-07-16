@@ -6,7 +6,9 @@ contract TransferBehaviorERC20 {
         ReturnTrue,
         ReturnNoData,
         ReturnFalse,
-        RevertCall
+        RevertCall,
+        ReturnShort,
+        ReturnMalformedBool
     }
 
     mapping(address => uint256) public balanceOf;
@@ -67,6 +69,18 @@ contract TransferBehaviorERC20 {
         if (behavior == Behavior.ReturnFalse) {
             assembly ("memory-safe") {
                 mstore(0, 0)
+                return(0, 32)
+            }
+        }
+        if (behavior == Behavior.ReturnShort) {
+            assembly ("memory-safe") {
+                mstore(0, 1)
+                return(31, 1)
+            }
+        }
+        if (behavior == Behavior.ReturnMalformedBool) {
+            assembly ("memory-safe") {
+                mstore(0, 2)
                 return(0, 32)
             }
         }

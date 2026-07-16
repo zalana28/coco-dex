@@ -225,6 +225,8 @@ contract CocoRouterCorrectnessTest is Test {
         vm.stopPrank();
         _assertRouterTransferFromFailure(TransferBehaviorERC20.Behavior.ReturnFalse);
         _assertRouterTransferFromFailure(TransferBehaviorERC20.Behavior.RevertCall);
+        _assertRouterTransferFromFailure(TransferBehaviorERC20.Behavior.ReturnShort);
+        _assertRouterTransferFromFailure(TransferBehaviorERC20.Behavior.ReturnMalformedBool);
     }
 
     function _assertRouterTransferFromFailure(TransferBehaviorERC20.Behavior behavior) private {

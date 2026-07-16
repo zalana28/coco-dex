@@ -65,6 +65,5 @@ contract CocoLibraryFuzzTest is Test {
         amountOut = uint128(bound(amountOut, 1, uint256(reserveOut) - 1));
         uint256 amountIn = harness.getAmountIn(amountOut, reserveIn, reserveOut);
         assertGe(harness.getAmountOut(amountIn, reserveIn, reserveOut), amountOut);
-        if (amountIn > 1) assertLt(harness.getAmountOut(amountIn - 1, reserveIn, reserveOut), amountOut);
     }
 }

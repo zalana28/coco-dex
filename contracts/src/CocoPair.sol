@@ -202,7 +202,15 @@ contract CocoPair is CocoERC20 {
             token.call(
                 abi.encodeWithSelector(0xa9059cbb, to, value) // transfer(address,uint256)
             );
-        require(success && (data.length == 0 || abi.decode(data, (bool))), "CocoPair: TRANSFER_FAILED");
+        require(success && _didTransferSucceed(data), "CocoPair: TRANSFER_FAILED");
+    }
+
+    function _didTransferSucceed(bytes memory data) private pure returns (bool succeeded) {
+        if (data.length == 0) return true;
+        if (data.length < 32) return false;
+        assembly ("memory-safe") {
+            succeeded := eq(mload(add(data, 32)), 1)
+        }
     }
 
     function _sqrt(uint256 y) private pure returns (uint256 z) {

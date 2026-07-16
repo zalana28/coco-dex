@@ -129,6 +129,8 @@ contract CocoPairTest is Test {
     function testSafeTransferRejectsFalseAndRevert() public {
         _assertFailedTransfer(TransferBehaviorERC20.Behavior.ReturnFalse);
         _assertFailedTransfer(TransferBehaviorERC20.Behavior.RevertCall);
+        _assertFailedTransfer(TransferBehaviorERC20.Behavior.ReturnShort);
+        _assertFailedTransfer(TransferBehaviorERC20.Behavior.ReturnMalformedBool);
     }
 
     function _assertFailedTransfer(TransferBehaviorERC20.Behavior behavior) private {
