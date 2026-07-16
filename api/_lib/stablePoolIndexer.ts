@@ -8,7 +8,11 @@ import {
   STABLE_POOL_DEPLOYMENT_BLOCK,
 } from './stablePoolEvents.js'
 
-const STABLE_POOL_BATCH_SIZE = 2000n
+function configValue(name: string, fallback: number, allowZero = false) {
+  const value = Number(process.env[name] ?? fallback)
+  if (!Number.isSafeInteger(value) || (allowZero ? value < 0 : value <= 0)) throw new Error(`Invalid ${name}`)
+  return BigInt(value)
+}
 
 async function getBlockTimestamp(client: PublicClient, blockNumber: bigint, cache: Map<bigint, string>) {
   const cached = cache.get(blockNumber)
@@ -20,7 +24,7 @@ async function getBlockTimestamp(client: PublicClient, blockNumber: bigint, cach
 }
 
 async function getLastStablePoolBlock(supabase: SupabaseClient) {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('stable_pool_indexer_runs')
     .select('to_block')
     .eq('pool_address', COCO_STABLE_POOL_ADDRESS.toLowerCase())
@@ -30,6 +34,7 @@ async function getLastStablePoolBlock(supabase: SupabaseClient) {
     .limit(1)
     .maybeSingle()
 
+  if (error) throw new Error('Supabase stable cursor read failed', { cause: error })
   return BigInt(data?.to_block ?? 0)
 }
 
@@ -47,7 +52,7 @@ export async function runStablePoolIndexer({
   let runStartBlock: bigint | null = null
   let toBlockMax: bigint | null = null
 
-  const { data: runInsert } = await supabase
+  const { data: runInsert, error: runInsertError } = await supabase
     .from('stable_pool_indexer_runs')
     .insert({
       chain_id: arcTestnet.id,
@@ -57,14 +62,19 @@ export async function runStablePoolIndexer({
     })
     .select('id')
     .single()
+  if (runInsertError) throw new Error('Supabase stable run insert failed', { cause: runInsertError })
   const runId = runInsert?.id
 
   try {
     const lastBlock = await getLastStablePoolBlock(supabase)
     const currentBlock = await client.getBlockNumber()
+    const confirmations = configValue('INDEXER_CONFIRMATION_BLOCKS', 12, true)
+    const safeHead = currentBlock > confirmations ? currentBlock - confirmations : 0n
+    const batchSize = configValue('INDEXER_BATCH_SIZE', 500)
+    const maxBlocks = configValue('INDEXER_MAX_BLOCKS_PER_RUN', 2000)
     const effectiveLastBlock = lastBlock < STABLE_POOL_DEPLOYMENT_BLOCK ? STABLE_POOL_DEPLOYMENT_BLOCK - 1n : lastBlock
     let nextFromBlock = effectiveLastBlock + 1n
-    const finalToBlock = currentBlock
+    const finalToBlock = nextFromBlock + maxBlocks - 1n < safeHead ? nextFromBlock + maxBlocks - 1n : safeHead
     runStartBlock = nextFromBlock
     toBlockMax = finalToBlock
 
@@ -72,9 +82,9 @@ export async function runStablePoolIndexer({
 
     while (nextFromBlock <= finalToBlock) {
       const toBlock =
-        nextFromBlock + STABLE_POOL_BATCH_SIZE - 1n > finalToBlock
+        nextFromBlock + batchSize - 1n > finalToBlock
           ? finalToBlock
-          : nextFromBlock + STABLE_POOL_BATCH_SIZE - 1n
+          : nextFromBlock + batchSize - 1n
       const logs = await fetchStablePoolLogs(client, nextFromBlock, toBlock)
       const allLogs = [
         ...logs.liquidityAddedLogs,
@@ -103,7 +113,7 @@ export async function runStablePoolIndexer({
       }
 
       // fix(2): check errors on reserve snapshot insert
-      const { error: reserveSnapshotError } = await supabase.from('stable_pool_reserve_snapshots').insert({
+      const { error: reserveSnapshotError } = await supabase.from('stable_pool_reserve_snapshots').upsert({
         pool_address: snapshot.pool_address,
         chain_id: snapshot.chain_id,
         snapshot_type: 'reserve',
@@ -115,12 +125,12 @@ export async function runStablePoolIndexer({
         reserve1_raw: snapshot.reserve1_raw,
         lp_total_supply_raw: snapshot.lp_total_supply_raw,
         lp_decimals: snapshot.lp_decimals,
-      })
+      }, { onConflict: 'pool_address,chain_id,block_number', ignoreDuplicates: true })
       if (reserveSnapshotError) throw reserveSnapshotError
       snapshotsWritten++
 
       // fix(2): check errors on lp snapshot insert
-      const { error: lpSnapshotError } = await supabase.from('stable_pool_lp_snapshots').insert({
+      const { error: lpSnapshotError } = await supabase.from('stable_pool_lp_snapshots').upsert({
         pool_address: snapshot.pool_address,
         chain_id: snapshot.chain_id,
         snapshot_type: 'lp_supply',
@@ -129,7 +139,7 @@ export async function runStablePoolIndexer({
         lp_token_address: COCO_STABLE_LP_TOKEN_ADDRESS.toLowerCase(),
         lp_total_supply_raw: snapshot.lp_total_supply_raw,
         lp_decimals: snapshot.lp_decimals,
-      })
+      }, { onConflict: 'pool_address,chain_id,block_number', ignoreDuplicates: true })
       if (lpSnapshotError) throw lpSnapshotError
       snapshotsWritten++
 
@@ -139,7 +149,7 @@ export async function runStablePoolIndexer({
 
     const finishedAt = new Date().toISOString()
     if (runId !== undefined) {
-      await supabase
+      const { error: runUpdateError } = await supabase
         .from('stable_pool_indexer_runs')
         .update({
           finished_at: finishedAt,
@@ -150,6 +160,7 @@ export async function runStablePoolIndexer({
           snapshots_written: snapshotsWritten,
         })
         .eq('id', runId)
+      if (runUpdateError) throw new Error('Supabase stable run update failed', { cause: runUpdateError })
     }
 
     return {
@@ -161,7 +172,7 @@ export async function runStablePoolIndexer({
     }
   } catch (error) {
     if (runId !== undefined) {
-      await supabase
+      const { error: failedRunUpdateError } = await supabase
         .from('stable_pool_indexer_runs')
         .update({
           finished_at: new Date().toISOString(),
@@ -174,6 +185,7 @@ export async function runStablePoolIndexer({
           error_message: error instanceof Error ? error.message : String(error),
         })
         .eq('id', runId)
+      if (failedRunUpdateError) console.error(JSON.stringify({ event: 'stable_run_failure_record_failed' }))
     }
     throw error
   }
