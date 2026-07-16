@@ -6,6 +6,7 @@ import { getArcClient, PAIR_ADDRESS, USDC_IS_TOKEN0 } from '../_lib/arcClient.js
 import { fetchPairLogs, computeSwapVolumeUsd, computeTvlUsd } from '../_lib/dexEvents.js'
 import type { DexEventRow } from '../_lib/dexEvents.js'
 import { runStablePoolIndexer } from '../_lib/stablePoolIndexer.js'
+import { sanitizeRpcError } from '../_lib/rpcLogs.js'
 
 const FEE_RATE = 0.003
 const DEPLOYMENT_BLOCK = 44170190n
@@ -48,7 +49,7 @@ function requiredPositiveInteger(name: string, fallback: number, allowZero = fal
 }
 
 function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error)
+  return sanitizeRpcError(error)
 }
 
 export function createSupabaseIndexerStore(supabase: SupabaseClient): IndexerStore {

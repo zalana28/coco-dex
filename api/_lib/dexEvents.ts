@@ -1,5 +1,6 @@
-import { type PublicClient, parseAbiItem } from 'viem'
+import { type GetLogsReturnType, type PublicClient, parseAbiItem } from 'viem'
 import { PAIR_ADDRESS, USDC_IS_TOKEN0 } from './arcClient.js'
+import { fetchLogsResilient, productionRpcLogOptions } from './rpcLogs.js'
 
 /**
  * Uniswap V2 Pair event signatures (standard).
@@ -16,6 +17,8 @@ export const BURN_EVENT = parseAbiItem(
 export const SYNC_EVENT = parseAbiItem(
   'event Sync(uint112 reserve0, uint112 reserve1)'
 )
+const PAIR_EVENTS = [SWAP_EVENT, MINT_EVENT, BURN_EVENT, SYNC_EVENT] as const
+type PairLogs = GetLogsReturnType<undefined, typeof PAIR_EVENTS>
 
 /** Fetch all relevant pair events in a block range */
 export async function fetchPairLogs(
@@ -23,12 +26,17 @@ export async function fetchPairLogs(
   fromBlock: bigint,
   toBlock: bigint
 ) {
-  const [swapLogs, mintLogs, burnLogs, syncLogs] = await Promise.all([
-    client.getLogs({ address: PAIR_ADDRESS, event: SWAP_EVENT, fromBlock, toBlock }),
-    client.getLogs({ address: PAIR_ADDRESS, event: MINT_EVENT, fromBlock, toBlock }),
-    client.getLogs({ address: PAIR_ADDRESS, event: BURN_EVENT, fromBlock, toBlock }),
-    client.getLogs({ address: PAIR_ADDRESS, event: SYNC_EVENT, fromBlock, toBlock }),
-  ])
+  const logs = await fetchLogsResilient(
+    client,
+    { address: PAIR_ADDRESS, events: PAIR_EVENTS },
+    fromBlock,
+    toBlock,
+    productionRpcLogOptions(),
+  ) as PairLogs
+  const swapLogs = logs.filter((log) => log.eventName === 'Swap')
+  const mintLogs = logs.filter((log) => log.eventName === 'Mint')
+  const burnLogs = logs.filter((log) => log.eventName === 'Burn')
+  const syncLogs = logs.filter((log) => log.eventName === 'Sync')
 
   return { swapLogs, mintLogs, burnLogs, syncLogs }
 }

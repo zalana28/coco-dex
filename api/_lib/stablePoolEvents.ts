@@ -1,4 +1,4 @@
-import { type PublicClient, parseAbiItem } from 'viem'
+import { type GetLogsReturnType, type PublicClient, parseAbiItem } from 'viem'
 import {
   arcTestnet,
   COCO_STABLE_LP_TOKEN_ADDRESS,
@@ -6,6 +6,7 @@ import {
   EURC_ADDRESS,
   USDC_ADDRESS,
 } from './arcClient.js'
+import { fetchLogsResilient, productionRpcLogOptions } from './rpcLogs.js'
 
 export const STABLE_POOL_DEPLOYMENT_BLOCK = 45646084n
 
@@ -17,6 +18,8 @@ export const STABLE_POOL_EVENTS = {
   paused: parseAbiItem('event Paused(address account)'),
   unpaused: parseAbiItem('event Unpaused(address account)'),
 } as const
+const STABLE_POOL_EVENT_LIST = Object.values(STABLE_POOL_EVENTS)
+type StablePoolLogs = GetLogsReturnType<undefined, typeof STABLE_POOL_EVENT_LIST>
 
 export const STABLE_POOL_READ_ABI = [
   {
@@ -99,14 +102,19 @@ export type StablePoolSnapshot = {
 
 export async function fetchStablePoolLogs(client: PublicClient, fromBlock: bigint, toBlock: bigint) {
   const address = COCO_STABLE_POOL_ADDRESS
-  const [liquidityAddedLogs, liquidityRemovedLogs, swapLogs, feeUpdatedLogs, pausedLogs, unpausedLogs] = await Promise.all([
-    client.getLogs({ address, event: STABLE_POOL_EVENTS.liquidityAdded, fromBlock, toBlock }),
-    client.getLogs({ address, event: STABLE_POOL_EVENTS.liquidityRemoved, fromBlock, toBlock }),
-    client.getLogs({ address, event: STABLE_POOL_EVENTS.swap, fromBlock, toBlock }),
-    client.getLogs({ address, event: STABLE_POOL_EVENTS.feeUpdated, fromBlock, toBlock }),
-    client.getLogs({ address, event: STABLE_POOL_EVENTS.paused, fromBlock, toBlock }),
-    client.getLogs({ address, event: STABLE_POOL_EVENTS.unpaused, fromBlock, toBlock }),
-  ])
+  const logs = await fetchLogsResilient(
+    client,
+    { address, events: STABLE_POOL_EVENT_LIST },
+    fromBlock,
+    toBlock,
+    productionRpcLogOptions(),
+  ) as StablePoolLogs
+  const liquidityAddedLogs = logs.filter((log) => log.eventName === 'LiquidityAdded')
+  const liquidityRemovedLogs = logs.filter((log) => log.eventName === 'LiquidityRemoved')
+  const swapLogs = logs.filter((log) => log.eventName === 'Swap')
+  const feeUpdatedLogs = logs.filter((log) => log.eventName === 'FeeUpdated')
+  const pausedLogs = logs.filter((log) => log.eventName === 'Paused')
+  const unpausedLogs = logs.filter((log) => log.eventName === 'Unpaused')
 
   return { liquidityAddedLogs, liquidityRemovedLogs, swapLogs, feeUpdatedLogs, pausedLogs, unpausedLogs }
 }

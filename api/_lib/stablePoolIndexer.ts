@@ -7,6 +7,7 @@ import {
   readStablePoolSnapshot,
   STABLE_POOL_DEPLOYMENT_BLOCK,
 } from './stablePoolEvents.js'
+import { sanitizeRpcError } from './rpcLogs.js'
 
 function configValue(name: string, fallback: number, allowZero = false) {
   const value = Number(process.env[name] ?? fallback)
@@ -182,7 +183,7 @@ export async function runStablePoolIndexer({
           to_block: toBlockMax === null ? null : Number(toBlockMax),
           events_indexed: eventsIndexed,
           snapshots_written: snapshotsWritten,
-          error_message: error instanceof Error ? error.message : String(error),
+          error_message: sanitizeRpcError(error),
         })
         .eq('id', runId)
       if (failedRunUpdateError) console.error(JSON.stringify({ event: 'stable_run_failure_record_failed' }))

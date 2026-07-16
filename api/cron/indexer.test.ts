@@ -90,6 +90,17 @@ describe('cron indexer reliability', () => {
     expect(indexerStore.persistChunk).toHaveBeenNthCalledWith(2, '00000000-0000-0000-0000-000000000001', [], CURSOR + 4n, undefined)
   })
 
+  it('does not advance the cursor when RPC retries are exhausted', async () => {
+    process.env.INDEXER_CONFIRMATION_BLOCKS = '0'
+    const persistChunk = vi.fn()
+    const fetchRows = vi.fn().mockRejectedValue(new Error('RPC eth_getLogs failed after 3 attempts (rate_limit)'))
+
+    const res = await invoke(dependencies(store({ persistChunk }), { fetchRows }))
+
+    expect(res.statusCode).toBe(500)
+    expect(persistChunk).not.toHaveBeenCalled()
+  })
+
   it('does not attempt a later checkpoint when event persistence fails', async () => {
     process.env.INDEXER_BATCH_SIZE = '2'
     process.env.INDEXER_MAX_BLOCKS_PER_RUN = '4'
@@ -101,10 +112,19 @@ describe('cron indexer reliability', () => {
     expect(persistChunk).toHaveBeenCalledTimes(1)
   })
 
-  it('returns a sanitized failure when lock RPC fails', async () => {
-    const res = await invoke(dependencies(store({ acquireLock: vi.fn().mockRejectedValue(new Error('rpc details')) })))
+  it('returns and logs a sanitized failure when RPC details contain credentials', async () => {
+    const log = vi.fn()
+    const secret = 'https://eth-mainnet.g.alchemy.com/v2/super-secret-key'
+    const res = await invoke(dependencies(store({
+      acquireLock: vi.fn().mockRejectedValue(new Error(`RPC failed at ${secret} Authorization: Bearer hidden-token`)),
+    }), { log }))
+
     expect(res.statusCode).toBe(500)
     expect(res.body).toEqual({ error: 'Indexer failed' })
+    const serialized = JSON.stringify(log.mock.calls)
+    expect(serialized).not.toContain('super-secret-key')
+    expect(serialized).not.toContain('hidden-token')
+    expect(serialized).not.toContain('Authorization')
   })
 
   it('skips an overlapping invocation without touching the cursor', async () => {
