@@ -22,6 +22,16 @@ Coco DEX is an Arc Testnet DEX MVP for USDC/EURC swaps, route comparison, liquid
 - Max approval mode for streamlined repeat swaps
 - Public `/docs` page and markdown developer docs
 
+The classic Coco V2 pair charges a 0.3% swap fee that remains in pair reserves
+for LPs. `CocoFactory.feeTo` is currently inactive: pairs do not track `kLast`
+or mint protocol LP fees. Configuring `feeTo` therefore does not collect a
+protocol fee.
+
+Classic Coco V2 contracts accept ERC-20 tokens only. On Arc, callers must use
+the ERC-20 USDC balance and its token-native decimals; native gas-token USDC
+amounts are not interchangeable. The router has no payable, wrapping, or
+native-USDC entry points.
+
 ## Coco Native Stable Pool LP Beta
 
 Coco Native Stable Pool V1 is visible on the Pools page as an Arc Testnet LP Beta. It supports tiny test add/remove liquidity flows for verification, but it remains:

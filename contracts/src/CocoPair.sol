@@ -61,6 +61,9 @@ contract CocoPair is CocoERC20 {
      */
     function initialize(address _token0, address _token1) external {
         require(msg.sender == factory, "CocoPair: FORBIDDEN");
+        require(token0 == address(0) && token1 == address(0), "CocoPair: ALREADY_INITIALIZED");
+        require(_token0 != address(0) && _token1 != address(0), "CocoPair: ZERO_ADDRESS");
+        require(_token0 != _token1, "CocoPair: IDENTICAL_ADDRESSES");
         token0 = _token0;
         token1 = _token1;
     }
@@ -90,10 +93,7 @@ contract CocoPair is CocoERC20 {
             liquidity = _sqrt(amount0 * amount1) - MINIMUM_LIQUIDITY;
             _mint(address(0xdead), MINIMUM_LIQUIDITY); // permanently lock minimum liquidity
         } else {
-            liquidity = _min(
-                (amount0 * _totalSupply) / _reserve0,
-                (amount1 * _totalSupply) / _reserve1
-            );
+            liquidity = _min((amount0 * _totalSupply) / _reserve0, (amount1 * _totalSupply) / _reserve1);
         }
         require(liquidity > 0, "CocoPair: INSUFFICIENT_LIQUIDITY_MINTED");
         _mint(to, liquidity);
@@ -107,6 +107,7 @@ contract CocoPair is CocoERC20 {
      * @dev LP tokens must be transferred to this contract before calling burn.
      */
     function burn(address to) external lock returns (uint256 amount0, uint256 amount1) {
+        require(to != address(0), "CocoPair: INVALID_TO");
         uint256 balance0 = _balanceOf(token0);
         uint256 balance1 = _balanceOf(token1);
         uint256 liquidity = balanceOf[address(this)];
@@ -137,7 +138,7 @@ contract CocoPair is CocoERC20 {
         require(amount0Out > 0 || amount1Out > 0, "CocoPair: INSUFFICIENT_OUTPUT_AMOUNT");
         (uint112 _reserve0, uint112 _reserve1,) = getReserves();
         require(amount0Out < _reserve0 && amount1Out < _reserve1, "CocoPair: INSUFFICIENT_LIQUIDITY");
-        require(to != token0 && to != token1, "CocoPair: INVALID_TO");
+        require(to != address(0) && to != token0 && to != token1, "CocoPair: INVALID_TO");
 
         if (amount0Out > 0) _safeTransfer(token0, to, amount0Out);
         if (amount1Out > 0) _safeTransfer(token1, to, amount1Out);
@@ -156,8 +157,7 @@ contract CocoPair is CocoERC20 {
             uint256 balance0Adjusted = balance0 * 1000 - amount0In * 3;
             uint256 balance1Adjusted = balance1 * 1000 - amount1In * 3;
             require(
-                balance0Adjusted * balance1Adjusted >= uint256(_reserve0) * uint256(_reserve1) * 1000000,
-                "CocoPair: K"
+                balance0Adjusted * balance1Adjusted >= uint256(_reserve0) * uint256(_reserve1) * 1000000, "CocoPair: K"
             );
         }
 
@@ -184,22 +184,24 @@ contract CocoPair is CocoERC20 {
         reserve0 = uint112(balance0);
         // forge-lint: disable-next-line(unsafe-typecast)
         reserve1 = uint112(balance1);
-        blockTimestampLast = uint32(block.timestamp % 2**32);
+        blockTimestampLast = uint32(block.timestamp % 2 ** 32);
         emit Sync(reserve0, reserve1);
     }
 
     function _balanceOf(address token) private view returns (uint256) {
-        (bool success, bytes memory data) = token.staticcall(
-            abi.encodeWithSelector(0x70a08231, address(this)) // balanceOf(address)
-        );
+        (bool success, bytes memory data) =
+            token.staticcall(
+                abi.encodeWithSelector(0x70a08231, address(this)) // balanceOf(address)
+            );
         require(success && data.length >= 32, "CocoPair: BALANCE_CALL_FAILED");
         return abi.decode(data, (uint256));
     }
 
     function _safeTransfer(address token, address to, uint256 value) private {
-        (bool success, bytes memory data) = token.call(
-            abi.encodeWithSelector(0xa9059cbb, to, value) // transfer(address,uint256)
-        );
+        (bool success, bytes memory data) =
+            token.call(
+                abi.encodeWithSelector(0xa9059cbb, to, value) // transfer(address,uint256)
+            );
         require(success && (data.length == 0 || abi.decode(data, (bool))), "CocoPair: TRANSFER_FAILED");
     }
 

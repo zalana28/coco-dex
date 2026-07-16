@@ -36,14 +36,15 @@ library CocoLibrary {
     /**
      * @notice Get reserves for a pair, ordered by tokenA/tokenB input order.
      */
-    function getReserves(
-        address factory,
-        address tokenA,
-        address tokenB
-    ) internal view returns (uint256 reserveA, uint256 reserveB) {
+    function getReserves(address factory, address tokenA, address tokenB)
+        internal
+        view
+        returns (uint256 reserveA, uint256 reserveB)
+    {
         (address token0,) = sortTokens(tokenA, tokenB);
         (uint112 reserve0, uint112 reserve1,) = CocoPair(pairFor(factory, tokenA, tokenB)).getReserves();
-        (reserveA, reserveB) = tokenA == token0 ? (uint256(reserve0), uint256(reserve1)) : (uint256(reserve1), uint256(reserve0));
+        (reserveA, reserveB) =
+            tokenA == token0 ? (uint256(reserve0), uint256(reserve1)) : (uint256(reserve1), uint256(reserve0));
     }
 
     /**
@@ -51,11 +52,11 @@ library CocoLibrary {
      * @dev Implements constant product formula with 0.3% fee:
      *      amountOut = (amountIn * 997 * reserveOut) / (reserveIn * 1000 + amountIn * 997)
      */
-    function getAmountOut(
-        uint256 amountIn,
-        uint256 reserveIn,
-        uint256 reserveOut
-    ) internal pure returns (uint256 amountOut) {
+    function getAmountOut(uint256 amountIn, uint256 reserveIn, uint256 reserveOut)
+        internal
+        pure
+        returns (uint256 amountOut)
+    {
         require(amountIn > 0, "CocoLibrary: INSUFFICIENT_INPUT_AMOUNT");
         require(reserveIn > 0 && reserveOut > 0, "CocoLibrary: INSUFFICIENT_LIQUIDITY");
         uint256 amountInWithFee = amountIn * 997;
@@ -67,13 +68,14 @@ library CocoLibrary {
     /**
      * @notice Given an output amount and reserves, calculate the required input.
      */
-    function getAmountIn(
-        uint256 amountOut,
-        uint256 reserveIn,
-        uint256 reserveOut
-    ) internal pure returns (uint256 amountIn) {
+    function getAmountIn(uint256 amountOut, uint256 reserveIn, uint256 reserveOut)
+        internal
+        pure
+        returns (uint256 amountIn)
+    {
         require(amountOut > 0, "CocoLibrary: INSUFFICIENT_OUTPUT_AMOUNT");
         require(reserveIn > 0 && reserveOut > 0, "CocoLibrary: INSUFFICIENT_LIQUIDITY");
+        require(amountOut < reserveOut, "CocoLibrary: INSUFFICIENT_LIQUIDITY");
         uint256 numerator = reserveIn * amountOut * 1000;
         uint256 denominator = (reserveOut - amountOut) * 997;
         amountIn = numerator / denominator + 1;
@@ -82,11 +84,11 @@ library CocoLibrary {
     /**
      * @notice Calculate output amounts for a multi-hop path.
      */
-    function getAmountsOut(
-        address factory,
-        uint256 amountIn,
-        address[] memory path
-    ) internal view returns (uint256[] memory amounts) {
+    function getAmountsOut(address factory, uint256 amountIn, address[] memory path)
+        internal
+        view
+        returns (uint256[] memory amounts)
+    {
         require(path.length >= 2, "CocoLibrary: INVALID_PATH");
         amounts = new uint256[](path.length);
         amounts[0] = amountIn;
@@ -99,11 +101,11 @@ library CocoLibrary {
     /**
      * @notice Calculate input amounts for a multi-hop path.
      */
-    function getAmountsIn(
-        address factory,
-        uint256 amountOut,
-        address[] memory path
-    ) internal view returns (uint256[] memory amounts) {
+    function getAmountsIn(address factory, uint256 amountOut, address[] memory path)
+        internal
+        view
+        returns (uint256[] memory amounts)
+    {
         require(path.length >= 2, "CocoLibrary: INVALID_PATH");
         amounts = new uint256[](path.length);
         amounts[amounts.length - 1] = amountOut;
@@ -125,4 +127,6 @@ library CocoLibrary {
 
 interface ICocoFactory {
     function getPair(address tokenA, address tokenB) external view returns (address pair);
+
+    function createPair(address tokenA, address tokenB) external returns (address pair);
 }
