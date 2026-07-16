@@ -13,6 +13,7 @@ type RetryCategory = 'rate_limit' | 'timeout' | 'gateway' | 'network'
 type LogEntry = Record<string, unknown>
 
 export type RpcLogOptions = {
+  maxRangeBlocks?: bigint
   maxAttempts?: number
   baseDelayMs?: number
   maxDelayMs?: number
@@ -125,17 +126,30 @@ export function fetchLogsResilient<TLog>(
   options: RpcLogOptions = {},
 ) {
   if (fromBlock > toBlock) throw new Error('RPC eth_getLogs range must not be empty')
-  return fetchRange(client, query, fromBlock, toBlock, {
+  const resolvedOptions = {
     maxAttempts: options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
     baseDelayMs: options.baseDelayMs ?? DEFAULT_BASE_DELAY_MS,
     maxDelayMs: options.maxDelayMs ?? DEFAULT_MAX_DELAY_MS,
     providerUrl: options.providerUrl,
-    sleep: options.sleep ?? ((delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs))),
+    sleep: options.sleep ?? ((delayMs: number) => new Promise<void>((resolve) => setTimeout(resolve, delayMs))),
     random: options.random ?? Math.random,
-    log: options.log ?? ((entry) => console.log(JSON.stringify(entry))),
-  })
+    log: options.log ?? ((entry: LogEntry) => console.log(JSON.stringify(entry))),
+  }
+  const maxRangeBlocks = options.maxRangeBlocks
+  if (maxRangeBlocks === undefined || toBlock - fromBlock + 1n <= maxRangeBlocks) {
+    return fetchRange(client, query, fromBlock, toBlock, resolvedOptions)
+  }
+  if (maxRangeBlocks < 1n) throw new Error('RPC eth_getLogs max range must be positive')
+  return (async () => {
+    const logs: TLog[] = []
+    for (let rangeStart = fromBlock; rangeStart <= toBlock; rangeStart += maxRangeBlocks) {
+      const rangeEnd = rangeStart + maxRangeBlocks - 1n < toBlock ? rangeStart + maxRangeBlocks - 1n : toBlock
+      logs.push(...await fetchRange(client, query, rangeStart, rangeEnd, resolvedOptions))
+    }
+    return logs
+  })()
 }
 
 export function productionRpcLogOptions(): RpcLogOptions {
-  return { providerUrl: process.env.ARC_TESTNET_RPC_URL }
+  return { providerUrl: process.env.ARC_TESTNET_RPC_URL, maxRangeBlocks: 10n }
 }

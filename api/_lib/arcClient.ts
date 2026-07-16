@@ -22,7 +22,7 @@ export const arcTestnet = defineChain({
 export function getArcClient() {
   return createPublicClient({
     chain: arcTestnet,
-    transport: http(process.env.ARC_TESTNET_RPC_URL || 'https://rpc.testnet.arc.network'),
+    transport: http(process.env.ARC_TESTNET_RPC_URL || 'https://rpc.testnet.arc.network', { retryCount: 0 }),
   })
 }
 

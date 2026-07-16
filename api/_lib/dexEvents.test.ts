@@ -93,6 +93,24 @@ describe('resilient eth_getLogs ranges', () => {
     expect(getLogs).toHaveBeenCalledWith(expect.objectContaining({ fromBlock: 1n, toBlock: 10n }))
   })
 
+  it('proactively caps provider requests at 10 inclusive blocks', async () => {
+    const ranges: Array<[bigint, bigint]> = []
+    const getLogs = vi.fn(async ({ fromBlock, toBlock }: { fromBlock: bigint; toBlock: bigint }) => {
+      ranges.push([fromBlock, toBlock])
+      return []
+    })
+
+    await fetchLogsResilient(
+      { getLogs } as never,
+      { address: baseLog.address as `0x${string}`, events: [] },
+      1n,
+      25n,
+      { maxRangeBlocks: 10n },
+    )
+
+    expect(ranges).toEqual([[1n, 10n], [11n, 20n], [21n, 25n]])
+  })
+
   it('splits an oversized range without gaps or overlaps', async () => {
     const successful: Array<[bigint, bigint]> = []
     const getLogs = vi.fn(async ({ fromBlock, toBlock }: { fromBlock: bigint; toBlock: bigint }) => {
