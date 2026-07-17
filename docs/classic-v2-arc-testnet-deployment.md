@@ -28,6 +28,7 @@ Set secrets in the shell or an ignored `.env` file; never commit them.
 ```bash
 export ARC_TESTNET_RPC_URL="https://rpc.testnet.arc.network"
 export ARC_TESTNET_DEPLOYER_PRIVATE_KEY="0x..."
+export ARC_TESTNET_EXPECTED_DEPLOYER="0x..." # independently confirmed operator address
 ```
 
 Optional configuration:
@@ -74,6 +75,7 @@ npm run lint
 npm run typecheck
 npm test
 npm run build
+npm run contracts:test:deployment-recorder
 git diff --check
 ```
 
@@ -81,7 +83,7 @@ Review the working tree and confirm it contains no secrets or production-address
 
 ## Exact manual deployment commands
 
-Deployment is deliberately split into factory, router, and pair phases. This makes retries idempotent: after each successful phase, export the recorded address before running the next phase. Never rerun a successful deployment phase, because contract creation itself cannot discover a prior address automatically.
+Deployment is deliberately split into factory, router, and pair phases. This makes retries idempotent: after each successful phase, export the confirmed address before running the next phase. A rerun with that address validates and reuses the contract without broadcasting another deployment.
 
 ### 1. Phase-by-phase simulation and manual deployment
 
@@ -118,7 +120,7 @@ forge script script/CreateArcClassicV2Pair.s.sol:CreateArcClassicV2Pair \
 cd ..
 ```
 
-The pair phase safely emits no transaction when the pair already exists. If a phase fails, inspect its receipt before retrying. Resume from the first incomplete phase using confirmed addresses; do not redeploy earlier phases. Simulations have no canonical receipts and create no deployment record.
+All phases safely emit no transaction when their confirmed address is supplied (or, for the pair, when it already exists). If a phase fails, inspect its receipt before retrying. Resume from the first incomplete phase using confirmed addresses. Preserve or archive each successful phase's original broadcast artifact before a no-op rerun; the canonical recorder needs those original transaction receipts. Simulations have no canonical receipts and create no deployment record.
 
 `--broadcast` is deliberately absent from `package.json`. Contract-source verification, if desired, is a separate operator action after deployment; it is not a security audit.
 
@@ -138,6 +140,17 @@ overrode their defaults during deployment:
 npm run contracts:record:classic-v2
 ```
 
+Recording performs read-only live RPC verification of chain ID, transaction input,
+sender, successful receipts, block numbers, deployed addresses, and runtime bytecode.
+It never signs or broadcasts a transaction. Export the recorded code hashes before
+running the read-only verifier:
+
+```bash
+export ARC_TESTNET_FACTORY_CODE_HASH="0x..."
+export ARC_TESTNET_ROUTER_CODE_HASH="0x..."
+export ARC_TESTNET_PAIR_CODE_HASH="0x..."
+```
+
 The recorder refuses to overwrite an existing deployment record. Archive old records instead of deleting them. The resulting JSON includes:
 
 - chain ID
@@ -146,6 +159,7 @@ The recorder refuses to overwrite an existing deployment record. Archive old rec
 - factory/router deployment and pair-creation transaction hashes
 - their receipt block numbers
 - pair init-code hash
+- factory, router, and pair runtime code hashes
 - ABI-encoded factory and router constructor arguments
 - `null` pair-creation transaction when the pair was already present
 - source broadcast artifact paths

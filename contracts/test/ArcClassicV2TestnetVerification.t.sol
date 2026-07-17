@@ -199,11 +199,12 @@ contract ArcClassicV2TestnetVerification is Test {
 
         bytes32 salt = keccak256(abi.encodePacked(token0, token1));
         address predictedPair = vm.computeCreate2Address(salt, keccak256(type(CocoPair).creationCode), address(factory));
+        uint256 expectedPairCount = factory.allPairsLength() + 1;
 
         vm.expectEmit(true, true, false, true, address(factory));
-        emit CocoFactory.PairCreated(token0, token1, predictedPair, 1);
+        emit CocoFactory.PairCreated(token0, token1, predictedPair, expectedPairCount);
         address createdPair = factory.createPair(address(tokenA), address(tokenB));
-        assertEq(factory.allPairsLength(), 1, "pair count mismatch");
+        assertEq(factory.allPairsLength(), expectedPairCount, "pair count mismatch");
         assertEq(createdPair, predictedPair, "created pair mismatch");
     }
 

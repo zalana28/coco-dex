@@ -14,6 +14,7 @@ contract DeployArcClassicV2Router is Script {
         uint256 deployerKey = vm.envUint("ARC_TESTNET_DEPLOYER_PRIVATE_KEY");
         address deployer = vm.addr(deployerKey);
         address factory = vm.envAddress("ARC_TESTNET_FACTORY_ADDRESS");
+        address existingRouter = vm.envOr("ARC_TESTNET_ROUTER_ADDRESS", address(0));
         address expectedFeeToSetter = vm.envOr("ARC_TESTNET_FEE_TO_SETTER", deployer);
 
         require(factory.code.length != 0, "DeployArcClassicV2Router: FACTORY_NOT_CONTRACT");
@@ -21,6 +22,15 @@ contract DeployArcClassicV2Router is Script {
             CocoFactory(factory).feeToSetter() == expectedFeeToSetter,
             "DeployArcClassicV2Router: FEE_TO_SETTER_MISMATCH"
         );
+
+        if (existingRouter != address(0)) {
+            require(existingRouter.code.length != 0, "DeployArcClassicV2Router: ROUTER_NOT_CONTRACT");
+            CocoRouter probe = new CocoRouter(factory);
+            require(existingRouter.codehash == address(probe).codehash, "DeployArcClassicV2Router: BYTECODE_MISMATCH");
+            require(CocoRouter(existingRouter).factory() == factory, "DeployArcClassicV2Router: FACTORY_MISMATCH");
+            console2.log("Reusing CocoRouter:", existingRouter);
+            return;
+        }
 
         console2.log("Chain ID:", block.chainid);
         console2.log("Deployer:", deployer);

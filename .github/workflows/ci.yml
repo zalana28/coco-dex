@@ -37,6 +37,10 @@ jobs:
       - name: Build contracts
         run: forge build
 
+      - name: Test deployment recorder
+        run: npm run contracts:test:deployment-recorder
+        working-directory: ${{ github.workspace }}
+
       - name: Test contracts
         run: forge test -vvv
 

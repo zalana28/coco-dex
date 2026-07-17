@@ -13,7 +13,20 @@ contract DeployArcClassicV2Factory is Script {
         uint256 deployerKey = vm.envUint("ARC_TESTNET_DEPLOYER_PRIVATE_KEY");
         address deployer = vm.addr(deployerKey);
         address feeToSetter = vm.envOr("ARC_TESTNET_FEE_TO_SETTER", deployer);
+        address existingFactory = vm.envOr("ARC_TESTNET_FACTORY_ADDRESS", address(0));
         require(feeToSetter != address(0), "DeployArcClassicV2Factory: FEE_TO_SETTER_ZERO");
+
+        if (existingFactory != address(0)) {
+            require(existingFactory.code.length != 0, "DeployArcClassicV2Factory: FACTORY_NOT_CONTRACT");
+            CocoFactory probe = new CocoFactory(feeToSetter);
+            require(existingFactory.codehash == address(probe).codehash, "DeployArcClassicV2Factory: BYTECODE_MISMATCH");
+            require(
+                CocoFactory(existingFactory).feeToSetter() == feeToSetter,
+                "DeployArcClassicV2Factory: FEE_TO_SETTER_MISMATCH"
+            );
+            console2.log("Reusing CocoFactory:", existingFactory);
+            return;
+        }
 
         console2.log("Chain ID:", block.chainid);
         console2.log("Deployer:", deployer);

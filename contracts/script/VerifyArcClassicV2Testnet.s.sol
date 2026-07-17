@@ -22,9 +22,14 @@ contract VerifyArcClassicV2Testnet is Script {
         address routerAddress = vm.envAddress("ARC_TESTNET_ROUTER_ADDRESS");
         address tokenA = vm.envAddress("ARC_TESTNET_TOKEN_A");
         address tokenB = vm.envAddress("ARC_TESTNET_TOKEN_B");
+        bytes32 expectedFactoryCodeHash = vm.envBytes32("ARC_TESTNET_FACTORY_CODE_HASH");
+        bytes32 expectedRouterCodeHash = vm.envBytes32("ARC_TESTNET_ROUTER_CODE_HASH");
+        bytes32 expectedPairCodeHash = vm.envBytes32("ARC_TESTNET_PAIR_CODE_HASH");
 
         require(factoryAddress.code.length != 0, "VerifyArcClassicV2: FACTORY_NOT_CONTRACT");
         require(routerAddress.code.length != 0, "VerifyArcClassicV2: ROUTER_NOT_CONTRACT");
+        require(factoryAddress.codehash == expectedFactoryCodeHash, "VerifyArcClassicV2: FACTORY_BYTECODE_MISMATCH");
+        require(routerAddress.codehash == expectedRouterCodeHash, "VerifyArcClassicV2: ROUTER_BYTECODE_MISMATCH");
         require(tokenA != address(0) && tokenB != address(0), "VerifyArcClassicV2: TOKEN_ZERO");
         require(tokenA != tokenB, "VerifyArcClassicV2: IDENTICAL_TOKENS");
 
@@ -36,8 +41,13 @@ contract VerifyArcClassicV2Testnet is Script {
 
         address pair = factory.getPair(tokenA, tokenB);
         require(pair != address(0) && pair.code.length != 0, "VerifyArcClassicV2: PAIR_NOT_FOUND");
+        require(pair.codehash == expectedPairCodeHash, "VerifyArcClassicV2: PAIR_BYTECODE_MISMATCH");
         require(factory.getPair(tokenB, tokenA) == pair, "VerifyArcClassicV2: REVERSE_PAIR_MISMATCH");
         require(_pairFor(factoryAddress, tokenA, tokenB) == pair, "VerifyArcClassicV2: CREATE2_MISMATCH");
+        (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
+        require(CocoPair(pair).factory() == factoryAddress, "VerifyArcClassicV2: PAIR_FACTORY_MISMATCH");
+        require(CocoPair(pair).token0() == token0, "VerifyArcClassicV2: TOKEN0_MISMATCH");
+        require(CocoPair(pair).token1() == token1, "VerifyArcClassicV2: TOKEN1_MISMATCH");
 
         console2.log("=== Classic Coco V2 Arc Testnet verification ===");
         console2.log("Chain ID:", block.chainid);
