@@ -212,8 +212,8 @@ export function BridgePage() {
       const output = scenario ? mockResult(source, scenario === 'recoverable' ? 'error' : 'success') : await bridgeFacade.bridge({ provider: await activeProvider(), wallet: wallet!, source, recipient, amount, mode: transferMode, traceId, onBurn: persistBurn })
       setResult(output)
       const normalized = normalizeBridgeResult(output)
-      if (normalized.burnHash && wallet) {
-        const record = createRecoveryRecord({ wallet, source, recipient, amount, mode, result: output, traceId: crypto.randomUUID().split('-').join('').slice(0, 32) })
+      if (normalized.burnHash && wallet && !recovery) {
+        const record = createRecoveryRecord({ wallet, source, recipient, amount, mode, result: output, traceId })
         if (!scenario) browserRecoveryStore().saveAfterBurn(record)
         setRecovery(record)
       }
@@ -235,6 +235,7 @@ export function BridgePage() {
       assertRecoveryBindings(recovery, { wallet, source, recipient })
       if (!sourceClient) throw new Error('Source RPC is unavailable for burn verification')
       const burn = await sourceClient.getTransaction({ hash: recovery.burnHash as `0x${string}` })
+      if (!burn) throw new Error('Recorded burn transaction not found on source chain')
       if (burn.from.toLowerCase() !== wallet.toLowerCase()) throw new Error('Recorded burn sender does not match the connected wallet')
       const output = await bridgeFacade.retryBridge(recoveryToBridgeResult(recovery), { provider: await activeProvider(), wallet, source, recipient, amount: recovery.amount, mode: recovery.mode })
       setResult(output)
