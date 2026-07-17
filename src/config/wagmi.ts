@@ -1,5 +1,6 @@
 import { createConfig, http } from 'wagmi'
 import { injected, walletConnect } from 'wagmi/connectors'
+import { baseSepolia, sepolia } from 'viem/chains'
 import { arcTestnet } from './chains'
 
 const walletConnectProjectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID
@@ -25,7 +26,7 @@ const connectors = [
 ]
 
 export const wagmiConfig = createConfig({
-  chains: [arcTestnet],
+  chains: [arcTestnet, sepolia, baseSepolia],
   connectors,
   transports: {
     [arcTestnet.id]: http('https://rpc.testnet.arc.network', {
@@ -33,5 +34,7 @@ export const wagmiConfig = createConfig({
       retryDelay: 1500,
       timeout: 30000,
     }),
+    [sepolia.id]: http(),
+    [baseSepolia.id]: http(),
   },
 })

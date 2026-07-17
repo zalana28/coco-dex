@@ -4,6 +4,7 @@ import { Layout } from '@/components/layout/Layout'
 
 const LandingPage = lazy(() => import('@/pages/LandingPage').then((module) => ({ default: module.LandingPage })))
 const SwapPage = lazy(() => import('@/pages/SwapPage').then((module) => ({ default: module.SwapPage })))
+const BridgePage = lazy(() => import('@/pages/BridgePage').then((module) => ({ default: module.BridgePage })))
 const PoolsPage = lazy(() => import('@/pages/PoolsPage').then((module) => ({ default: module.PoolsPage })))
 const AddLiquidityPage = lazy(() => import('@/pages/AddLiquidityPage').then((module) => ({ default: module.AddLiquidityPage })))
 const RemoveLiquidityPage = lazy(() => import('@/pages/RemoveLiquidityPage').then((module) => ({ default: module.RemoveLiquidityPage })))
@@ -29,6 +30,7 @@ export default function App() {
       <Route element={<Layout />}>
         <Route path="/" element={lazyRoute(<LandingPage />)} />
         <Route path="/swap" element={lazyRoute(<SwapPage />)} />
+        <Route path="/bridge" element={lazyRoute(<BridgePage />)} />
         <Route path="/pools" element={lazyRoute(<PoolsPage />)} />
         <Route path="/pools/add" element={lazyRoute(<AddLiquidityPage />)} />
         <Route path="/pools/remove" element={lazyRoute(<RemoveLiquidityPage />)} />

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Card } from '@/components/common/Card'
 import { TokenIcon } from '@/components/common/TokenIcon'
 import { TransactionProgressPanel } from '@/components/transactions/TransactionProgressPanel'
@@ -28,14 +29,17 @@ import type { Token } from '@/types/token'
 import type { TransactionType } from '@/types/transactions'
 import type { RouteQuote } from '@/lib/router/types'
 import { isQuoteStale } from '@/lib/router/selectBestRoute'
+import { safeBridgeAmount } from '@/features/bridge/postBridge'
 
 export function SwapPage() {
   const { address, isConnected } = useAccount()
+  const [searchParams] = useSearchParams()
 
   // ─── Fix 2: Real fromToken/toToken state with flip ───
   const [fromToken, setFromToken] = useState<Token>(USDC)
   const [toToken, setToToken] = useState<Token>(EURC)
-  const [fromAmount, setFromAmount] = useState('')
+  const initialBridgeAmount = searchParams.get('from') === 'USDC' && searchParams.get('to') === 'EURC' ? safeBridgeAmount(searchParams.get('amount')) : null
+  const [fromAmount, setFromAmount] = useState(initialBridgeAmount ?? '')
   const [showSettings, setShowSettings] = useState(false)
   const [showQuotesMobile, setShowQuotesMobile] = useState(false)
   const [showAllRoutes, setShowAllRoutes] = useState(false)
@@ -44,6 +48,8 @@ export function SwapPage() {
   // becomes unavailable, so the UI returns to "best route" by default.
   const [manualRouteId, setManualRouteId] = useState<string | null>(null)
   const [routeChangedWarning, setRouteChangedWarning] = useState(false)
+
+
   const { slippage, slippageBps, setSlippage, getDeadlineTimestamp, deadline, setDeadline, approvalMode, setApprovalMode } = useTransactionSettings()
   const hasValidFromAmount = fromAmount.trim() !== '' && Number.isFinite(Number(fromAmount)) && Number(fromAmount) > 0
 
