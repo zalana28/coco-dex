@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-const routes = ['/', '/swap', '/pools', '/analytics', '/docs']
+const routes = ['/', '/swap', '/bridge', '/pools', '/analytics', '/docs']
 
 test.describe('mobile shell', () => {
   for (const route of routes) {

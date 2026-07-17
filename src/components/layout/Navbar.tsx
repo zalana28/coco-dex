@@ -6,6 +6,7 @@ import { ConnectWalletButton } from '@/components/common/ConnectWalletButton'
 const navLinks = [
   { to: '/', label: 'Home' },
   { to: '/swap', label: 'Swap' },
+  { to: '/bridge', label: 'Bridge' },
   { to: '/pools', label: 'Pools' },
   { to: '/analytics', label: 'Analytics' },
   { to: '/docs', label: 'Docs' },

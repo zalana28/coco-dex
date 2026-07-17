@@ -3,6 +3,7 @@ import { truncateAddress } from '@/utils/format'
 import { isWalletConnectConfigured } from '@/config/wagmi'
 import { Wallet, LogOut, AlertTriangle, X, Smartphone, WalletCards } from 'lucide-react'
 import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import { useNetworkGuard } from '@/hooks/useNetworkGuard'
 
@@ -60,6 +61,7 @@ function isWalletConnectConnector(connector: Connector) {
 }
 
 export function ConnectWalletButton() {
+  const { pathname } = useLocation()
   const { address, isConnected, isConnecting } = useAccount()
   const { connect, connectors, error: connectError, isPending } = useConnect()
   const { disconnect } = useDisconnect()
@@ -85,7 +87,7 @@ export function ConnectWalletButton() {
     )
   }
 
-  if (isWrongNetwork) {
+  if (isWrongNetwork && pathname !== '/bridge') {
     return (
       <div className="relative">
         <button

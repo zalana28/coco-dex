@@ -38,6 +38,8 @@
     "contracts:stable:add-liquidity:dry": "cd contracts && forge script script/AddInitialLiquidityCocoStablePool.s.sol:AddInitialLiquidityCocoStablePool --rpc-url $ARC_TESTNET_RPC_URL"
   },
   "dependencies": {
+    "@circle-fin/adapter-viem-v2": "^1.14.0",
+    "@circle-fin/bridge-kit": "^1.12.1",
     "@supabase/supabase-js": "^2.106.2",
     "@tailwindcss/vite": "^4.3.0",
     "@tanstack/react-query": "^5.100.14",
@@ -49,7 +51,8 @@
     "recharts": "^3.8.1",
     "tailwindcss": "^4.3.0",
     "viem": "^2.51.0",
-    "wagmi": "^3.6.15"
+    "wagmi": "^3.6.15",
+    "zod": "^3.25.67"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",
