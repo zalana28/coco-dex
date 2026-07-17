@@ -28,6 +28,8 @@
     "debug:synthra": "npx tsx scripts/debugSynthraQuoteAndSwap.ts",
     "indexer:backfill": "npx tsx scripts/backfillAnalytics.ts",
     "contracts:test": "cd contracts && forge test",
+    "contracts:deploy:classic-v2:dry": "cd contracts && forge script script/ArcClassicV2TestnetDeployment.s.sol:ArcClassicV2TestnetDeployment --rpc-url $ARC_TESTNET_RPC_URL",
+    "contracts:deploy:classic-v2": "cd contracts && forge script script/ArcClassicV2TestnetDeployment.s.sol:ArcClassicV2TestnetDeployment --rpc-url $ARC_TESTNET_RPC_URL --broadcast --verify --verifier-url https://testnet.arcscan.app/api -vvvv",
     "contracts:deploy:stable:dry": "cd contracts && forge script script/DeployCocoStablePool.s.sol:DeployCocoStablePool --rpc-url $ARC_TESTNET_RPC_URL",
     "contracts:stable:add-liquidity:dry": "cd contracts && forge script script/AddInitialLiquidityCocoStablePool.s.sol:AddInitialLiquidityCocoStablePool --rpc-url $ARC_TESTNET_RPC_URL"
   },
