@@ -28,8 +28,11 @@
     "debug:synthra": "npx tsx scripts/debugSynthraQuoteAndSwap.ts",
     "indexer:backfill": "npx tsx scripts/backfillAnalytics.ts",
     "contracts:test": "cd contracts && forge test",
-    "contracts:deploy:classic-v2:dry": "cd contracts && forge script script/ArcClassicV2TestnetDeployment.s.sol:ArcClassicV2TestnetDeployment --rpc-url $ARC_TESTNET_RPC_URL",
-    "contracts:deploy:classic-v2": "cd contracts && forge script script/ArcClassicV2TestnetDeployment.s.sol:ArcClassicV2TestnetDeployment --rpc-url $ARC_TESTNET_RPC_URL --broadcast --verify --verifier-url https://testnet.arcscan.app/api -vvvv",
+    "contracts:deploy:classic-v2:factory:dry": "cd contracts && forge script script/DeployArcClassicV2Factory.s.sol:DeployArcClassicV2Factory --rpc-url $ARC_TESTNET_RPC_URL -vvvv",
+    "contracts:deploy:classic-v2:router:dry": "cd contracts && forge script script/DeployArcClassicV2Router.s.sol:DeployArcClassicV2Router --rpc-url $ARC_TESTNET_RPC_URL -vvvv",
+    "contracts:deploy:classic-v2:pair:dry": "cd contracts && forge script script/CreateArcClassicV2Pair.s.sol:CreateArcClassicV2Pair --rpc-url $ARC_TESTNET_RPC_URL -vvvv",
+    "contracts:record:classic-v2": "node contracts/script/recordArcClassicV2Deployment.mjs",
+    "contracts:verify:classic-v2": "cd contracts && forge script script/VerifyArcClassicV2Testnet.s.sol:VerifyArcClassicV2Testnet --rpc-url $ARC_TESTNET_RPC_URL -vvvv",
     "contracts:deploy:stable:dry": "cd contracts && forge script script/DeployCocoStablePool.s.sol:DeployCocoStablePool --rpc-url $ARC_TESTNET_RPC_URL",
     "contracts:stable:add-liquidity:dry": "cd contracts && forge script script/AddInitialLiquidityCocoStablePool.s.sol:AddInitialLiquidityCocoStablePool --rpc-url $ARC_TESTNET_RPC_URL"
   },

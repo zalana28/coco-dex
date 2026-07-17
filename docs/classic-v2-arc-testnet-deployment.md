@@ -1,181 +1,260 @@
-# Coco Classic V2 Arc Testnet Deployment Runbook
+# Classic Coco V2: Arc Testnet deployment runbook
 
-> **Scope:** Arc Testnet only.  
-> **Not in scope:** production/mainnet deployment, Stable Pool, indexer, analytics, or quote-routing changes.
+Scope: updated classic `CocoFactory` and `CocoRouter` on Arc Testnet (chain ID `5042002`) only.
 
-## Purpose
+Out of scope: production/mainnet deployment, Stable Pool changes, indexer/analytics changes, quote-routing changes, and frontend address changes.
 
-This document describes how to manually deploy the updated classic Coco V2 contracts (`CocoFactory`, `CocoRouter`) to Arc Testnet, verify them, and migrate test liquidity without affecting the existing classic V1 or Stable Pool deployments.
+This runbook prepares a manual deployment. Nothing in this repository broadcasts automatically, and the npm scripts intentionally expose only dry-run, record, and read-only verification commands.
 
-## Pre-requisites
+## Existing deployment model and preserved addresses
 
-- Git repository at `https://github.com/zalana28/coco-dex`
-- Branch `chore/classic-v2-testnet-deployment-plan` checked out
-- Foundry installed (`forge --version`)
-- Node.js 22+ and npm installed
-- An Arc Testnet wallet with gas USDC (native gas token on Arc Testnet)
-- RPC URL for Arc Testnet
+The original Foundry script is `contracts/script/Deploy.s.sol`. It deploys a factory, deploys a router with that factory constructor argument, then creates the Arc USDC/EURC pair. This runbook retains that model and uses the existing Arc Testnet ERC-20 contracts rather than deploying unrestricted mock tokens:
 
-## Environment variables
+- USDC: `0x3600000000000000000000000000000000000000`
+- EURC: `0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a`
 
-Create or update `.env` in the repository root (this file is already `.gitignore`d):
+The current classic addresses in `src/config/contracts.ts` remain unchanged:
+
+- old factory: `0xE1E39F01207cD3f56d3b2a69B757cf2b59c8e5bE`
+- old router: `0xC31166847A4CEC31629a0ABe4E6383B3CD75732A`
+- old USDC/EURC pair: `0x0eEA9DC9153215B15b1E6c43f4D68779002d4F1c`
+
+Do not delete or overwrite these addresses or their historical records.
+
+## Required environment variables
+
+Set secrets in the shell or an ignored `.env` file; never commit them.
 
 ```bash
-# Required
 export ARC_TESTNET_RPC_URL="https://rpc.testnet.arc.network"
 export ARC_TESTNET_DEPLOYER_PRIVATE_KEY="0x..."
-
-# Optional
-export ARC_TESTNET_FEE_TO_SETTER="0x..."        # defaults to deployer
-export ARC_TESTNET_FACTORY_ADDRESS="0x..."      # re-use an existing factory
-export ARC_TESTNET_ROUTER_ADDRESS="0x..."       # re-use an existing router
-export ARC_TESTNET_MOCK_TOKEN_A="0x..."        # re-use an existing mock token
-export ARC_TESTNET_MOCK_TOKEN_B="0x..."        # re-use an existing mock token
-export ARC_TESTNET_OUTPUT_FILE="./deployments/classic-v2-arc-testnet.json"
 ```
 
-Never commit private keys or RPC credentials.
+Optional configuration:
 
-## Manual deployment command
+```bash
+# Defaults to the deployer derived from the private key.
+export ARC_TESTNET_FEE_TO_SETTER="0x..."
 
-Dry run (simulation only, no transaction broadcast):
+# Defaults to Arc Testnet USDC/EURC. Override only with reviewed Arc Testnet token contracts.
+export ARC_TESTNET_TOKEN_A="0x3600000000000000000000000000000000000000"
+export ARC_TESTNET_TOKEN_B="0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a"
+
+# Resume/reuse controls. Omit these for a fresh deployment.
+export ARC_TESTNET_FACTORY_ADDRESS="0x..."
+export ARC_TESTNET_ROUTER_ADDRESS="0x..."
+
+# Optional canonical-record path.
+export ARC_TESTNET_DEPLOYMENT_FILE="./contracts/deployments/classic-v2-arc-testnet.json"
+```
+
+Idempotency is explicit and safe:
+
+- Supplying `ARC_TESTNET_FACTORY_ADDRESS` reuses that factory only if it is a contract and its `feeToSetter` equals the configured value.
+- Supplying `ARC_TESTNET_ROUTER_ADDRESS` reuses that router only if its immutable `factory()` equals the selected factory.
+- The pair is created only when `getPair(tokenA, tokenB)` is zero; otherwise the existing pair is reused.
+- Pair mappings in both orders and the CREATE2-derived address are validated.
+
+If a partial broadcast fails, set the successfully deployed addresses from the receipts before rerunning. Do not use an old router with a new factory.
+
+## Pre-deployment checks
+
+From `contracts/`:
+
+```bash
+forge fmt --check
+forge build
+forge test -vvv
+```
+
+From the repository root:
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+git diff --check
+```
+
+Review the working tree and confirm it contains no secrets or production-address changes.
+
+## Exact manual deployment commands
+
+Deployment is deliberately split into factory, router, and pair phases. This makes retries idempotent: after each successful phase, export the recorded address before running the next phase. Never rerun a successful deployment phase, because contract creation itself cannot discover a prior address automatically.
+
+### 1. Phase-by-phase simulation and manual deployment
+
+Each phase after the factory depends on a confirmed address containing live Arc Testnet bytecode. Therefore, dry-run and manually broadcast one phase before moving to the next; a simulated deployment address is not sufficient input for the next phase.
+
+```bash
+# Repository root: simulate factory.
+npm run contracts:deploy:classic-v2:factory:dry
+
+# Operator-only after reviewing the factory simulation.
+cd contracts
+forge script script/DeployArcClassicV2Factory.s.sol:DeployArcClassicV2Factory \
+  --rpc-url "$ARC_TESTNET_RPC_URL" --broadcast -vvvv
+export ARC_TESTNET_FACTORY_ADDRESS="0x..." # from the confirmed receipt
+cd ..
+
+# Simulate router against the confirmed factory.
+npm run contracts:deploy:classic-v2:router:dry
+
+# Operator-only after reviewing the router simulation.
+cd contracts
+forge script script/DeployArcClassicV2Router.s.sol:DeployArcClassicV2Router \
+  --rpc-url "$ARC_TESTNET_RPC_URL" --broadcast -vvvv
+export ARC_TESTNET_ROUTER_ADDRESS="0x..." # from the confirmed receipt
+cd ..
+
+# Simulate pair creation against the confirmed factory and router.
+npm run contracts:deploy:classic-v2:pair:dry
+
+# Operator-only after reviewing the pair simulation.
+cd contracts
+forge script script/CreateArcClassicV2Pair.s.sol:CreateArcClassicV2Pair \
+  --rpc-url "$ARC_TESTNET_RPC_URL" --broadcast -vvvv
+cd ..
+```
+
+The pair phase safely emits no transaction when the pair already exists. If a phase fails, inspect its receipt before retrying. Resume from the first incomplete phase using confirmed addresses; do not redeploy earlier phases. Simulations have no canonical receipts and create no deployment record.
+
+`--broadcast` is deliberately absent from `package.json`. Contract-source verification, if desired, is a separate operator action after deployment; it is not a security audit.
+
+## Record transaction hashes and block numbers
+
+Successful broadcasts write three artifacts:
+
+- `contracts/broadcast/DeployArcClassicV2Factory.s.sol/5042002/run-latest.json`
+- `contracts/broadcast/DeployArcClassicV2Router.s.sol/5042002/run-latest.json`
+- `contracts/broadcast/CreateArcClassicV2Pair.s.sol/5042002/run-latest.json`
+
+From the repository root, convert the artifacts into the canonical deployment record. Keep
+`ARC_TESTNET_FEE_TO_SETTER`, `ARC_TESTNET_TOKEN_A`, and `ARC_TESTNET_TOKEN_B` set when you
+overrode their defaults during deployment:
+
+```bash
+npm run contracts:record:classic-v2
+```
+
+The recorder refuses to overwrite an existing deployment record. Archive old records instead of deleting them. The resulting JSON includes:
+
+- chain ID
+- deployer and fee-to setter addresses
+- factory, router, token, and pair addresses
+- factory/router deployment and pair-creation transaction hashes
+- their receipt block numbers
+- pair init-code hash
+- ABI-encoded factory and router constructor arguments
+- `null` pair-creation transaction when the pair was already present
+- source broadcast artifact paths
+
+Check the receipt data directly before committing the record:
+
+```bash
+for artifact in \
+  contracts/broadcast/DeployArcClassicV2Factory.s.sol/5042002/run-latest.json \
+  contracts/broadcast/DeployArcClassicV2Router.s.sol/5042002/run-latest.json \
+  contracts/broadcast/CreateArcClassicV2Pair.s.sol/5042002/run-latest.json
+do
+  jq '.transactions[] | {contractName, function, hash}' "$artifact"
+  jq '.receipts[] | {transactionHash, blockNumber, status}' "$artifact"
+done
+```
+
+## Post-deployment verification
+
+### Read-only checks against Arc Testnet
+
+Set the deployed addresses and run:
+
+```bash
+export ARC_TESTNET_FACTORY_ADDRESS="0x..."
+export ARC_TESTNET_ROUTER_ADDRESS="0x..."
+export ARC_TESTNET_FEE_TO_SETTER="0x..."
+export ARC_TESTNET_TOKEN_A="0x3600000000000000000000000000000000000000"
+export ARC_TESTNET_TOKEN_B="0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a"
+npm run contracts:verify:classic-v2
+```
+
+This script never broadcasts. It verifies:
+
+- factory and router contain code
+- `factory.feeToSetter()` matches the expected address
+- `router.factory()` matches the new factory
+- `getPair` returns the same nonzero pair in both token orders
+- the pair matches the current `CocoPair` CREATE2 init-code hash
+
+### Functional checks on an isolated fork
+
+The default test suite deploys fresh contracts locally. To exercise the deployed factory/router bytecode and state without sending Arc Testnet transactions:
 
 ```bash
 cd contracts
-forge script script/ArcClassicV2TestnetDeployment.s.sol:ArcClassicV2TestnetDeployment \
-  --rpc-url $ARC_TESTNET_RPC_URL \
-  -vvvv
+ARC_TESTNET_VERIFY_FORK=true forge test \
+  --match-contract ArcClassicV2TestnetVerification \
+  --fork-url "$ARC_TESTNET_RPC_URL" \
+  -vvv
 ```
 
-Live deployment (operator must review the simulation output before signing):
+The test creates disposable verification tokens only inside the local fork and checks:
 
-```bash
-cd contracts
-forge script script/ArcClassicV2TestnetDeployment.s.sol:ArcClassicV2TestnetDeployment \
-  --rpc-url $ARC_TESTNET_RPC_URL \
-  --broadcast \
-  --verify \
-  --verifier-url https://testnet.arcscan.app/api \
-  -vvvv
-```
+- [ ] factory fee-to setter is correct
+- [ ] router factory is correct
+- [ ] `createPair` succeeds
+- [ ] `getPair` works in both token orders
+- [ ] first `addLiquidity` through the new router succeeds
+- [ ] exact-input swap succeeds
+- [ ] `removeLiquidity` succeeds
+- [ ] invalid inputs revert as expected
 
-Or from the repository root:
+Because these state-changing checks run on a local fork, they do not consume real Arc Testnet balances or mutate live contracts.
 
-```bash
-npm run contracts:deploy:classic-v2:dry   # simulation
-npm run contracts:deploy:classic-v2     # live broadcast + verify
-```
+## Pair init-code hash and constructor arguments
 
-The script:
-
-1. Checks `block.chainid == 5042002` (Arc Testnet).
-2. Deploys `CocoFactory` with `feeToSetter` (or re-uses `ARC_TESTNET_FACTORY_ADDRESS`).
-3. Deploys `CocoRouter` with the factory address (or re-uses `ARC_TESTNET_ROUTER_ADDRESS`).
-4. Deploys two mock ERC-20 tokens (or re-uses provided addresses).
-5. Creates a single pair from the two mock tokens if it does not exist.
-6. Validates the pair address against the deterministic CREATE2 formula.
-7. Writes a JSON deployment record to `./deployments/classic-v2-arc-testnet.json`.
-
-## Expected outputs
-
-The deployment record contains:
-
-| Field | Description |
-|-------|-------------|
-| `chainId` | `5042002` |
-| `deployer` | Address that sent the transactions |
-| `feeToSetter` | Address set as `CocoFactory.feeToSetter` |
-| `factory` | Deployed `CocoFactory` address |
-| `router` | Deployed `CocoRouter` address |
-| `mockTokenA` | Mock ERC-20 A address |
-| `mockTokenB` | Mock ERC-20 B address |
-| `pair` | First created pair address |
-| `pairInitCodeHash` | `keccak256` of `CocoPair` creation bytecode |
-| `factoryBlock` / `routerBlock` / `createPairBlock` | Block numbers of each step |
-| `constructorArgsFactory` | ABI-encoded `feeToSetter` |
-| `constructorArgsRouter` | ABI-encoded factory address |
-| `note` | Arc Testnet-only disclaimer |
-
-The canonical transaction hashes are emitted as `ClassicV2Deployed` events and are also recorded in the Foundry broadcast artifact at `broadcast/run-latest.json` (or `broadcast/<chain_id>/run-latest.json`). Extract them with:
-
-```bash
-cat contracts/broadcast/run-latest.json | jq '.transactions[] | {name, txHash, contractName, contractAddress}'
-```
-
-## Verification checklist
-
-Run the offline verification suite before any live broadcast:
-
-```bash
-cd contracts
-forge test --match-contract ArcClassicV2TestnetVerification -vvv
-```
-
-This validates:
-
-- [ ] `factory.feeToSetter == deployer` (or configured `ARC_TESTNET_FEE_TO_SETTER`)
-- [ ] `router.factory == factory`
-- [ ] `factory.createPair` succeeds
-- [ ] `factory.getPair` returns the same address in both token orders
-- [ ] First `router.addLiquidity` succeeds
-- [ ] `router.swapExactTokensForTokens` succeeds
-- [ ] `router.removeLiquidity` succeeds
-- [ ] Invalid inputs still revert with expected errors (`CocoRouter: EXPIRED`, `CocoRouter: INVALID_TO`, `CocoRouter: INVALID_PATH`, `CocoRouter: INSUFFICIENT_INPUT_AMOUNT`, `CocoRouter: INSUFFICIENT_LIQUIDITY`, `CocoLibrary: PAIR_NOT_FOUND`, etc.)
-
-After a live deployment, validate the on-chain state with:
-
-```bash
-cast call <FACTORY> "feeToSetter()(address)" --rpc-url $ARC_TESTNET_RPC_URL
-cast call <ROUTER> "factory()(address)" --rpc-url $ARC_TESTNET_RPC_URL
-cast call <FACTORY> "getPair(address,address)(address)" <TOKEN_A> <TOKEN_B> --rpc-url $ARC_TESTNET_RPC_URL
-```
-
-## Migration and liquidity notes
-
-- **Old contracts remain live and unchanged.** The existing `FACTORY_ADDRESS`, `ROUTER_ADDRESS`, and `USDC_EURC_PAIR_ADDRESS` in `src/config/contracts.ts` are not modified by this script.
-- **Liquidity does not migrate automatically.** Existing LP holders must manually withdraw from the old router and re-add liquidity through the new router.
-- **Test liquidity only.** The new deployment mints fresh mock tokens for verification. Real testnet liquidity (e.g., USDC/EURC) must be added separately through the new router if needed.
-- **Frontend address update.** The frontend will be pointed to the new addresses in a separate PR. Do not update `src/config/contracts.ts` in this deployment PR.
-- **Historical indexing.** Keep the old deployment record (e.g., `src/config/contracts.ts` and any prior JSON files) intact for historical indexing and reference.
-
-## Rollback procedure
-
-Because the deployment is additive and does not modify existing contracts, rollback is a configuration change rather than a contract migration:
-
-1. Do not broadcast any transactions to the old contracts.
-2. Revert the frontend PR that points to the new factory/router addresses.
-3. Re-activate the old contract addresses in `src/config/contracts.ts`.
-4. Archive the new deployment JSON under `deployments/archive/<date>-classic-v2-arc-testnet.json`.
-
-## Safety rules
-
-- Do not run the deployment script in CI or any automated pipeline with `--broadcast`.
-- Do not commit `.env`, private keys, or RPC URLs.
-- Do not claim the contracts are audited in any documentation or communications.
-- Do not delete old deployment records.
-- Do not modify Stable Pool, indexer, analytics, or quote-routing code as part of this task.
-
-## Pair init code hash
-
-The deterministic pair address depends on the compiled `CocoPair` creation bytecode. The deployment script computes this at runtime with:
+The script computes the pair init-code hash from the exact compiled creation bytecode:
 
 ```solidity
 keccak256(type(CocoPair).creationCode)
 ```
 
-If the source changes, the hash changes, and all previously computed pair addresses become invalid. Re-verify the hash after any contract modification.
+Constructor arguments recorded in the canonical deployment record are:
 
-## Constructor arguments
+- `CocoFactory`: `abi.encode(feeToSetter)`
+- `CocoRouter`: `abi.encode(factory)`
 
-- `CocoFactory`: `abi.encode(feeToSetter)` — one address.
-- `CocoRouter`: `abi.encode(factory)` — one address.
+Any `CocoPair` source/compiler-setting change alters the init-code hash and deterministic pair addresses. Re-run all checks after such a change.
 
-These are recorded in the deployment JSON for verification on the block explorer.
+## Migration plan
 
-## Related files
+1. Old contracts remain live and unchanged; deploying V2 is additive.
+2. Liquidity does not migrate automatically. There is no privileged migration transaction.
+3. Test LP holders withdraw from the old router/pair using the old frontend configuration or direct contract call.
+4. After confirming receipt of both underlying test tokens, holders approve the new router and add liquidity to the new pair.
+5. Use conservative minimum amounts and deadlines; verify token ordering and decimals before signing.
+6. Update frontend factory/router/pair addresses later in a separate reviewed PR. This deployment PR does not modify `src/config/contracts.ts`.
+7. Preserve old addresses and deployment start/end blocks in historical indexer configuration. A later indexer change may add the new deployment while retaining the old source; do not repoint historical data to the new contracts.
 
-- `contracts/script/ArcClassicV2TestnetDeployment.s.sol`
-- `contracts/test/ArcClassicV2TestnetVerification.t.sol`
-- `contracts/foundry.toml`
-- `deployments/classic-v2-arc-testnet.json` (generated after broadcast)
-- `src/config/contracts.ts` (unchanged; old addresses preserved)
+## Rollback
+
+The contracts are immutable and an on-chain deployment cannot be deleted. Rollback means routing users back to the preserved old deployment:
+
+1. Stop the frontend-address rollout or revert its separate PR.
+2. Restore/preserve the old factory, router, and pair addresses in frontend configuration.
+3. Stop adding test liquidity to the new pair.
+4. Withdraw any test liquidity already added to the new pair and re-add it to the old pair if required.
+5. Keep the new deployment record, transaction hashes, and block numbers archived and label the deployment inactive; never delete history.
+6. Ensure historical indexing continues to associate old events with old addresses. If new-address indexing was enabled, stop at a recorded block rather than rewriting historical rows.
+
+## Safety checklist
+
+- [ ] Arc Testnet chain ID is exactly `5042002`
+- [ ] dry run reviewed before any manual broadcast
+- [ ] deployer and fee-to setter independently confirmed
+- [ ] no production address or Stable Pool file changed
+- [ ] no private key, RPC credential, `.env`, or broadcast artifact committed
+- [ ] old deployment records preserved
+- [ ] canonical record generated from actual receipts only after broadcast
+- [ ] frontend update remains a separate PR
+- [ ] no audit claim is made

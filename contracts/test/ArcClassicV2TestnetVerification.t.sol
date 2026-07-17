@@ -9,10 +9,10 @@ import {MockERC20} from "../src/mocks/MockERC20.sol";
 
 /**
  * @title  ArcClassicV2TestnetVerification
- * @notice Post-deployment verification for the updated classic Coco V2 on Arc Testnet.
- * @dev    This test deploys fresh contracts in setUp so it can run offline with `forge test`.
- *         For an actual Arc Testnet deployment, set the ARC_TESTNET_* environment variables
- *         and run this test with a forked RPC to validate a live deployment.
+ * @notice Functional and fork-based post-deployment verification for classic Coco V2.
+ * @dev By default setUp deploys contracts locally. Set ARC_TESTNET_VERIFY_FORK=true plus the
+ *      RPC URL and deployed addresses to run the same state-changing checks against an isolated
+ *      Arc Testnet fork. Fork mode never broadcasts transactions to Arc Testnet.
  */
 contract ArcClassicV2TestnetVerification is Test {
     CocoFactory internal factory;
@@ -23,13 +23,25 @@ contract ArcClassicV2TestnetVerification is Test {
     address internal deployer = makeAddr("deployer");
     address internal user = makeAddr("user");
     uint256 internal constant DEADLINE = type(uint256).max;
+    bool internal forkMode;
 
     function setUp() public {
-        factory = new CocoFactory(deployer);
-        router = new CocoRouter(address(factory));
+        forkMode = vm.envOr("ARC_TESTNET_VERIFY_FORK", false);
+        if (forkMode) {
+            vm.createSelectFork(vm.envString("ARC_TESTNET_RPC_URL"));
+            require(block.chainid == 5_042_002, "verification fork must be Arc Testnet");
+            factory = CocoFactory(vm.envAddress("ARC_TESTNET_FACTORY_ADDRESS"));
+            router = CocoRouter(vm.envAddress("ARC_TESTNET_ROUTER_ADDRESS"));
+            deployer = vm.envAddress("ARC_TESTNET_FEE_TO_SETTER");
+        } else {
+            factory = new CocoFactory(deployer);
+            router = new CocoRouter(address(factory));
+        }
 
-        tokenA = new MockERC20("Coco Mock Token A", "COCO-A", 18);
-        tokenB = new MockERC20("Coco Mock Token B", "COCO-B", 18);
+        // Fresh local test tokens make state-changing checks deterministic. In fork mode these
+        // exist only inside Foundry's local fork and never alter the live Arc Testnet deployment.
+        tokenA = new MockERC20("Coco Verification Token A", "VERIFY-A", 18);
+        tokenB = new MockERC20("Coco Verification Token B", "VERIFY-B", 18);
 
         tokenA.mint(user, 1_000_000_000 ether);
         tokenB.mint(user, 1_000_000_000 ether);
