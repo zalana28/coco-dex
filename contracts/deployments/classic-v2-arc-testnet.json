@@ -1,0 +1,40 @@
+{
+  "chainId": 5042002,
+  "deployer": "0x42b10b337A5692743D587134c89A725422c3dFFB",
+  "feeToSetter": "0x42b10b337A5692743D587134c89A725422c3dFFB",
+  "factory": "0x4f05C941e024129F1939038215a3EDad2Ec35e78",
+  "router": "0x1d15A06DCc7EABfF4fF4adbEffedbCab726Ffc68",
+  "tokenA": "0x3600000000000000000000000000000000000000",
+  "tokenB": "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a",
+  "pair": "0xEC3E684735A094dCc50A7F44960787EE3f632de8",
+  "factoryCodeHash": "0x0ccd40932aaaae4c6c5da6d27893e05b57a899fc1b36f2787860644d8ee5a831",
+  "routerCodeHash": "0x88a49351e20ac1a5517749c07aaab3f9a7033c8d7d72d56fd6a40c1ae7e303fc",
+  "pairCodeHash": "0x7824be6285b588a88e4679f12c7022e1409b2214682459e29bef514355fc4177",
+  "pairInitCodeHash": "0x41e0021258daf8bb9f478c945fc67263335306d58189c39845e7e8e45039cd6f",
+  "constructorArgs": {
+    "factory": "0x00000000000000000000000042b10b337a5692743d587134c89a725422c3dffb",
+    "router": "0x0000000000000000000000004f05c941e024129f1939038215a3edad2ec35e78"
+  },
+  "transactions": {
+    "factoryDeployment": {
+      "transactionHash": "0x35250a4438a30a01992e42d11697a7932f65bfc6bb2c7aa9dcc48128015da022",
+      "blockNumber": "52329943"
+    },
+    "routerDeployment": {
+      "transactionHash": "0x77a5808caa6369654dde14180e7477d66bdece70cd87ea5c41f7b40911ad2ea5",
+      "blockNumber": "52330334"
+    },
+    "pairCreation": {
+      "transactionHash": "0xa4eca8ee81146392e3238dccae26292e527ae1c40265886eac793e05ca362c84",
+      "blockNumber": "52330700"
+    }
+  },
+  "source": {
+    "broadcastFiles": {
+      "factory": "contracts/broadcast/DeployArcClassicV2Factory.s.sol/5042002/run-latest.json",
+      "router": "contracts/broadcast/DeployArcClassicV2Router.s.sol/5042002/run-latest.json",
+      "pair": "contracts/broadcast/CreateArcClassicV2Pair.s.sol/5042002/run-latest.json"
+    }
+  },
+  "note": "Arc Testnet only. No production deployment. Old contracts remain live and unchanged."
+}
