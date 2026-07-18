@@ -1,78 +1,116 @@
-# Arc Testnet MVP Release Checklist
+# Arc Testnet Submission Release Checklist
 
-Use this checklist before presenting Coco DEX as a public Arc Testnet MVP.
+Use this checklist before presenting a specific Coco DEX deployment for Arc Testnet review. Coco DEX is unaudited testnet software and is not production-ready.
 
-## Required Local Checks
+## Build identity and repository proof
 
-Run from the repository root:
+- Review `docs/implementation-evidence.md` for the starting SHA, package versions, routes, and configured addresses.
+- Record repository `main` SHA: `git rev-parse origin/main`.
+- Record candidate/deployed SHA from `/api/version` and the global footer.
+- Confirm public `main`, PR head, footer SHA, `/api/version.gitCommitSha`, and Vercel deployment SHA agree.
+- Configure `BUILD_TIMESTAMP` as an ISO deployment value and verify `/api/version.buildTimestamp`; without it, the endpoint uses serverless module initialization time as a documented fallback.
+- Confirm `/api/version` exposes only application, environment label, SHA, timestamp, Arc Testnet chain ID, public feature flags, and application version.
+- Confirm no environment values, RPC URLs, credentials, wallet data, cron secrets, or internal paths appear in `/api/version`.
+
+## Required local gates
 
 ```bash
 npm run lint
 npm run typecheck
-npm run test
+npm test
 npm run build
 npm run test:e2e
 npm run test:mobile
 npm run contracts:test
+git diff --check
 ```
 
-## Vercel Preview Checklist
+- Build-time public-bundle secret scan passes.
+- No tracked `.env*`, `.vercel/`, `screenshots/`, `supabase/.temp/`, private keys, or seed phrases.
 
-- Preview deploy builds successfully.
-- Preview environment has Arc Testnet variables configured.
-- Server-only secrets are not exposed through `VITE_` variables.
-- `/api/health` returns a healthy response.
-- `/api/circle/health` does not expose secrets.
-- Analytics pages load gracefully if indexer data is delayed.
-- Arcscan links point to Arc Testnet.
+## Desktop and mobile application checks
 
-## App Smoke Checks
+Check `/bridge`, `/swap`, `/pools`, `/analytics`, `/docs`, `/terms`, and `/privacy` at:
 
-- `/swap` loads on desktop and mobile.
-- `/pools` loads on desktop and mobile.
-- `/pools` has no mobile horizontal overflow.
-- Coco Native Stable Pool badges are visible: Arc Testnet, LP Beta, Unaudited, Not Routed.
-- Stable pool warning is visible near write actions: Arc Testnet LP Beta, tiny test amounts only, unaudited, not routed, beta observability only.
-- Stable Pool Observability shows configured status or the fallback copy: "Stable pool analytics are not configured yet."
-- `/analytics` keeps classic Coco V2 pair metrics separate from stable pool beta analytics.
-- `/docs` uses Arc Testnet wording.
+- 320×700
+- 360×800
+- iPhone 13
+- Pixel 5
+- 768×1024
+- 1280×800
+- 1440×900
 
-## Wallet And Network Checks
+For each relevant route:
 
-- Wallet connect works on desktop injected wallets.
-- WalletConnect appears where configured for mobile.
-- Wrong network state blocks swap, approval, add liquidity, and remove liquidity actions.
-- Switch-to-Arc-Testnet prompt appears when wallet is connected to another chain.
-- Transaction progress panels show hashes and Arcscan links.
+- no horizontal overflow;
+- keyboard focus is visible;
+- footer remains secondary and links are keyboard reachable;
+- Terms and Privacy pages show the owner-review-required template warning;
+- Arc attribution is descriptive (`Supports Arc Testnet`) and secondary to Coco DEX;
+- no wording implies Arc/Circle endorsement, partnership, certification, or sponsorship.
 
-## Tiny Stable Pool Beta Checks
+## Bridge verification
 
-Use only tiny Arc Testnet amounts.
+- `/bridge` appears in route configuration and application navigation.
+- Ethereum Sepolia → Arc Testnet estimate renders.
+- Base Sepolia → Arc Testnet estimate renders.
+- Only USDC is offered; EURC is not described as bridgeable.
+- Estimate displays protocol, forwarding, and source gas context without guaranteed duration/cost claims.
+- Dialog traps focus, closes with Escape, inerts background content, and restores focus to its trigger.
+- Approval, burn, attestation, and Forwarding Service mint lifecycle are visible.
+- Refresh after a recorded successful burn restores recovery state.
+- Recovery calls `retryBridge` and does not repeat the successful burn.
+- No Circle API key is required for the connected browser-wallet Bridge path.
 
-- Add Liquidity shows slippage presets: 0.1%, 0.5%, 1.0%.
-- Add Liquidity derives min cSLP output from estimated cSLP output and slippage.
-- Remove Liquidity shows 25%, 50%, 75%, and Max buttons.
-- Remove Liquidity shows estimated USDC and EURC outputs before enabling removal.
-- Remove Liquidity derives min outputs from estimated outputs and slippage.
-- Rejected wallet actions leave the user in a recoverable retry/reset state.
+## Swap, liquidity, and contracts
 
-## Stable Pool Observability Checks
+- Coco Classic V2 quote, approval, swap, and receipt flow work.
+- Route comparison discloses that external availability is not guaranteed.
+- Add/remove liquidity works with tiny Arc Testnet amounts.
+- Current frontend/indexer addresses match `src/config/contracts.ts` and footer Arcscan links.
+- The newer `contracts/deployments/classic-v2-arc-testnet.json` record remains explicitly not activated unless a separate migration is approved.
+- Stable Pool is labeled LP Beta, unaudited, not production-ready, and not routed.
+- Stable-pool observability remains separate from classic V2 metrics.
+- Do not deploy or modify contracts during this checklist.
 
-- Apply `supabase/migrations/002_stable_pool_observability.sql` before enabling stable pool API checks.
-- Confirm `/api/analytics/stable-pool/health` returns `not_configured` when Supabase env vars are absent.
-- Confirm `/api/analytics/stable-pool/health` returns latest run metadata when configured.
-- Confirm stable pool rows are written only to `stable_pool_*` tables.
-- Confirm classic `/api/analytics/summary` does not include stable pool TVL.
+## Security headers and browser compatibility
 
-## Rollback Checklist
+- Deployed responses include `nosniff`, strict-origin referrer policy, restrictive Permissions Policy, frame denial, and popup-compatible opener policy.
+- CSP remains Report-Only until the promotion gate in `docs/security-headers.md` is complete.
+- No `unsafe-eval`; `unsafe-inline` is absent from `script-src`.
+- Injected wallet connection and Arc network switching work.
+- WalletConnect pairing/reconnect works when configured.
+- Swap and Bridge flows produce no unexplained CSP violations.
+- No browser request goes directly to Supabase service-role APIs.
+- No unexpected analytics/tracking request appears.
 
-If a preview or release has a user-facing issue:
+## Scheduler and indexer health
 
-- Disable or roll back the Vercel deployment to the previous known-good build.
-- Keep stable pool routing disabled.
-- Roll back stable pool observability by reverting the app/API deployment; do not drop classic analytics tables.
-- Do not deploy or modify contracts as part of an app rollback.
-- Pause Coco Native Stable Pool V1 from the owner wallet only if an on-chain emergency requires it.
-- Announce that the affected surface is Arc Testnet only.
-- Preserve transaction hashes and logs for diagnosis.
-- Run the required local checks again before redeploying.
+- `vercel.json` contains no Vercel Cron configuration.
+- cron-job.org is the single scheduler, set to authenticated `GET /api/cron/indexer` every 15 minutes.
+- Authorization header is `Bearer <CRON_SECRET>` and never logged/shared publicly.
+- cron-job.org alerts on non-2xx responses.
+- Authenticated indexer smoke test returns HTTP 200 (`success`, `up_to_date`, or `skipped_overlap`).
+- `/api/health` returns HTTP 200 and indexer lag is reviewed.
+- On failure, fix RPC/database/configuration, rerun the authenticated endpoint, and verify cursor progress; do not enable a second scheduler.
+
+## Documentation and wording review
+
+- README and `/docs` describe Coco Classic V2, Coco liquidity, route comparison, CCTP V2 Bridge, Forwarding Service, and recovery accurately.
+- Arc Testnet EVM chain ID `5042002` and CCTP domain `26` are described as separate typed concepts.
+- ERC-20 USDC application units are 6 decimals; native Arc gas raw units are 18 decimals.
+- `/api/circle/health` is described as an optional server/admin diagnostic.
+- No formal audit, production readiness, guaranteed finality/cost/liquidity, EURC Bridge, partnership, or endorsement claim appears.
+- Footer shows Docs, GitHub, contracts, Terms, Privacy, `Supports Arc Testnet`, unaudited, and not-production-ready disclaimers.
+
+## Rollback
+
+If the candidate has a functional blocker:
+
+1. Roll back the Vercel deployment to the previous known-good SHA.
+2. Verify the restored SHA through `/api/version` and the footer.
+3. If caused by browser headers, revert only the `vercel.json` header change and retest wallets/Bridge.
+4. If caused by docs/footer/legal UI, revert the application commit without modifying contracts or transaction logic.
+5. Keep Stable Pool routing disabled and retain separate observability.
+6. Preserve transaction hashes, indexer logs, CSP reports, and CI artifacts for diagnosis.
+7. Rerun every required gate before redeploying.

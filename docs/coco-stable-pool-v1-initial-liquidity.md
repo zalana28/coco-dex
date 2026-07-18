@@ -18,7 +18,7 @@ The CocoStablePool V1 panel includes an Arc Testnet LP Beta Add Liquidity sectio
 - The UI requires nonzero USDC, EURC, and minimum LP output inputs.
 - The UI blocks the action when the wallet is disconnected, on the wrong network, the pool is paused, balances are insufficient, or allowances are still insufficient.
 - There is still no swap or smart router integration.
-- There is still no analytics or indexer integration.
+- Stable-pool beta observability is indexed separately from classic Coco V2 analytics.
 
 This UI is for Arc Testnet LP Beta experimentation only. Start with tiny amounts, do not overfund the pool, and do not treat the displayed LP preview or quote checks as production readiness.
 
@@ -36,7 +36,7 @@ The CocoStablePool V1 panel includes an Arc Testnet LP Beta Remove Liquidity sec
 - The remove flow uses resilient transaction progress with receipt polling fallback, slower backoff, rate-limit-friendly copy, and Check status recovery.
 - LP token approval is not required because the pool contract burns cSLP directly from `msg.sender`.
 - There is still no swap or smart router integration.
-- There is still no analytics or indexer integration.
+- Stable-pool beta observability is indexed separately from classic Coco V2 analytics.
 
 This UI remains testnet-only, unaudited LP Beta functionality. Start with tiny amounts and set minimum outputs carefully.
 

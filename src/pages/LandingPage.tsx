@@ -222,17 +222,7 @@ export function LandingPage() {
         </section>
       </main>
 
-      <footer className="border-t border-coco-dark-border/70 py-8">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 text-sm text-coco-dark-muted sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-          <span>Coco DEX · Built for Arc Testnet</span>
-          <div className="flex flex-wrap gap-5">
-            <Link to="/swap" className="hover:text-coco-teal-400">Launch App</Link>
-            <a href="#pools-preview" className="hover:text-coco-teal-400">Explore Pools</a>
-            <a href="#analytics-preview" className="hover:text-coco-teal-400">View Analytics</a>
-            <a href="#docs-preview" className="hover:text-coco-teal-400">Docs</a>
-          </div>
-        </div>
-      </footer>
+
     </div>
   )
 }

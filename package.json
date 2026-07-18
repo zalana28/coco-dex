@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && tsc -p api/tsconfig.json && vite build && node scripts/scanPublicBundle.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest --run",

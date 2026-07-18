@@ -27,7 +27,7 @@ CocoStablePool V1 is live as an Arc Testnet LP Beta. Initial tiny liquidity has 
 - Quote-only router readiness diagnostics are available through `npm run debug:coco-stable-quote`.
 - The pool remains unaudited and not production-ready.
 - Router integration remains future work.
-- The pool is not integrated into router, swap execution, analytics, or indexer flows.
+- The pool is not integrated into router or swap execution. Its beta observability is indexed separately from classic Coco V2 analytics.
 
 ## Router Readiness Diagnostics
 
