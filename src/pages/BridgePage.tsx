@@ -98,6 +98,16 @@ function mockResult(source: SourceChain, state: 'success' | 'error'): BridgeResu
   }
 }
 
+function mockPendingResult(source: SourceChain, pending: BridgeStepName): BridgeResult {
+  const result = mockResult(source, 'success')
+  const pendingIndex = ['approve', 'burn', 'fetchAttestation', 'mint'].indexOf(pending)
+  return {
+    ...result,
+    state: 'pending',
+    steps: result.steps.slice(0, pendingIndex + 1).map((step, index) => index === pendingIndex ? { name: step.name, state: 'pending' } : step),
+  }
+}
+
 export function BridgePage() {
   const connection = useConnection()
   const scenario = getBridgeE2EScenario()
@@ -117,7 +127,13 @@ export function BridgePage() {
   const [estimateState, setEstimateState] = useState<'idle' | 'loading' | 'error' | 'success'>('idle')
   const [error, setError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
-  const [result, setResult] = useState<BridgeResult | null>(() => scenario === 'restored' ? mockResult(source, 'error') : null)
+  const [result, setResult] = useState<BridgeResult | null>(() => {
+    if (scenario === 'restored') return mockResult(source, 'error')
+    const pending = scenario?.replace('pending-', '')
+    if (pending === 'approve' || pending === 'burn' || pending === 'mint') return mockPendingResult(source, pending)
+    if (pending === 'attestation') return mockPendingResult(source, 'fetchAttestation')
+    return null
+  })
   const [recovery, setRecovery] = useState<BridgeRecoveryRecord | null>(() => {
     if (scenario === 'restored') return {} as BridgeRecoveryRecord
     try { return browserRecoveryStore().load() } catch { return null }
@@ -136,13 +152,14 @@ export function BridgePage() {
     query: { enabled: Boolean(wallet) && !scenario },
   })
   const { data: nativeBalance } = useBalance({ address: wallet, chainId: route.chainId, query: { enabled: Boolean(wallet) && !scenario } })
-  const balanceRaw = scenario ? 25_000_000n : (tokenBalance as bigint | undefined)
+  const balanceRaw = scenario === 'balance-loading' ? undefined : scenario === 'insufficient-usdc' ? 1_000_000n : scenario ? 25_000_000n : (tokenBalance as bigint | undefined)
   let amountRaw = 0n
   try { amountRaw = parseUsdc(amount) } catch { /* invalid amount remains zero */ }
   const wrongNetwork = scenario === 'wrong-network' || (isConnected && connection.chainId !== route.chainId && !scenario)
   const validRecipient = isAddress(recipient)
+  const showRecipientError = recipientInput.length > 0 && !validRecipient
   const insufficientUsdc = balanceRaw !== undefined && amountRaw > balanceRaw
-  const insufficientGas = !scenario && nativeBalance !== undefined && nativeBalance.value === 0n
+  const insufficientGas = scenario === 'insufficient-gas' || (!scenario && nativeBalance !== undefined && nativeBalance.value === 0n)
   const steps = normalizeBridgeResult(result ?? mockResult(source, 'error')).steps.map((step) => result ? step : { ...step, state: 'idle' as const })
 
   function resetEstimate() {
@@ -171,6 +188,7 @@ export function BridgePage() {
       if (insufficientUsdc) throw new Error('Insufficient source USDC')
       if (insufficientGas) throw new Error(`Insufficient ${meta.gas} for source gas`)
       if (scenario === 'estimate-error') throw new Error('Forwarding Service estimate is temporarily unavailable')
+      if (scenario === 'long-error') throw new Error('Bridge estimate failed because the source RPC provider returned a response that could not be validated. Reconnect the active wallet, confirm Ethereum Sepolia is selected, and try again without changing the recipient or submitting a transaction.')
       const provider = scenario ? null : await activeProvider()
       const normalized = scenario ? e2eEstimate(source) : normalizeEstimate(await bridgeFacade.estimate({ provider: provider!, wallet: wallet!, source, recipient, amount, mode: mode === 'FAST' ? TransferSpeed.FAST : TransferSpeed.SLOW }))
       setEstimate(normalized)
@@ -257,16 +275,16 @@ export function BridgePage() {
   const success = result?.state === 'success'
 
   return (
-    <main className="page-fade mx-auto min-h-[calc(100vh-4rem)] max-w-7xl px-3 pb-16 pt-24 sm:px-6 lg:px-8">
-      <div className="mb-7 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
+    <main className="page-fade mx-auto min-h-[calc(100vh-4rem)] w-full max-w-[1400px] px-3 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-24 sm:px-6 xl:px-8">
+      <div className="mb-6 flex min-w-0 flex-col gap-4 sm:mb-7 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
           <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-coco-teal-400/20 bg-coco-teal-400/10 px-3 py-1 text-xs font-medium text-coco-teal-400">
             <ShieldCheck className="h-3.5 w-3.5" /> CCTP V2 · testnet MVP
           </div>
           <h1 className="text-3xl font-semibold tracking-tight text-coco-dark-text sm:text-4xl">Bridge USDC to Arc</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-coco-dark-muted">Move native CCTP USDC from Sepolia testnets. Circle Forwarding Service submits the Arc mint and deducts its quoted fee from the destination amount.</p>
         </div>
-        <div className="rounded-xl border border-coco-dark-border bg-coco-dark-surface/70 px-3 py-2 text-xs text-coco-dark-muted">
+        <div className="min-w-0 max-w-full self-start rounded-xl border border-coco-dark-border bg-coco-dark-surface/70 px-3 py-2 text-sm text-coco-dark-muted sm:shrink-0 sm:self-auto">
           Connected: <span className="font-mono text-coco-dark-text">{shortAddress(wallet)}</span>
         </div>
       </div>
@@ -278,59 +296,62 @@ export function BridgePage() {
       )}
 
       {recovery && isConnected && (
-        <div data-testid="recovery-card"><Card className="mb-5 border-coco-amber-500/25 p-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div><p className="text-xs font-semibold uppercase tracking-wider text-coco-amber-500">Recoverable transfer</p><h2 className="mt-1 font-semibold text-coco-dark-text">Burn succeeded; resume attestation or mint</h2><p className="mt-1 text-sm text-coco-dark-muted">Recovery creates fresh wallet adapters and calls retry only. It will not repeat the burn.</p></div>
-            <div className="flex gap-2"><button type="button" onClick={() => void recoverBridge()} disabled={isSubmitting} className="min-h-11 rounded-xl bg-coco-amber-500 px-4 text-sm font-semibold text-slate-950 disabled:opacity-50">Resume</button><button type="button" onClick={dismissRecovery} className="min-h-11 rounded-xl border border-coco-dark-border px-4 text-sm text-coco-dark-secondary">Dismiss</button></div>
+        <div data-testid="recovery-card" className="min-w-0"><Card className="mb-5 min-w-0 p-4 sm:p-5 border-coco-amber-500/25">
+          <div className="flex min-w-0 flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wider text-coco-amber-500">Recoverable transfer</p><h2 className="mt-1 font-semibold text-coco-dark-text">Burn succeeded; resume attestation or mint</h2><p className="mt-1 break-words text-sm leading-6 text-coco-dark-muted">Recovery creates fresh wallet adapters and calls retry only. It will not repeat the burn.</p></div>
+            <div className="grid w-full shrink-0 grid-cols-1 gap-2 min-[420px]:grid-cols-2 md:w-auto"><button type="button" onClick={() => void recoverBridge()} disabled={isSubmitting} className="min-h-11 rounded-xl bg-coco-amber-500 px-4 text-sm font-semibold text-slate-950 disabled:opacity-50">Resume</button><button type="button" onClick={dismissRecovery} className="min-h-11 rounded-xl border border-coco-dark-border px-4 text-sm text-coco-dark-secondary">Dismiss</button></div>
           </div>
         </Card></div>
       )}
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(20rem,.85fr)]">
-        <Card className="p-4 sm:p-6">
-          <div className="grid gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
-            <label className="grid gap-2 text-sm font-medium text-coco-dark-secondary">Source
-              <select aria-label="Source chain" value={source} onChange={(event) => { setSource(event.target.value as SourceChain); resetEstimate() }} className="min-h-12 rounded-xl border border-coco-dark-border bg-coco-dark-bg px-3 text-coco-dark-text outline-none focus:border-coco-green-500">
+      <div data-testid="bridge-layout" className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,25rem)] xl:items-start">
+        <Card className="min-w-0 overflow-hidden p-4 sm:p-6">
+          <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:items-end md:gap-4">
+            <label className="grid min-w-0 gap-2 text-sm font-medium text-coco-dark-secondary">Source
+              <select aria-label="Source chain" value={source} onChange={(event) => { setSource(event.target.value as SourceChain); resetEstimate() }} className="min-h-12 w-full min-w-0 rounded-xl border border-coco-dark-border bg-coco-dark-bg px-3 text-coco-dark-text outline-none focus-visible:border-coco-green-500 focus-visible:ring-2 focus-visible:ring-coco-green-500/30">
                 <option value="Ethereum_Sepolia">Ethereum Sepolia</option><option value="Base_Sepolia">Base Sepolia</option>
               </select>
             </label>
-            <div className="hidden h-12 items-center sm:flex"><ArrowRight className="h-5 w-5 text-coco-dark-muted" /></div>
-            <div className="grid gap-2 text-sm font-medium text-coco-dark-secondary"><span>Destination</span>
-              <div className="flex min-h-12 items-center rounded-xl border border-coco-teal-400/20 bg-coco-teal-400/5 px-3 font-medium text-coco-dark-text">Arc Testnet <span className="ml-auto text-xs text-coco-teal-400">Fixed</span></div>
+            <div aria-hidden="true" className="flex h-5 items-center justify-center md:h-12"><ArrowRight className="h-5 w-5 rotate-90 text-coco-dark-muted md:rotate-0" /></div>
+            <div className="grid min-w-0 gap-2 text-sm font-medium text-coco-dark-secondary"><span>Destination</span>
+              <div data-testid="bridge-destination" className="flex min-h-12 min-w-0 items-center rounded-xl border border-coco-teal-400/20 bg-coco-teal-400/5 px-3 font-medium text-coco-dark-text">Arc Testnet <span className="ml-auto shrink-0 text-xs text-coco-teal-400">Fixed</span></div>
             </div>
           </div>
 
           {wrongNetwork && (
-            <div className="mt-4 flex flex-col gap-3 rounded-xl border border-coco-amber-500/25 bg-coco-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="flex items-center gap-2 text-sm text-coco-amber-500"><AlertTriangle className="h-4 w-4" /> Wallet is on the wrong source network.</p>
-              <button type="button" onClick={() => scenario ? undefined : void switchChainAsync({ chainId: route.chainId })} disabled={isSwitching} className="min-h-11 rounded-xl border border-coco-amber-500/30 px-4 text-sm font-semibold text-coco-amber-500">{isSwitching ? 'Switching…' : `Switch to ${meta.label}`}</button>
+            <div className="mt-4 flex min-w-0 flex-col gap-3 rounded-xl border border-coco-amber-500/25 bg-coco-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="flex min-w-0 items-start gap-2 break-words text-sm leading-6 text-coco-amber-500"><AlertTriangle className="mt-1 h-4 w-4 shrink-0" /> Wallet is on the wrong source network.</p>
+              <button type="button" onClick={() => scenario ? undefined : void switchChainAsync({ chainId: route.chainId })} disabled={isSwitching} className="min-h-11 w-full shrink-0 rounded-xl border border-coco-amber-500/30 px-4 text-sm font-semibold text-coco-amber-500 sm:w-auto">{isSwitching ? 'Switching…' : `Switch to ${meta.label}`}</button>
             </div>
           )}
 
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <label className="grid gap-2 text-sm font-medium text-coco-dark-secondary">Amount
-              <div className="flex min-h-14 items-center rounded-xl border border-coco-dark-border bg-coco-dark-bg px-3 focus-within:border-coco-green-500"><input aria-label="USDC amount" inputMode="decimal" value={amount} onChange={(event) => { setAmount(event.target.value); resetEstimate() }} placeholder="0.00" className="min-w-0 flex-1 bg-transparent text-xl text-coco-dark-text outline-none" /><span className="mr-2 text-sm font-semibold text-coco-dark-text">USDC</span><button type="button" onClick={() => { if (balanceRaw !== undefined) { setAmount(formatUsdc(balanceRaw)); resetEstimate() } }} disabled={!balanceRaw} className="rounded-lg bg-coco-green-500/15 px-2 py-1 text-xs font-semibold text-coco-green-500 disabled:opacity-40">Max</button></div>
-              <span className="text-xs text-coco-dark-muted">Balance: {balanceLoading ? 'Loading…' : balanceRaw === undefined ? '—' : `${formatUsdc(balanceRaw)} USDC`}</span>
-            </label>
-            <label className="grid gap-2 text-sm font-medium text-coco-dark-secondary">Recipient on Arc
-              <input aria-label="Recipient address" value={recipient} onChange={(event) => { setRecipient(event.target.value); resetEstimate() }} className="min-h-14 min-w-0 rounded-xl border border-coco-dark-border bg-coco-dark-bg px-3 font-mono text-sm text-coco-dark-text outline-none focus:border-coco-green-500" />
-              <span className="text-xs text-coco-dark-muted">Defaults to the connected account; no Arc gas required for forwarded mint.</span>
-            </label>
+          <div data-testid="bridge-fields" className="mt-5 grid min-w-0 gap-5 md:grid-cols-[minmax(13rem,0.7fr)_minmax(0,1.3fr)] md:items-start">
+            <div className="grid min-w-0 gap-2">
+              <label htmlFor="bridge-amount" className="text-sm font-medium text-coco-dark-secondary">Amount</label>
+              <div className="grid min-h-14 min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-xl border border-coco-dark-border bg-coco-dark-bg px-3 focus-within:border-coco-green-500 focus-within:ring-2 focus-within:ring-coco-green-500/30"><input id="bridge-amount" aria-describedby="bridge-amount-help" aria-label="USDC amount" inputMode="decimal" value={amount} onChange={(event) => { setAmount(event.target.value); resetEstimate() }} placeholder="0.00" className="w-full min-w-0 bg-transparent text-xl text-coco-dark-text outline-none" /><span className="text-sm font-semibold text-coco-dark-text">USDC</span><button type="button" onClick={() => { if (balanceRaw !== undefined) { setAmount(formatUsdc(balanceRaw)); resetEstimate() } }} disabled={!balanceRaw} className="min-h-11 min-w-11 rounded-lg bg-coco-green-500/15 px-2 text-sm font-semibold text-coco-green-500 disabled:opacity-40">Max</button></div>
+              <p id="bridge-amount-help" className="text-sm leading-5 text-coco-dark-muted">Balance: {balanceLoading || scenario === 'balance-loading' ? 'Loading…' : balanceRaw === undefined ? '—' : `${formatUsdc(balanceRaw)} USDC`}</p>
+            </div>
+            <div className="grid min-w-0 gap-2">
+              <label htmlFor="bridge-recipient" className="text-sm font-medium text-coco-dark-secondary">Recipient on Arc</label>
+              <input id="bridge-recipient" aria-describedby={`bridge-recipient-help${showRecipientError ? ' bridge-recipient-error' : ''}`} aria-invalid={showRecipientError || undefined} value={recipient} onChange={(event) => { setRecipient(event.target.value); resetEstimate() }} autoComplete="off" spellCheck={false} className="min-h-14 w-full min-w-0 max-w-full overflow-x-auto whitespace-nowrap rounded-xl border border-coco-dark-border bg-coco-dark-bg px-3 font-mono text-sm text-coco-dark-text outline-none focus-visible:border-coco-green-500 focus-visible:ring-2 focus-visible:ring-coco-green-500/30 aria-[invalid=true]:border-coco-red-500" />
+              <p id="bridge-recipient-help" className="break-words text-sm leading-5 text-coco-dark-muted">Defaults to the connected account; no Arc gas required for forwarded mint.</p>
+              {showRecipientError && <p id="bridge-recipient-error" className="break-words text-sm leading-5 text-coco-red-500">Enter a valid Arc recipient address.</p>}
+            </div>
           </div>
 
-          <fieldset className="mt-5"><legend className="mb-2 text-sm font-medium text-coco-dark-secondary">Transfer mode</legend><div className="grid grid-cols-2 gap-2"><button type="button" aria-pressed={mode === 'SLOW'} onClick={() => setMode('SLOW')} className={`min-h-12 rounded-xl border px-3 text-sm font-semibold ${mode === 'SLOW' ? 'border-coco-green-500 bg-coco-green-500/10 text-coco-dark-text' : 'border-coco-dark-border text-coco-dark-muted'}`}>Standard</button>{fastSupported && <button type="button" aria-pressed={mode === 'FAST'} onClick={() => { setMode('FAST'); if (fastEstimate) setEstimate(fastEstimate) }} className={`min-h-12 rounded-xl border px-3 text-sm font-semibold ${mode === 'FAST' ? 'border-coco-teal-400 bg-coco-teal-400/10 text-coco-dark-text' : 'border-coco-dark-border text-coco-dark-muted'}`}><Zap className="mr-1 inline h-4 w-4" />Fast</button>}</div><p className="mt-2 text-xs text-coco-dark-muted">Fast is shown only after a FAST estimate succeeds for this exact route and amount.</p></fieldset>
+          <fieldset className="mt-5 min-w-0"><legend className="mb-2 text-sm font-medium text-coco-dark-secondary">Transfer mode</legend><div className="grid min-w-0 grid-cols-1 gap-2 min-[360px]:grid-cols-2"><button type="button" aria-pressed={mode === 'SLOW'} onClick={() => setMode('SLOW')} className={`min-h-12 w-full rounded-xl border px-3 text-sm font-semibold ${mode === 'SLOW' ? 'border-coco-green-500 bg-coco-green-500/10 text-coco-dark-text' : 'border-coco-dark-border text-coco-dark-muted'}`}>Standard</button>{fastSupported && <button type="button" aria-pressed={mode === 'FAST'} onClick={() => { setMode('FAST'); if (fastEstimate) setEstimate(fastEstimate) }} className={`min-h-12 w-full rounded-xl border px-3 text-sm font-semibold ${mode === 'FAST' ? 'border-coco-teal-400 bg-coco-teal-400/10 text-coco-dark-text' : 'border-coco-dark-border text-coco-dark-muted'}`}><Zap className="mr-1 inline h-4 w-4" />Fast</button>}</div><p className="mt-2 break-words text-sm leading-5 text-coco-dark-muted">Fast is shown only after a FAST estimate succeeds for this exact route and amount.</p></fieldset>
 
-          {error && <div role="alert" className="mt-4 rounded-xl border border-coco-red-500/25 bg-coco-red-500/5 p-3 text-sm text-coco-red-500">{error}</div>}
+          {error && <div role="alert" className="mt-4 max-w-full whitespace-pre-wrap break-words rounded-xl border border-coco-red-500/25 bg-coco-red-500/5 p-3 text-sm leading-6 text-coco-red-500">{error}</div>}
 
           <button type="button" onClick={() => estimate ? setConfirming(true) : void estimateBridge()} disabled={!isConnected || wrongNetwork || estimateState === 'loading' || !validRecipient || amountRaw <= 0n || insufficientUsdc || insufficientGas || isSubmitting} className="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-coco-green-500 px-4 font-semibold text-white shadow-lg shadow-coco-green-500/20 transition hover:bg-coco-green-600 disabled:cursor-not-allowed disabled:opacity-45">
             {estimateState === 'loading' ? <><LoaderCircle className="h-4 w-4 animate-spin" /> Estimating…</> : estimate ? 'Review transfer' : 'Estimate bridge'}
           </button>
         </Card>
 
-        <div className="grid content-start gap-5">
-          <div data-testid="estimate-panel"><Card className="p-5"><h2 className="font-semibold text-coco-dark-text">Estimate</h2>{estimate ? <dl className="mt-4 grid gap-3 text-sm"><EstimateRow label="Destination amount" value={`${estimate.destinationAmount} USDC`} strong /><EstimateRow label="CCTP protocol fee" value={estimate.providerFee === null ? 'Unavailable' : `${estimate.providerFee} USDC`} /><EstimateRow label="Forwarding Service fee" value={estimate.forwarderFee === null ? 'Unavailable' : `${estimate.forwarderFee} USDC`} /><EstimateRow label="Application fee" value="0 USDC" /><EstimateRow label="Total estimated fee" value={`${estimate.totalFee} USDC`} strong /><EstimateRow label="Estimated duration" value={estimate.duration ?? 'Not provided by Bridge Kit 1.12.1'} icon={<Clock3 className="h-4 w-4" />} /><EstimateRow label="Source gas requirement" value={estimate.gas.map((item) => `${item.name}: ${item.fees?.fee ?? 'unavailable'} ${item.token}`).join(', ') || 'Unavailable'} /></dl> : <p className="mt-3 text-sm leading-6 text-coco-dark-muted">Enter an amount and request an SDK estimate. Submission stays disabled if fees, gas, or forwarding availability cannot be estimated.</p>}</Card></div>
+        <div data-testid="bridge-sidebar" className="grid min-w-0 content-start gap-5 xl:w-full">
+          <div data-testid="estimate-panel" className="min-w-0"><Card className="min-w-0 p-4 sm:p-5"><h2 className="font-semibold text-coco-dark-text">Estimate</h2>{estimate ? <dl className="mt-4 grid min-w-0 gap-3 text-sm"><EstimateRow label="Destination amount" value={`${estimate.destinationAmount} USDC`} strong /><EstimateRow label="CCTP protocol fee" value={estimate.providerFee === null ? 'Unavailable' : `${estimate.providerFee} USDC`} /><EstimateRow label="Forwarding Service fee" value={estimate.forwarderFee === null ? 'Unavailable' : `${estimate.forwarderFee} USDC`} /><EstimateRow label="Application fee" value="0 USDC" /><EstimateRow label="Total estimated fee" value={`${estimate.totalFee} USDC`} strong /><EstimateRow label="Estimated duration" value={estimate.duration ?? 'Not provided by Bridge Kit 1.12.1'} icon={<Clock3 className="h-4 w-4" />} /><EstimateRow label="Source gas requirement" value={estimate.gas.map((item) => `${item.name}: ${item.fees?.fee ?? 'unavailable'} ${item.token}`).join(', ') || 'Unavailable'} /></dl> : <p className="mt-3 break-words text-sm leading-6 text-coco-dark-muted">Enter an amount and request an SDK estimate. Submission stays disabled if fees, gas, or forwarding availability cannot be estimated.</p>}</Card></div>
 
-          <Card className="p-5"><h2 className="font-semibold text-coco-dark-text">Bridge lifecycle</h2><ol className="mt-4 grid gap-3">{steps.map((step) => <li key={step.name} className="flex min-w-0 items-center gap-3"><span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border ${step.state === 'success' ? 'border-coco-green-500/30 bg-coco-green-500/10 text-coco-green-500' : step.state === 'error' || step.state === 'recoverable' ? 'border-coco-amber-500/30 bg-coco-amber-500/10 text-coco-amber-500' : 'border-coco-dark-border text-coco-dark-muted'}`}>{step.state === 'success' ? <Check className="h-4 w-4" /> : step.state === 'pending' || step.state === 'waiting-wallet' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <span className="text-xs">{steps.indexOf(step) + 1}</span>}</span><div className="min-w-0 flex-1"><p className="text-sm font-medium text-coco-dark-text">{STEP_LABELS[step.name]}</p><p className="text-xs text-coco-dark-muted">{stateLabel(step.state)}</p></div>{step.explorerUrl && <a href={step.explorerUrl} target="_blank" rel="noreferrer" aria-label={`View ${step.name} transaction`} className="text-coco-teal-400"><ExternalLink className="h-4 w-4" /></a>}</li>)}</ol></Card>
+          <Card className="min-w-0 p-4 sm:p-5"><h2 className="font-semibold text-coco-dark-text">Bridge lifecycle</h2><ol className="mt-4 grid min-w-0 gap-3" aria-live="polite">{steps.map((step) => <li key={step.name} className="flex min-w-0 items-center gap-3"><span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border ${step.state === 'success' ? 'border-coco-green-500/30 bg-coco-green-500/10 text-coco-green-500' : step.state === 'error' || step.state === 'recoverable' ? 'border-coco-amber-500/30 bg-coco-amber-500/10 text-coco-amber-500' : 'border-coco-dark-border text-coco-dark-muted'}`}>{step.state === 'success' ? <Check className="h-4 w-4" /> : step.state === 'pending' || step.state === 'waiting-wallet' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <span className="text-xs">{steps.indexOf(step) + 1}</span>}</span><div className="min-w-0 flex-1"><p className="break-words text-sm font-medium text-coco-dark-text">{STEP_LABELS[step.name]}</p><p className="text-sm text-coco-dark-muted">{stateLabel(step.state)}</p></div>{step.explorerUrl && <a href={step.explorerUrl} target="_blank" rel="noreferrer" aria-label={`View ${step.name} transaction`} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-coco-teal-400 focus-visible:ring-2 focus-visible:ring-coco-teal-400/40"><ExternalLink className="h-4 w-4" /></a>}</li>)}</ol></Card>
         </div>
       </div>
 
