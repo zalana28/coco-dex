@@ -22,7 +22,7 @@ The policy does not use a global `*`, `https:`, `wss:`, `*.circle.com`, `*.walle
 |---|---|
 | `'self'` | Vite assets and same-origin APIs |
 | `https://rpc.testnet.arc.network` | Arc Testnet wallet/read RPC |
-| `https://ethereum-sepolia-rpc.publicnode.com` | Bridge Kit Ethereum Sepolia RPC |
+| `https://11155111.rpc.thirdweb.com` | viem default Ethereum Sepolia RPC used by the browser transport |
 | `https://sepolia.base.org` | Bridge Kit Base Sepolia RPC |
 | `https://iris-api-sandbox.circle.com` | CCTP V2 testnet attestation/forwarding state |
 | `https://api.circle.com` | Bridge Kit telemetry endpoint; no application API key is sent by the browser |

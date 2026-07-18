@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import handler, { getPublicVersionMetadata } from './version.js'
+import handler from './health.js'
+import { getPublicVersionMetadata } from './_lib/publicVersion.js'
 
 function makeReq(method: string) {
-  return { method } as unknown as import('@vercel/node').VercelRequest
+  return { method, query: { publicVersion: '1' } } as unknown as import('@vercel/node').VercelRequest
 }
 function makeRes() {
   const res: Record<string, unknown> = {

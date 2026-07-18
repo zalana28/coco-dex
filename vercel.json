@@ -26,12 +26,16 @@
         },
         {
           "key": "Content-Security-Policy-Report-Only",
-          "value": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://rpc.testnet.arc.network https://ethereum-sepolia-rpc.publicnode.com https://sepolia.base.org https://iris-api-sandbox.circle.com https://api.circle.com https://relay.walletconnect.com wss://relay.walletconnect.com https://explorer-api.walletconnect.com https://verify.walletconnect.com https://pulse.walletconnect.org; frame-src https://verify.walletconnect.com; worker-src 'self' blob:; manifest-src 'self'; upgrade-insecure-requests"
+          "value": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://rpc.testnet.arc.network https://11155111.rpc.thirdweb.com https://sepolia.base.org https://iris-api-sandbox.circle.com https://api.circle.com https://relay.walletconnect.com wss://relay.walletconnect.com https://explorer-api.walletconnect.com https://verify.walletconnect.com https://pulse.walletconnect.org; frame-src https://verify.walletconnect.com; worker-src 'self' blob:; manifest-src 'self'"
         }
       ]
     }
   ],
   "rewrites": [
+    {
+      "source": "/api/version",
+      "destination": "/api/health?publicVersion=1"
+    },
     {
       "source": "/api/(.*)",
       "destination": "/api/$1"

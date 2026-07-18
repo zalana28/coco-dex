@@ -1,12 +1,15 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getSupabaseAdmin } from './_lib/supabaseAdmin.js'
 import { getArcClient } from './_lib/arcClient.js'
+import { servePublicVersion } from './_lib/publicVersion.js'
 
 /**
  * Health check endpoint for Coco DEX indexer status.
  * Returns chain/indexer state without exposing secrets.
  */
-export default async function handler(_req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.query.publicVersion === '1') return servePublicVersion(req, res)
+
   try {
     const supabase = getSupabaseAdmin()
     const client = getArcClient()

@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import packageJson from '../package.json' with { type: 'json' }
+import packageJson from '../../package.json' with { type: 'json' }
 
 const FALLBACK_BUILD_TIMESTAMP = new Date().toISOString()
 
@@ -44,7 +44,7 @@ export function getPublicVersionMetadata(env: NodeJS.ProcessEnv = process.env): 
   }
 }
 
-export default function handler(req: VercelRequest, res: VercelResponse) {
+export function servePublicVersion(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET')
     return res.status(405).json({ error: 'Method not allowed' })

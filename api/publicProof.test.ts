@@ -41,6 +41,20 @@ describe('public proof and compliance configuration', () => {
     expect(`${readme}\n${analyticsDocs}`).not.toContain('every 5-15 minutes')
   })
 
+  it('stays within the Vercel Hobby function limit while serving /api/version', () => {
+    const entrypoints = filesUnder('api').filter((path) =>
+      path.endsWith('.ts') &&
+      !path.endsWith('.test.ts') &&
+      !path.includes('/_lib/'),
+    )
+    const vercel = read('vercel.json')
+
+    expect(entrypoints).toHaveLength(12)
+    expect(entrypoints).not.toContain('api/version.ts')
+    expect(vercel).toContain('"source": "/api/version"')
+    expect(vercel).toContain('"destination": "/api/health?publicVersion=1"')
+  })
+
   it('keeps README and public Docs synchronized with implemented Bridge facts', () => {
     const readme = read('README.md')
     const docs = read('src/pages/DocsPage.tsx')
