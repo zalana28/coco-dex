@@ -4,6 +4,14 @@ export type BridgeE2EScenario =
   | 'base'
   | 'wrong-network'
   | 'estimate-error'
+  | 'long-error'
+  | 'balance-loading'
+  | 'insufficient-usdc'
+  | 'insufficient-gas'
+  | 'pending-approve'
+  | 'pending-burn'
+  | 'pending-attestation'
+  | 'pending-mint'
   | 'lifecycle'
   | 'recoverable'
   | 'restored'
@@ -18,6 +26,14 @@ export function getBridgeE2EScenario(): BridgeE2EScenario | null {
     'base',
     'wrong-network',
     'estimate-error',
+    'long-error',
+    'balance-loading',
+    'insufficient-usdc',
+    'insufficient-gas',
+    'pending-approve',
+    'pending-burn',
+    'pending-attestation',
+    'pending-mint',
     'lifecycle',
     'recoverable',
     'restored',
