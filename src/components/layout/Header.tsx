@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { Menu, X } from 'lucide-react'
 import { ConnectWalletButton } from '@/components/common/ConnectWalletButton'
@@ -9,12 +9,6 @@ const appNavLinks = [
   { to: '/pools', label: 'Pools' },
   { to: '/analytics', label: 'Analytics' },
   { to: '/docs', label: 'Docs' },
-]
-
-const landingNavLinks = [
-  { to: '/docs', label: 'Docs' },
-  { to: '/pools', label: 'Explore Pools' },
-  { to: '/analytics', label: 'View Analytics' },
 ]
 
 const shell =
@@ -70,9 +64,25 @@ function Logo() {
   )
 }
 
-function DesktopNavMenu({ links, ariaLabel }: { links: ReadonlyArray<{ to: string; label: string }>; ariaLabel: string }) {
+// Landing header exposes only the logo and the single Launch App entry point.
+// No application navigation (Swap/Bridge/Pools/Analytics/Docs) is present, so
+// Launch App is the only visible path into the application.
+export function LandingHeader() {
   return (
-    <nav className={desktopPill} aria-label={ariaLabel}>
+    <header className={shell}>
+      <div className={bar}>
+        <Logo />
+        <Link to="/swap" className={launchButton}>
+          Launch App
+        </Link>
+      </div>
+    </header>
+  )
+}
+
+function DesktopNavMenu({ links }: { links: ReadonlyArray<{ to: string; label: string }> }) {
+  return (
+    <nav className={desktopPill} aria-label="Primary">
       {links.map(({ to, label }) => (
         <NavLink key={to} to={to} end={to === '/'} className={desktopPillLink}>
           {label}
@@ -84,7 +94,13 @@ function DesktopNavMenu({ links, ariaLabel }: { links: ReadonlyArray<{ to: strin
 
 function MobileToggle({ isOpen, onToggle }: { isOpen: boolean; onToggle: () => void }) {
   return (
-    <button type="button" onClick={onToggle} className={mobileToggle} aria-label="Toggle navigation" aria-expanded={isOpen}>
+    <button
+      type="button"
+      onClick={onToggle}
+      className={mobileToggle}
+      aria-label="Toggle navigation"
+      aria-expanded={isOpen}
+    >
       {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
     </button>
   )
@@ -94,12 +110,10 @@ function MobilePanel({
   links,
   isOpen,
   onNavigate,
-  children,
 }: {
   links: ReadonlyArray<{ to: string; label: string }>
   isOpen: boolean
   onNavigate: () => void
-  children?: ReactNode
 }) {
   if (!isOpen) return null
   return (
@@ -111,38 +125,7 @@ function MobilePanel({
           </NavLink>
         ))}
       </nav>
-      {children}
     </div>
-  )
-}
-
-export function LandingHeader() {
-  const [isOpen, setIsOpen] = useState(false)
-  const close = () => setIsOpen(false)
-  const toggle = () => setIsOpen((value) => !value)
-
-  return (
-    <header className={shell}>
-      <div className={bar}>
-        <Logo />
-        <DesktopNavMenu links={landingNavLinks} ariaLabel="Landing" />
-        <div className="hidden shrink-0 items-center gap-3 md:flex">
-          <Link to="/swap" className={launchButton}>
-            Launch App
-          </Link>
-        </div>
-        <div className="flex min-w-0 shrink-0 items-center gap-1.5 md:hidden">
-          <MobileToggle isOpen={isOpen} onToggle={toggle} />
-        </div>
-      </div>
-      <MobilePanel links={landingNavLinks} isOpen={isOpen} onNavigate={close}>
-        <div className="mt-3 grid gap-3">
-          <Link to="/swap" onClick={close} className={`${launchButton} w-full`}>
-            Launch App
-          </Link>
-        </div>
-      </MobilePanel>
-    </header>
   )
 }
 
@@ -155,7 +138,7 @@ export function AppHeader() {
     <header className={shell}>
       <div className={bar}>
         <Logo />
-        <DesktopNavMenu links={appNavLinks} ariaLabel="Primary" />
+        <DesktopNavMenu links={appNavLinks} />
         <div className="hidden shrink-0 items-center gap-3 md:flex">
           <ConnectWalletButton />
         </div>
@@ -171,6 +154,5 @@ export function AppHeader() {
 
 export function Header() {
   const { pathname } = useLocation()
-  const isLanding = pathname === '/' || pathname === '/docs'
-  return isLanding ? <LandingHeader /> : <AppHeader />
+  return pathname === '/' ? <LandingHeader /> : <AppHeader />
 }
