@@ -83,21 +83,21 @@ export function LandingPage() {
                 Launch App
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link
-                to="/analytics"
+              <a
+                href="#analytics-preview"
                 className="inline-flex items-center justify-center gap-2 rounded-2xl border border-coco-dark-border bg-coco-dark-surface/70 px-6 py-3.5 text-sm font-semibold text-coco-dark-text shadow-coco-1 backdrop-blur-xl transition-all hover:-translate-y-0.5 hover:border-coco-teal-400/40"
               >
                 View Analytics
                 <BarChart3 className="h-4 w-4" />
-              </Link>
+              </a>
             </div>
             <div className="mt-8 flex flex-wrap gap-3 text-sm text-coco-dark-muted">
-              <Link to="/pools" className="inline-flex items-center gap-1.5 hover:text-coco-teal-400">
+              <a href="#pools-preview" className="inline-flex items-center gap-1.5 hover:text-coco-teal-400">
                 Explore Pools <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-              <Link to="/docs" className="inline-flex items-center gap-1.5 hover:text-coco-teal-400">
+              </a>
+              <a href="#docs-preview" className="inline-flex items-center gap-1.5 hover:text-coco-teal-400">
                 Read Docs <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
+              </a>
             </div>
           </div>
 
@@ -130,6 +130,7 @@ export function LandingPage() {
         </Section>
 
         <Section
+          id="pools-preview"
           eyebrow="Liquidity made visible"
           title="Add, track, and remove Coco liquidity."
           description="Provide liquidity to Coco pools, monitor LP position value, and remove liquidity anytime. Fees are reflected through pool value like V2-style AMM pools."
@@ -142,6 +143,7 @@ export function LandingPage() {
         </Section>
 
         <Section
+          id="analytics-preview"
           eyebrow="Real indexed analytics"
           title="Protocol activity with indexed event context."
           description="Analytics surfaces real indexed swap and liquidity activity, TVL and volume charts, Supabase-backed event data, and Arcscan transaction links."
@@ -153,9 +155,9 @@ export function LandingPage() {
               <p className="mt-3 text-sm leading-6 text-coco-dark-muted">
                 Track TVL, 24h volume, total trades, recent events, and sync health from the analytics page.
               </p>
-              <Link to="/analytics" className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-coco-teal-400 hover:text-coco-teal-600">
-                View Analytics <ArrowRight className="h-4 w-4" />
-              </Link>
+              <p className="mt-5 text-sm font-semibold text-coco-dark-muted">
+                Available after you launch the app
+              </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               {['TVL and volume charts', 'Supabase-backed event indexer', 'Arcscan transaction links', 'Swap and liquidity activity'].map((item) => (
@@ -191,6 +193,19 @@ export function LandingPage() {
           </div>
         </section>
 
+        <Section
+          id="docs-preview"
+          eyebrow="Documentation preview"
+          title="Understand routing before you sign."
+          description="Coco DEX explains route comparison, approvals, and testnet behavior inline. Full developer and usage documentation is available inside the app after you launch it."
+        >
+          <FeatureGrid>
+            <FeatureCard icon={<ShieldAlert />} title="Approval clarity" description="Each route shows its own spender and approval context, so you never sign a hidden allowance." />
+            <FeatureCard icon={<GitCompareArrows />} title="Route transparency" description="Expected output, min received, route source, and slippage stay visible before every action." />
+            <FeatureCard icon={<LockKeyhole />} title="Testnet safety" description="Network guard and wallet states remain visible, and every transaction links to Arcscan." />
+          </FeatureGrid>
+        </Section>
+
         <section className="mt-20">
           <div className="mb-8">
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-coco-teal-400">FAQ</p>
@@ -212,9 +227,9 @@ export function LandingPage() {
           <span>Coco DEX · Built for Arc Testnet</span>
           <div className="flex flex-wrap gap-5">
             <Link to="/swap" className="hover:text-coco-teal-400">Launch App</Link>
-            <Link to="/pools" className="hover:text-coco-teal-400">Explore Pools</Link>
-            <Link to="/analytics" className="hover:text-coco-teal-400">View Analytics</Link>
-            <Link to="/docs" className="hover:text-coco-teal-400">Docs</Link>
+            <a href="#pools-preview" className="hover:text-coco-teal-400">Explore Pools</a>
+            <a href="#analytics-preview" className="hover:text-coco-teal-400">View Analytics</a>
+            <a href="#docs-preview" className="hover:text-coco-teal-400">Docs</a>
           </div>
         </div>
       </footer>
@@ -304,9 +319,9 @@ function MockRoute({
   )
 }
 
-function Section({ eyebrow, title, description, children }: { eyebrow: string; title: string; description: string; children: ReactNode }) {
+function Section({ id, eyebrow, title, description, children }: { id?: string; eyebrow: string; title: string; description: string; children: ReactNode }) {
   return (
-    <section className="mb-20">
+    <section id={id} className="mb-20 scroll-mt-20">
       <div className="mb-8 max-w-3xl">
         <p className="text-sm font-semibold uppercase tracking-[0.24em] text-coco-teal-400">{eyebrow}</p>
         <h2 className="mt-3 text-3xl font-semibold tracking-tight text-coco-dark-text sm:text-4xl">{title}</h2>
