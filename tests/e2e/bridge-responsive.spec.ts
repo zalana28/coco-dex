@@ -106,6 +106,52 @@ test.describe('Bridge responsive layout', () => {
     await expectNoHorizontalOverflow(page)
   })
 
+  test('associates amount validation with an accessible reason', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 700 })
+    await page.goto('/bridge?bridge-e2e=ethereum')
+    const amount = page.getByLabel('USDC amount')
+    await amount.fill('not-an-amount')
+
+    await expect(amount).toHaveAttribute('aria-invalid', 'true')
+    await expect(amount).toHaveAttribute('aria-describedby', /bridge-amount-error/)
+    await expect(page.getByText('Enter a valid USDC amount.')).toBeVisible()
+    await expectNoHorizontalOverflow(page)
+  })
+
+  test('traps dialog focus, closes with Escape, and restores the trigger', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await openEstimatedBridge(page)
+    const trigger = page.getByRole('button', { name: 'Review transfer' })
+    await trigger.focus()
+    await trigger.click()
+
+    const dialog = page.getByRole('dialog', { name: 'Confirm bridge' })
+    const cancel = dialog.getByRole('button', { name: 'Cancel' })
+    const confirm = dialog.getByRole('button', { name: 'Confirm & bridge' })
+    await expect(cancel).toBeFocused()
+    await expect(page.getByTestId('bridge-page-content')).toHaveAttribute('inert', '')
+    await cancel.press('Shift+Tab')
+    await expect(confirm).toBeFocused()
+    await confirm.press('Tab')
+    await expect(cancel).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
+    await expect(trigger).toBeFocused()
+  })
+
+  test('announces one lifecycle update and bridge success as statuses', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 700 })
+    await page.goto('/bridge?bridge-e2e=pending-burn')
+    const lifecycleStatus = page.getByRole('status', { name: 'Bridge lifecycle update' })
+    await expect(lifecycleStatus).toHaveText('Burn on source: Pending')
+    await expect(page.getByRole('list')).not.toHaveAttribute('aria-live')
+
+    await openEstimatedBridge(page, 'lifecycle')
+    await page.getByRole('button', { name: 'Review transfer' }).click()
+    await page.getByRole('button', { name: 'Confirm & bridge' }).click()
+    await expect(page.getByRole('status', { name: 'Bridge completed' })).toContainText('USDC arrived on Arc Testnet')
+  })
+
   test('stacks wrong-network warning action at 320px', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 700 })
     await page.goto('/bridge?bridge-e2e=wrong-network')
@@ -125,7 +171,7 @@ test.describe('Bridge responsive layout', () => {
 
     await expect(page.getByTestId('recovery-card')).toBeVisible()
     for (const label of ['Approve USDC', 'Burn on source', 'Fetch attestation', 'Mint on Arc']) {
-      const row = page.getByText(label).locator('..')
+      const row = page.getByRole('list').getByText(label).locator('..')
       const rowBox = await box(row)
       expect(rowBox.x + rowBox.width).toBeLessThanOrEqual(320)
     }
@@ -172,7 +218,7 @@ test.describe('Bridge responsive layout', () => {
 
     for (const [scenario, label] of [['pending-approve', 'Approve USDC'], ['pending-burn', 'Burn on source'], ['pending-attestation', 'Fetch attestation'], ['pending-mint', 'Mint on Arc']] as const) {
       await page.goto(`/bridge?bridge-e2e=${scenario}`)
-      await expect(page.getByText(label).locator('..')).toContainText('Pending')
+      await expect(page.getByRole('list').getByText(label).locator('..')).toContainText('Pending')
       await expectNoHorizontalOverflow(page)
     }
   })
