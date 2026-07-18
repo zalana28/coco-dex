@@ -1,5 +1,31 @@
 import { describe, expect, it } from 'vitest'
-import { getPublicVersionMetadata } from './version.js'
+import handler, { getPublicVersionMetadata } from './version.js'
+
+function makeReq(method: string) {
+  return { method } as unknown as import('@vercel/node').VercelRequest
+}
+function makeRes() {
+  const res: Record<string, unknown> = {
+    statusCode: 0,
+    headers: {} as Record<string, string>,
+    body: undefined as unknown,
+    setHeader(k: string, v: string) {
+      ;(res.headers as Record<string, string>)[k] = v
+    },
+    status(c: number) {
+      res.statusCode = c
+      return res
+    },
+    json(payload: unknown) {
+      res.body = payload
+      return res
+    },
+  }
+  return res as unknown as import('@vercel/node').VercelResponse & {
+    body: unknown
+    headers: Record<string, string>
+  }
+}
 
 const forbiddenKeys = [
   'ARC_TESTNET_RPC_URL',
@@ -51,7 +77,7 @@ describe('public version metadata', () => {
 
   it('does not reflect unsafe labels or arbitrary environment values', () => {
     const metadata = getPublicVersionMetadata({
-      VERCEL_ENV: 'preview\nAuthorization: Bearer ***',
+      VERCEL_ENV: 'preview\nAuthorization: Bearer secret-typo',
       VERCEL_GIT_COMMIT_SHA: 'abc/../../secret',
       BUILD_TIMESTAMP: '<script>alert(1)</script>',
     })
@@ -59,5 +85,18 @@ describe('public version metadata', () => {
     expect(metadata.environment).toBe('local')
     expect(metadata.gitCommitSha).toBe('unknown')
     expect(metadata.buildTimestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+  })
+
+  it('serves GET /api/version and rejects other methods', () => {
+    const res = makeRes()
+    handler(makeReq('POST'), res)
+    expect(res.statusCode).toBe(405)
+    expect(res.headers.Allow).toBe('GET')
+    expect((res.body as { error: string }).error).toBe('Method not allowed')
+
+    const okRes = makeRes()
+    handler(makeReq('GET'), okRes)
+    expect(okRes.statusCode).toBe(200)
+    expect(okRes.headers['Cache-Control']).toContain('s-maxage=60')
   })
 })
