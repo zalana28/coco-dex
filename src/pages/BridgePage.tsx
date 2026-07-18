@@ -151,7 +151,7 @@ export function BridgePage() {
     chainId: route.chainId,
     query: { enabled: Boolean(wallet) && !scenario },
   })
-  const { data: nativeBalance } = useBalance({ address: wallet, chainId: route.chainId, query: { enabled: Boolean(wallet) && !scenario } })
+  const { data: nativeBalance, isLoading: nativeBalanceLoading } = useBalance({ address: wallet, chainId: route.chainId, query: { enabled: Boolean(wallet) && !scenario } })
   const balanceRaw = scenario === 'balance-loading' ? undefined : scenario === 'insufficient-usdc' ? 1_000_000n : scenario ? 25_000_000n : (tokenBalance as bigint | undefined)
   let amountRaw = 0n
   try { amountRaw = parseUsdc(amount) } catch { /* invalid amount remains zero */ }
@@ -160,6 +160,7 @@ export function BridgePage() {
   const showRecipientError = recipientInput.length > 0 && !validRecipient
   const insufficientUsdc = balanceRaw !== undefined && amountRaw > balanceRaw
   const insufficientGas = scenario === 'insufficient-gas' || (!scenario && nativeBalance !== undefined && nativeBalance.value === 0n)
+  const sourceBalancesLoading = scenario === 'balance-loading' || (!scenario && isConnected && (balanceLoading || nativeBalanceLoading || balanceRaw === undefined || nativeBalance === undefined))
   const steps = normalizeBridgeResult(result ?? mockResult(source, 'error')).steps.map((step) => result ? step : { ...step, state: 'idle' as const })
 
   function resetEstimate() {
@@ -185,6 +186,7 @@ export function BridgePage() {
       if (wrongNetwork) throw new Error(`Switch to ${meta.label} before estimating`)
       if (!validRecipient) throw new Error('Enter a valid Arc recipient address')
       if (amountRaw <= 0n) throw new Error('Enter a USDC amount')
+      if (sourceBalancesLoading) throw new Error('Source balances are still loading')
       if (insufficientUsdc) throw new Error('Insufficient source USDC')
       if (insufficientGas) throw new Error(`Insufficient ${meta.gas} for source gas`)
       if (scenario === 'estimate-error') throw new Error('Forwarding Service estimate is temporarily unavailable')
@@ -341,9 +343,17 @@ export function BridgePage() {
 
           <fieldset className="mt-5 min-w-0"><legend className="mb-2 text-sm font-medium text-coco-dark-secondary">Transfer mode</legend><div className="grid min-w-0 grid-cols-1 gap-2 min-[360px]:grid-cols-2"><button type="button" aria-pressed={mode === 'SLOW'} onClick={() => setMode('SLOW')} className={`min-h-12 w-full rounded-xl border px-3 text-sm font-semibold ${mode === 'SLOW' ? 'border-coco-green-500 bg-coco-green-500/10 text-coco-dark-text' : 'border-coco-dark-border text-coco-dark-muted'}`}>Standard</button>{fastSupported && <button type="button" aria-pressed={mode === 'FAST'} onClick={() => { setMode('FAST'); if (fastEstimate) setEstimate(fastEstimate) }} className={`min-h-12 w-full rounded-xl border px-3 text-sm font-semibold ${mode === 'FAST' ? 'border-coco-teal-400 bg-coco-teal-400/10 text-coco-dark-text' : 'border-coco-dark-border text-coco-dark-muted'}`}><Zap className="mr-1 inline h-4 w-4" />Fast</button>}</div><p className="mt-2 break-words text-sm leading-5 text-coco-dark-muted">Fast is shown only after a FAST estimate succeeds for this exact route and amount.</p></fieldset>
 
+          {(sourceBalancesLoading || insufficientUsdc || insufficientGas) && amountRaw > 0n && (
+            <div aria-live="polite" className="mt-4 grid gap-1 rounded-xl border border-coco-amber-500/25 bg-coco-amber-500/5 p-3 text-sm leading-6 text-coco-amber-500">
+              {sourceBalancesLoading && <p>Source balances are still loading.</p>}
+              {insufficientUsdc && <p>Insufficient source USDC.</p>}
+              {insufficientGas && <p>Insufficient {meta.gas} for source gas.</p>}
+            </div>
+          )}
+
           {error && <div role="alert" className="mt-4 max-w-full whitespace-pre-wrap break-words rounded-xl border border-coco-red-500/25 bg-coco-red-500/5 p-3 text-sm leading-6 text-coco-red-500">{error}</div>}
 
-          <button type="button" onClick={() => estimate ? setConfirming(true) : void estimateBridge()} disabled={!isConnected || wrongNetwork || estimateState === 'loading' || !validRecipient || amountRaw <= 0n || insufficientUsdc || insufficientGas || isSubmitting} className="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-coco-green-500 px-4 font-semibold text-white shadow-lg shadow-coco-green-500/20 transition hover:bg-coco-green-600 disabled:cursor-not-allowed disabled:opacity-45">
+          <button type="button" onClick={() => estimate ? setConfirming(true) : void estimateBridge()} disabled={!isConnected || wrongNetwork || estimateState === 'loading' || !validRecipient || amountRaw <= 0n || sourceBalancesLoading || insufficientUsdc || insufficientGas || isSubmitting} className="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-coco-green-500 px-4 font-semibold text-white shadow-lg shadow-coco-green-500/20 transition hover:bg-coco-green-600 disabled:cursor-not-allowed disabled:opacity-45">
             {estimateState === 'loading' ? <><LoaderCircle className="h-4 w-4 animate-spin" /> Estimating…</> : estimate ? 'Review transfer' : 'Estimate bridge'}
           </button>
         </Card>

@@ -152,15 +152,23 @@ test.describe('Bridge responsive layout', () => {
   test('contains loading, insufficient, and pending lifecycle states', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 700 })
     await page.goto('/bridge?bridge-e2e=balance-loading')
+    await page.getByLabel('USDC amount').fill('10')
     await expect(page.getByText('Balance: Loading…')).toBeVisible()
+    await expect(page.getByText('Source balances are still loading.')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Estimate bridge' })).toBeDisabled()
     await expectNoHorizontalOverflow(page)
 
-    for (const scenario of ['insufficient-usdc', 'insufficient-gas']) {
-      await page.goto(`/bridge?bridge-e2e=${scenario}`)
-      await page.getByLabel('USDC amount').fill('10')
-      await expect(page.getByRole('button', { name: 'Estimate bridge' })).toBeDisabled()
-      await expectNoHorizontalOverflow(page)
-    }
+    await page.goto('/bridge?bridge-e2e=insufficient-usdc')
+    await page.getByLabel('USDC amount').fill('10')
+    await expect(page.getByText('Insufficient source USDC.')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Estimate bridge' })).toBeDisabled()
+    await expectNoHorizontalOverflow(page)
+
+    await page.goto('/bridge?bridge-e2e=insufficient-gas')
+    await page.getByLabel('USDC amount').fill('10')
+    await expect(page.getByText('Insufficient ETH for source gas.')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Estimate bridge' })).toBeDisabled()
+    await expectNoHorizontalOverflow(page)
 
     for (const [scenario, label] of [['pending-approve', 'Approve USDC'], ['pending-burn', 'Burn on source'], ['pending-attestation', 'Fetch attestation'], ['pending-mint', 'Mint on Arc']] as const) {
       await page.goto(`/bridge?bridge-e2e=${scenario}`)
