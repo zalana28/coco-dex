@@ -1,5 +1,5 @@
 import { Outlet } from 'react-router-dom'
-import { Navbar } from './Navbar'
+import { Header } from './Header'
 
 export function Layout() {
   return (
@@ -9,7 +9,7 @@ export function Layout() {
         <div className="absolute right-[-10rem] top-[24rem] h-[28rem] w-[28rem] rounded-full bg-coco-teal-400/10 blur-[120px]" />
         <div className="absolute bottom-[-18rem] left-[-10rem] h-[34rem] w-[34rem] rounded-full bg-coco-violet-500/10 blur-[150px]" />
       </div>
-      <Navbar />
+      <Header />
       <main className="relative flex-1">
         <Outlet />
       </main>
