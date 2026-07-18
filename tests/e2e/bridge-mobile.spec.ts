@@ -49,8 +49,8 @@ test.describe('CCTP bridge mobile MVP', () => {
   test('renders complete lifecycle and safe post-bridge actions', async ({ page }) => {
     await completeBridge(page)
     await expect(page.getByRole('heading', { name: 'USDC arrived on Arc Testnet' })).toBeVisible()
-    await expect(page.getByText('Approve USDC').locator('..')).toContainText('Complete')
-    await expect(page.getByText('Fetch attestation').locator('..')).toContainText('Complete')
+    await expect(page.getByRole('list').getByText('Approve USDC').locator('..')).toContainText('Complete')
+    await expect(page.getByRole('list').getByText('Fetch attestation').locator('..')).toContainText('Complete')
     const swap = page.getByRole('link', { name: 'Swap USDC to EURC' })
     await expect(swap).toHaveAttribute('href', /\/swap\?from=USDC&to=EURC&chain=Arc_Testnet&amount=/)
     await expect(page.getByRole('link', { name: 'Add Liquidity' })).toHaveAttribute('href', '/pools/add')
@@ -60,7 +60,7 @@ test.describe('CCTP bridge mobile MVP', () => {
   test('restores and retries recoverable transfers without another burn', async ({ page }) => {
     await completeBridge(page, 'recoverable')
     await expect(page.getByTestId('recovery-card')).toContainText('It will not repeat the burn')
-    await expect(page.getByText('Mint on Arc').locator('..')).toContainText('Recovery available')
+    await expect(page.getByRole('list').getByText('Mint on Arc').locator('..')).toContainText('Recovery available')
     await page.getByRole('button', { name: 'Resume' }).click()
     await expect(page.getByRole('heading', { name: 'USDC arrived on Arc Testnet' })).toBeVisible()
 
