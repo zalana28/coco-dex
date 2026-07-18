@@ -38,7 +38,8 @@ const sectionLinks = [
   { id: 'walletconnect', label: 'Mobile' },
   { id: 'troubleshooting', label: 'Troubleshooting' },
   { id: 'security', label: 'Security' },
-  { id: 'circle', label: 'Circle Future' },
+  { id: 'bridge', label: 'Bridge' },
+  { id: 'circle', label: 'Circle Services' },
   { id: 'developer', label: 'Developers' },
 ]
 
@@ -193,13 +194,13 @@ const troubleshootingItems = [
 
 const circleItems = [
   {
-    title: 'Circle API Keys',
-    detail: 'Future backend-only readiness checks could use Circle API keys on the server. API keys must never be exposed in frontend code or committed to the repository.',
+    title: 'Circle API diagnostic',
+    detail: 'The optional server/admin /api/circle/health diagnostic can verify a server-side Circle API key. The browser-wallet Bridge path does not require this key.',
     href: 'https://developers.circle.com/api-reference/keys',
   },
   {
-    title: 'CCTP',
-    detail: 'Future bridge UX could use CCTP to move native USDC to Arc before swapping. CCTP uses a native USDC burn-and-mint transfer model. This is not implemented in Coco DEX today.',
+    title: 'CCTP V2 and Bridge Kit',
+    detail: 'The current /bridge route uses Circle Bridge Kit with CCTP V2 for USDC transfers from Ethereum Sepolia or Base Sepolia to Arc Testnet.',
     href: 'https://developers.circle.com/cctp',
   },
   {
@@ -232,10 +233,9 @@ const developerCommands = [
 ]
 
 const envVars = [
-  'ARC_TESTNET_RPC_URL',
-  'SUPABASE_URL',
-  'SUPABASE_SERVICE_ROLE_KEY',
-  'CRON_SECRET',
+  'Server RPC configuration',
+  'Server analytics configuration',
+  'Server scheduler credential',
   'VITE_WALLETCONNECT_PROJECT_ID',
 ]
 
@@ -260,7 +260,7 @@ export function DocsPage() {
                 Route-aware stablecoin swaps on Arc Testnet.
               </h1>
               <p className="mt-6 max-w-3xl text-base leading-8 text-coco-dark-secondary sm:text-lg">
-                Learn how Coco DEX compares Coco, XyloNet, UnitFlow, and Synthra routes, what approvals mean, how analytics update, and what future Circle integrations could look like without exposing secrets or claiming unfinished features.
+                Learn how Coco DEX compares routes, handles Coco Classic V2 liquidity, transfers USDC to Arc Testnet through CCTP V2, and exposes indexed testnet activity without exposing secrets or overstating availability.
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Link
@@ -429,6 +429,15 @@ export function DocsPage() {
               </div>
             </DocSection>
 
+            <DocSection id="bridge" eyebrow="USDC Bridge" title="CCTP V2 into Arc Testnet" icon={<GitCompareArrows />}>
+              <div className="grid gap-4 md:grid-cols-2">
+                <Feature title="Supported testnet routes" detail="Ethereum Sepolia or Base Sepolia to Arc Testnet. USDC only; EURC is not offered by the CCTP Bridge page." />
+                <Feature title="Protocol and recovery" detail="Circle Bridge Kit uses CCTP V2 and the Forwarding Service. Recovery calls retryBridge with the recorded result so a successful burn is not repeated." />
+                <Feature title="Separate identifiers" detail="Arc Testnet EVM chain ID is 5042002. Arc CCTP domain is 26. They identify different systems and are separate types." />
+                <Feature title="Units and diagnostics" detail="ERC-20 USDC app operations use 6 decimals; native Arc gas uses 18-decimal raw units. The browser-wallet Bridge path needs no Circle API key; /api/circle/health is optional." />
+              </div>
+            </DocSection>
+
             <DocSection id="stable-pool" eyebrow="LP Beta" title="Coco Native Stable Pool" icon={<ShieldAlert />}>
               <div className="grid gap-4 md:grid-cols-2">
                 <GlassCard className="border-coco-amber-500/20 bg-coco-amber-500/10">
@@ -451,7 +460,7 @@ export function DocsPage() {
                 <GlassCard>
                   <h3 className="text-lg font-semibold text-coco-dark-text">What analytics can show</h3>
                   <p className="mt-3 text-sm leading-6 text-coco-dark-muted">
-                    Coco DEX has indexed analytics for the classic Coco V2 pair, including TVL, volume, trades, and activity where available in the current app. Coco Native Stable Pool V1 is not indexed yet.
+                    Coco DEX has indexed analytics for the classic Coco V2 pair, including TVL, volume, trades, and activity where available. Stable-pool beta observability is indexed separately and is not included in classic Coco V2 TVL, volume, fees, or activity.
                   </p>
                 </GlassCard>
                 <GlassCard>
@@ -493,13 +502,13 @@ export function DocsPage() {
                 <Feature title="Testnet status" detail="Coco DEX is Arc Testnet software. Use Arc Testnet tokens and Arc Testnet transaction links only." />
                 <Feature title="Verify before signing" detail="Always verify the selected route and minimum received before approving or swapping." />
                 <Feature title="External approvals" detail="External routes require separate approvals or route-specific wallet permissions." />
-                <Feature title="Key hygiene" detail="Never share seed phrases or private keys. API keys and secrets must never be committed." />
+                <Feature title="Key hygiene" detail="Never share wallet recovery credentials or private keys. API keys and secrets must never be committed." />
               </div>
             </DocSection>
 
-            <DocSection id="circle" eyebrow="Future Integrations" title="Circle ideas are not implemented" icon={<WalletCards />}>
+            <DocSection id="circle" eyebrow="Circle Services" title="Implemented Bridge and optional diagnostics" icon={<WalletCards />}>
               <div className="mb-5 rounded-2xl border border-coco-amber-500/20 bg-coco-amber-500/10 p-4 text-sm leading-6 text-coco-dark-secondary">
-                This section documents future integration ideas only. This PR does not add Circle API calls, frontend secrets, CCTP transactions, embedded wallets, gas sponsorship, or smart-contract API integration.
+                Coco DEX uses Circle Bridge Kit and CCTP V2 for the current browser-wallet Bridge route. Circle Wallets, Gas Station, and Circle Contracts APIs are not implemented. Use of Circle software and public infrastructure does not imply endorsement or partnership.
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 {circleItems.map((item) => (
@@ -539,7 +548,7 @@ export function DocsPage() {
                   <div className="mt-5 grid gap-2">
                     {envVars.map((envVar) => (
                       <code key={envVar} className="rounded-xl border border-coco-dark-border bg-coco-dark-bg/80 px-3 py-2 text-xs text-coco-dark-secondary">
-                        {envVar}=...
+                        {envVar}
                       </code>
                     ))}
                   </div>

@@ -1,8 +1,8 @@
-# Circle Future Integrations
+# Circle Services: Current Bridge and Future Integrations
 
-This document records possible future Circle integrations for Coco DEX. The only current Circle-related implementation is a server-side `/api/circle/health` readiness endpoint that verifies whether `CIRCLE_API_KEY` can authenticate against the Circle Wallets endpoint.
+This document separates Coco DEX's current Circle-related implementation from possible future services. The current `/bridge` route uses Circle Bridge Kit, the Viem v2 adapter, CCTP V2, and the Forwarding Service for USDC transfers from Ethereum Sepolia or Base Sepolia to Arc Testnet.
 
-No Circle SDKs, CCTP transactions, Circle Wallets user flows, Gas Station policies, Circle Contracts API integrations, frontend Circle keys, swap/router changes, or analytics/indexer changes are added here.
+Circle Wallets user flows, Gas Station policies, Circle Contracts API integrations, and frontend Circle API keys are not implemented. Use of Circle software and infrastructure does not imply endorsement or partnership.
 
 ## Public references used
 
@@ -41,13 +41,15 @@ Rules:
 
 Circle docs distinguish API keys for server-side REST APIs from client keys and kit keys. Permissionless products like CCTP do not require an API key.
 
-## CCTP
+## Current CCTP V2 Bridge
 
-Future idea: bridge native USDC to Arc before swapping.
+The public `/bridge` route transfers testnet USDC from Ethereum Sepolia or Base Sepolia to Arc Testnet. EURC is not offered by this Bridge page.
 
 Circle CCTP facilitates native USDC transfers across supported blockchains by burning USDC on the source chain and minting USDC on the destination chain. This is different from a traditional liquidity-pool bridge or wrapped-token bridge.
 
-Coco DEX does not implement CCTP today.
+The Bridge lifecycle is approval, source burn, attestation, and forwarded destination mint. Recovery stores the Bridge Kit result and calls `retryBridge` after interruption so a recorded successful burn is not repeated. Arc Testnet EVM chain ID `5042002` and CCTP domain `26` are separate identifiers and types. ERC-20 USDC application transfers use 6-decimal units; native Arc gas accounting uses 18-decimal raw EVM units.
+
+The browser-wallet Bridge path is permissionless and does not require `CIRCLE_API_KEY`. `/api/circle/health` remains an optional server/admin diagnostic.
 
 ## Circle Wallets
 
@@ -68,7 +70,3 @@ Coco DEX does not implement Gas Station today.
 Future idea: admin or developer tooling for contract read/write workflows and event monitoring.
 
 Circle Contracts documentation describes exploring, deploying, interacting with, and monitoring smart contracts through console or APIs. Coco DEX does not add Circle Contracts integration in this PR.
-
-## PR scope lock
-
-Do not add secrets, SDK dependencies, frontend Circle keys, CCTP calls, Gas Station policy logic, smart contract API calls, Circle Wallets user flows, swap/router logic changes, or analytics/indexer logic changes in this health endpoint PR.

@@ -90,10 +90,10 @@ Analytics can lag behind the latest wallet transaction. Common causes:
 
 Users should rely on transaction links for immediate transaction confirmation and analytics for indexed protocol views after sync.
 
+## Canonical scheduler
+
+The canonical production scheduler is cron-job.org. It sends one authenticated `GET /api/cron/indexer` every 15 minutes using an `Authorization: Bearer …` header. Vercel Cron must remain disabled in `vercel.json`; do not run both schedulers. Configure failure alerts for non-2xx responses, then recover by fixing the RPC/database/configuration issue, rerunning the authenticated endpoint, and verifying HTTP 200 plus `/api/health` lag.
+
 ## Security
 
 `SUPABASE_SERVICE_ROLE_KEY` is server-only. It must never be exposed through frontend code or a `VITE_` variable.
-
-## Docs PR scope
-
-Docs changes must not modify analytics/indexer logic, Supabase queries, cron behavior, or event parsing.

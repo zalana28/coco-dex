@@ -5,6 +5,12 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  define: {
+    __APP_ENV__: JSON.stringify(process.env.VERCEL_ENV ?? process.env.VITE_PUBLIC_APP_ENV ?? 'local'),
+    __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? '0.1.0'),
+    __BUILD_TIMESTAMP__: JSON.stringify(process.env.BUILD_TIMESTAMP ?? new Date().toISOString()),
+    __GIT_COMMIT_SHA__: JSON.stringify(process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.GITHUB_SHA ?? 'unknown'),
+  },
   build: {
     rolldownOptions: {
       output: {

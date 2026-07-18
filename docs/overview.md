@@ -1,6 +1,6 @@
 # Coco DEX Overview
 
-Coco DEX is a smart-routing DEX interface for Arc Testnet stablecoin swaps. It compares quotes across Coco, XyloNet, UnitFlow, and Synthra so users can choose a route before signing approval or swap transactions.
+Coco DEX is an independent stablecoin interface that supports Arc Testnet. It compares quotes across Coco, XyloNet, UnitFlow, and Synthra so users can choose a route before signing approval or swap transactions.
 
 ## Current scope
 
@@ -9,6 +9,7 @@ Coco DEX is a smart-routing DEX interface for Arc Testnet stablecoin swaps. It c
 - Route comparison: Coco direct pool, XyloNet external router, UnitFlow route using WUSDC where displayed, and Synthra V3.
 - Liquidity: users can add and remove liquidity in Coco pools.
 - Analytics: indexed protocol data is exposed through the analytics page and serverless API routes.
+- Bridge: CCTP V2 USDC transfers from Ethereum Sepolia or Base Sepolia to Arc Testnet through Circle Bridge Kit and the Forwarding Service.
 
 ## Coco Native Stable Pool LP Beta
 
@@ -55,6 +56,6 @@ Approvals are route-specific. Coco, XyloNet, UnitFlow, and Synthra can require d
 - `stable-pool-v2-plan.md`: future rate-aware V2 plan.
 - `release-checklist.md`: Arc Testnet MVP release checks.
 - `troubleshooting.md`: common wallet, route, and transaction failures.
-- `circle-future-integrations.md`: Circle ideas documented as future integrations only.
+- `circle-future-integrations.md`: implemented CCTP V2 Bridge plus unimplemented Circle service ideas.
 - `coco-stable-pool-v1-spec.md`: Coco Native Stable Pool V1 specification and current beta notes.
 - `developer-setup.md`: local setup, env vars, and verification commands.

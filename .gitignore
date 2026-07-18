@@ -12,6 +12,9 @@ dist
 dist-ssr
 playwright-report/
 test-results/
+.vercel/
+screenshots/
+supabase/.temp/
 *.local
 
 # Editor directories and files
