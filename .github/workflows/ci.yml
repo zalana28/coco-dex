@@ -16,6 +16,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch pull-request base branch
+        if: github.event_name == 'pull_request' && env.GITHUB_BASE_REF != ''
+        env:
+          GITHUB_BASE_REF: ${{ github.base_ref }}
+        run: git fetch --no-tags origin "+refs/heads/${GITHUB_BASE_REF}:refs/remotes/origin/${GITHUB_BASE_REF}"
 
       - uses: actions/setup-node@v4
         with:
@@ -49,6 +57,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch pull-request base branch
+        if: github.event_name == 'pull_request' && env.GITHUB_BASE_REF != ''
+        env:
+          GITHUB_BASE_REF: ${{ github.base_ref }}
+        run: git fetch --no-tags origin "+refs/heads/${GITHUB_BASE_REF}:refs/remotes/origin/${GITHUB_BASE_REF}"
 
       - uses: actions/setup-node@v4
         with:
