@@ -23,6 +23,9 @@ type UseAggregatedQuotesParams = {
 }
 
 const BETTER_ROUTE_WARNING_THRESHOLD_BPS = BigInt(500)
+const QUOTE_REFETCH_INTERVAL_MS = 15_000
+const QUOTE_RETRY_COUNT = 2
+const QUOTE_STALE_TIME_MS = 30_000
 
 export function useAggregatedQuotes({
   tokenIn,
@@ -48,12 +51,14 @@ export function useAggregatedQuotes({
     address: xylonet.routerAddress,
     abi: XYLONET_ROUTER_ABI,
     functionName: 'getAmountOut',
-    // Router resolves the pool internally — only tokenIn, tokenOut, amountIn are needed.
     args: [tokenIn.address as `0x${string}`, tokenOut.address as `0x${string}`, amountIn],
     chainId: arcTestnet.id,
     query: {
       enabled: shouldReadXyloNet,
-      refetchInterval: 15_000,
+      refetchInterval: QUOTE_REFETCH_INTERVAL_MS,
+      retry: QUOTE_RETRY_COUNT,
+      retryDelay: 1_000,
+      staleTime: QUOTE_STALE_TIME_MS,
     },
   })
 
@@ -65,7 +70,10 @@ export function useAggregatedQuotes({
     chainId: arcTestnet.id,
     query: {
       enabled: shouldReadCocoStable,
-      refetchInterval: 15_000,
+      refetchInterval: QUOTE_REFETCH_INTERVAL_MS,
+      retry: QUOTE_RETRY_COUNT,
+      retryDelay: 1_000,
+      staleTime: QUOTE_STALE_TIME_MS,
     },
   })
 
@@ -77,7 +85,10 @@ export function useAggregatedQuotes({
     chainId: arcTestnet.id,
     query: {
       enabled: shouldReadUnitFlow,
-      refetchInterval: 15_000,
+      refetchInterval: QUOTE_REFETCH_INTERVAL_MS,
+      retry: QUOTE_RETRY_COUNT,
+      retryDelay: 1_000,
+      staleTime: QUOTE_STALE_TIME_MS,
     },
   })
 
@@ -97,7 +108,10 @@ export function useAggregatedQuotes({
     chainId: arcTestnet.id,
     query: {
       enabled: shouldReadSynthra,
-      refetchInterval: 15_000,
+      refetchInterval: QUOTE_REFETCH_INTERVAL_MS,
+      retry: QUOTE_RETRY_COUNT,
+      retryDelay: 1_000,
+      staleTime: QUOTE_STALE_TIME_MS,
     },
   })
 
@@ -109,7 +123,10 @@ export function useAggregatedQuotes({
     chainId: arcTestnet.id,
     query: {
       enabled: shouldReadSynthra,
-      refetchInterval: 15_000,
+      refetchInterval: QUOTE_REFETCH_INTERVAL_MS,
+      retry: QUOTE_RETRY_COUNT,
+      retryDelay: 1_000,
+      staleTime: QUOTE_STALE_TIME_MS,
     },
   })
 
@@ -121,7 +138,10 @@ export function useAggregatedQuotes({
     chainId: arcTestnet.id,
     query: {
       enabled: shouldReadSynthra,
-      refetchInterval: 15_000,
+      refetchInterval: QUOTE_REFETCH_INTERVAL_MS,
+      retry: QUOTE_RETRY_COUNT,
+      retryDelay: 1_000,
+      staleTime: QUOTE_STALE_TIME_MS,
     },
   })
 

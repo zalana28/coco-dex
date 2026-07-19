@@ -129,6 +129,8 @@ describe('router audit base-ref resolver', () => {
       'src/lib/router/xylonetAdapter.ts',
       'src/lib/router/routerShadowMode.test.ts',
       'src/lib/router/xylonetAdapter.test.ts',
+      'src/lib/router/quoteState.ts',
+      'src/lib/router/quoteState.test.ts',
     ])
     expect(changed).not.toContain('vercel.json')
     expect(changed.some((file) => file.startsWith('api/') && !file.startsWith('api/_lib/'))).toBe(false)
@@ -205,6 +207,8 @@ describe('router audit deployment and execution guards', () => {
       'src/lib/router/xylonetAdapter.ts',
       'src/lib/router/routerShadowMode.test.ts',
       'src/lib/router/xylonetAdapter.test.ts',
+      'src/lib/router/quoteState.ts',
+      'src/lib/router/quoteState.test.ts',
     ])
     expect(changed.some((file) => file.startsWith('api/'))).toBe(false)
     expect(changed.some((file) => file === 'vercel.json')).toBe(false)
