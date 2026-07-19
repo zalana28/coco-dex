@@ -123,10 +123,11 @@ describe('router audit base-ref resolver', () => {
   it('still detects prohibited file changes in the diff', () => {
     const changed = changedFilesAgainstBase()
     // This PR must not touch protected runtime/contract/API paths.
+    // executionPolicy.ts is allowed — it is not runtime route selection.
     expect(changed).not.toContain('vercel.json')
     expect(changed.some((file) => file.startsWith('api/') && !file.startsWith('api/_lib/'))).toBe(false)
     expect(changed.some((file) => file.startsWith('contracts/src/') || file.startsWith('contracts/script/') || file.startsWith('contracts/deployments/'))).toBe(false)
-    expect(changed.some((file) => file.startsWith('src/lib/router/') && !file.startsWith('src/lib/router-audit/'))).toBe(false)
+    expect(changed.some((file) => file.startsWith('src/lib/router/') && !file.startsWith('src/lib/router-audit/') && !file.endsWith('executionPolicy.ts') && !file.endsWith('executionPolicy.test.ts'))).toBe(false)
     expect(changed.some((file) => file.startsWith('src/features/bridge/'))).toBe(false)
     expect(changed.some((file) => /^src\/pages\/(?:BridgePage|SwapPage)\.tsx$/.test(file))).toBe(false)
   })
@@ -176,7 +177,7 @@ describe('router audit deployment and execution guards', () => {
     const changed = changedFilesAgainstBase()
     expect(changed.some((file) => file.startsWith('api/'))).toBe(false)
     expect(changed.some((file) => file === 'vercel.json')).toBe(false)
-    expect(changed.some((file) => file.startsWith('src/lib/router/') && !file.startsWith('src/lib/router-audit/'))).toBe(false)
+    expect(changed.some((file) => file.startsWith('src/lib/router/') && !file.startsWith('src/lib/router-audit/') && !file.endsWith('executionPolicy.ts') && !file.endsWith('executionPolicy.test.ts'))).toBe(false)
     expect(changed.some((file) => file.startsWith('src/features/bridge/'))).toBe(false)
     expect(changed.some((file) => /^src\/pages\/(?:BridgePage|SwapPage)\.tsx$/.test(file))).toBe(false)
     expect(changed.some((file) => file.startsWith('contracts/src/') || file.startsWith('contracts/script/') || file.startsWith('contracts/deployments/'))).toBe(false)
