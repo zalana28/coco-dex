@@ -69,6 +69,9 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      - name: Deterministic offline router audit
+        run: npm run routers:audit -- --offline-fixtures
+
       - name: Build
         run: npm run build
 
