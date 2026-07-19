@@ -112,6 +112,7 @@ export function SwapPage() {
     reserveUsdc,
     reserveEurc,
     slippageBps,
+    selectedQuoteId: manualRouteId ?? undefined,
   })
 
   // "Finding best route…" while debouncing or quotes are in flight for a valid amount.
@@ -140,6 +141,7 @@ export function SwapPage() {
 
   // Reset manual override when amount or token pair changes → return to best route.
   useEffect(() => {
+    // Intentionally reset manual route override when the swap pair/amount changes.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setManualRouteId(null)
     setRouteChangedWarning(false)

@@ -6,6 +6,7 @@ import { formatTokenAmount } from '@/utils/format'
 import { calculateMinimumReceived } from '@/utils/price'
 import type { RouteAvailabilityStatus, RouteQuote, RouteUnavailableReason } from './types'
 import { DEFAULT_ROUTE_TTL_MS, getRouteHealthStatus } from './routeMetadata'
+import { classifyQuoteError, isTransientRpcError } from './quoteState'
 
 export const SYNTHRA_V3_QUOTER_ABI = [
   {
@@ -22,10 +23,16 @@ export const SYNTHRA_V3_QUOTER_ABI = [
           { name: 'amountIn', type: 'uint256' },
           { name: 'fee', type: 'uint24' },
           { name: 'sqrtPriceLimitX96', type: 'uint160' },
+          { name: 'recipient', type: 'address' },
         ],
       },
     ],
-    outputs: [{ name: 'amountOut', type: 'uint256' }],
+    outputs: [
+      { name: 'amountOut', type: 'uint256' },
+      { name: 'sqrtPriceX96After', type: 'uint160' },
+      { name: 'initializedTicksCrossed', type: 'uint32' },
+      { name: 'gasEstimate', type: 'uint256' },
+    ],
   },
 ] as const
 
@@ -35,6 +42,7 @@ type SynthraQuoteRequest = {
   tokenIn: `0x${string}`
   tokenOut: `0x${string}`
   amountIn: bigint
+  recipient: `0x${string}`
 }
 
 type SynthraFeeQuote = {
@@ -69,13 +77,14 @@ export function isSynthraPairSupported(tokenIn: Token, tokenOut: Token): boolean
   )
 }
 
-export function getSynthraV3QuoteRequest(tokenIn: Token, tokenOut: Token, amountIn: bigint): SynthraQuoteRequest | undefined {
+export function getSynthraV3QuoteRequest(tokenIn: Token, tokenOut: Token, amountIn: bigint, recipient: `0x${string}` = '0x0000000000000000000000000000000000000000'): SynthraQuoteRequest | undefined {
   if (amountIn <= BigInt(0) || !isSynthraPairSupported(tokenIn, tokenOut)) return undefined
 
   return {
     tokenIn: tokenIn.address as `0x${string}`,
     tokenOut: tokenOut.address as `0x${string}`,
     amountIn,
+    recipient,
   }
 }
 
@@ -111,8 +120,20 @@ export function buildSynthraRouteQuote({
   } else if (isLoading && !hasQuote) {
     availabilityStatus = 'loading'
   } else if (error && !hasQuote) {
-    availabilityStatus = 'unavailable'
-    unavailableReason = 'Contract read failed'
+    const category = classifyQuoteError(error)
+    if (category === 'no-liquidity' || category === 'contract-revert') {
+      availabilityStatus = 'unavailable'
+      unavailableReason = 'No active USDC/EURC pool'
+    } else if (category === 'abi-mismatch') {
+      availabilityStatus = 'unavailable'
+      unavailableReason = 'Synthra quote configuration mismatch'
+    } else if (isTransientRpcError(category)) {
+      availabilityStatus = 'unavailable'
+      unavailableReason = 'Temporarily unavailable — retrying'
+    } else {
+      availabilityStatus = 'unavailable'
+      unavailableReason = 'Contract read failed'
+    }
   } else if (!hasQuote) {
     availabilityStatus = 'unavailable'
     unavailableReason = 'No quote returned'

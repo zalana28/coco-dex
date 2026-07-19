@@ -10,6 +10,9 @@ export type RouteUnavailableReason =
   | 'Unsupported pair'
   | 'Contract read failed'
   | 'No quote returned'
+  | 'No active USDC/EURC pool'
+  | 'Synthra quote configuration mismatch'
+  | 'Temporarily unavailable — retrying'
 export type RouteBlockedReason =
   | 'Quote-only beta'
   | 'Not routed'
