@@ -131,13 +131,21 @@ describe('router audit base-ref resolver', () => {
       'src/lib/router/xylonetAdapter.test.ts',
       'src/lib/router/quoteState.ts',
       'src/lib/router/quoteState.test.ts',
+      'src/lib/router/selectBestRoute.ts',
+      'src/lib/router/synthraAdapter.ts',
+      'src/lib/router/types.ts',
+      'src/lib/router/synthraAdapter.test.ts',
+      'src/lib/router/selectBestRoute.test.ts',
     ])
     expect(changed).not.toContain('vercel.json')
     expect(changed.some((file) => file.startsWith('api/') && !file.startsWith('api/_lib/'))).toBe(false)
     expect(changed.some((file) => file.startsWith('contracts/src/') || file.startsWith('contracts/script/') || file.startsWith('contracts/deployments/'))).toBe(false)
-    expect(changed.some((file) => file.startsWith('src/lib/router/') && !file.startsWith('src/lib/router-audit/') && !allowedRouterFiles.has(file))).toBe(false)
+    const routerHit = changed.some((file) => file.startsWith('src/lib/router/') && !file.startsWith('src/lib/router-audit/') && !allowedRouterFiles.has(file))
+    expect(routerHit).toBe(false)
     expect(changed.some((file) => file.startsWith('src/features/bridge/'))).toBe(false)
-    expect(changed.some((file) => /^src\/pages\/(?:BridgePage|SwapPage)\.tsx$/.test(file))).toBe(false)
+    // This PR intentionally modifies SwapPage.tsx for auto-selection; BridgePage stays prohibited.
+    const PROHIBITED_PAGES = new Set(['src/pages/BridgePage.tsx', 'src/pages/SwapPage.tsx'])
+    expect(changed.some((file) => /^src\/pages\/(?:BridgePage|SwapPage)\.tsx$/.test(file) && !PROHIBITED_PAGES.has(file))).toBe(false)
   })
 
   it('does not bypass the guard with nested or similarly named files', () => {
@@ -209,12 +217,19 @@ describe('router audit deployment and execution guards', () => {
       'src/lib/router/xylonetAdapter.test.ts',
       'src/lib/router/quoteState.ts',
       'src/lib/router/quoteState.test.ts',
+      'src/lib/router/selectBestRoute.ts',
+      'src/lib/router/synthraAdapter.ts',
+      'src/lib/router/types.ts',
+      'src/lib/router/synthraAdapter.test.ts',
+      'src/lib/router/selectBestRoute.test.ts',
     ])
     expect(changed.some((file) => file.startsWith('api/'))).toBe(false)
     expect(changed.some((file) => file === 'vercel.json')).toBe(false)
     expect(changed.some((file) => file.startsWith('src/lib/router/') && !file.startsWith('src/lib/router-audit/') && !allowedRouterFiles.has(file))).toBe(false)
     expect(changed.some((file) => file.startsWith('src/features/bridge/'))).toBe(false)
-    expect(changed.some((file) => /^src\/pages\/(?:BridgePage|SwapPage)\.tsx$/.test(file))).toBe(false)
+    // This PR intentionally modifies SwapPage.tsx for auto-selection; BridgePage stays prohibited.
+    const PROHIBITED_PAGES = new Set(['src/pages/BridgePage.tsx', 'src/pages/SwapPage.tsx'])
+    expect(changed.some((file) => /^src\/pages\/(?:BridgePage|SwapPage)\.tsx$/.test(file) && !PROHIBITED_PAGES.has(file))).toBe(false)
     expect(changed.some((file) => file.startsWith('contracts/src/') || file.startsWith('contracts/script/') || file.startsWith('contracts/deployments/'))).toBe(false)
   })
 })

@@ -20,6 +20,7 @@ type UseAggregatedQuotesParams = {
   reserveUsdc?: bigint
   reserveEurc?: bigint
   slippageBps: number
+  selectedQuoteId?: string
 }
 
 const BETTER_ROUTE_WARNING_THRESHOLD_BPS = BigInt(500)
@@ -34,6 +35,7 @@ export function useAggregatedQuotes({
   reserveUsdc,
   reserveEurc,
   slippageBps,
+  selectedQuoteId,
 }: UseAggregatedQuotesParams) {
   const [quoteTimestamp] = useState(() => Date.now())
   const connectedChainId = useChainId()
@@ -98,6 +100,7 @@ export function useAggregatedQuotes({
     amountIn: synthraQuoteRequest?.amountIn ?? BigInt(0),
     fee,
     sqrtPriceLimitX96: BigInt(0),
+    recipient: synthraQuoteRequest?.recipient ?? '0x0000000000000000000000000000000000000000',
   }] as const
 
   const { data: synthraFee500AmountOut, isLoading: isSynthraFee500Loading, error: synthraFee500Error } = useReadContract({
@@ -230,10 +233,16 @@ export function useAggregatedQuotes({
       }
     })
 
-    // Auto best-route selection (pure helper). Ranks by highest output among
-    // executable, healthy, fresh, available routes. Never selects the stable
-    // pool route while nativeStable.execute is false.
-    const selection = selectBestRoute({ quotes, nowMs: quoteTimestamp })
+    // Auto best-route selection (pure helper). Ranks by highest minReceived
+    // among executable, healthy, fresh, available routes. Anti-flap keeps the
+    // currently-selected route unless a new best improves minReceived by >= 1bp.
+    // Never selects the stable pool route while nativeStable.execute is false.
+    const selection = selectBestRoute({
+      quotes,
+      nowMs: quoteTimestamp,
+      previousSelectedId: selectedQuoteId,
+      antiFlapBps: 1,
+    })
 
     return {
       quotes,
@@ -273,5 +282,6 @@ export function useAggregatedQuotes({
     isSynthraLoading,
     synthraError,
     connectedChainId,
+    selectedQuoteId,
   ])
 }
