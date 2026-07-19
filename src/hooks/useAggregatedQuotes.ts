@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useReadContract } from 'wagmi'
+import { useChainId, useReadContract } from 'wagmi'
 import { arcTestnet } from '@/config/chains'
 import { COCO_STABLE_POOL, COCO_STABLE_POOL_READ_ABI } from '@/config/cocoStablePool'
 import { EXTERNAL_DEXES } from '@/config/externalDexes'
@@ -33,6 +33,7 @@ export function useAggregatedQuotes({
   slippageBps,
 }: UseAggregatedQuotesParams) {
   const [quoteTimestamp] = useState(() => Date.now())
+  const connectedChainId = useChainId()
   const shouldReadXyloNet = amountIn > BigInt(0) && isXyloNetPairSupported(tokenIn, tokenOut)
   const shouldReadCocoStable = ROUTER_SHADOW_MODE_CONFIG.nativeStable.quoteOnly && amountIn > BigInt(0) && isCocoStablePairSupported(tokenIn, tokenOut)
   const xylonet = EXTERNAL_DEXES.xylonet
@@ -139,6 +140,7 @@ export function useAggregatedQuotes({
       slippageBps,
       isLoading: isXyloNetLoading,
       error: xylonetError,
+      chainId: connectedChainId,
     })
     const unitflowQuote = buildUnitFlowRouteQuote({
       tokenIn,
@@ -250,5 +252,6 @@ export function useAggregatedQuotes({
     synthraFee10000AmountOut,
     isSynthraLoading,
     synthraError,
+    connectedChainId,
   ])
 }

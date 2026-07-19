@@ -5,6 +5,7 @@ import { formatTokenAmount } from '@/utils/format'
 import { calculateMinimumReceived } from '@/utils/price'
 import type { RouteAvailabilityStatus, RouteQuote, RouteUnavailableReason } from './types'
 import { DEFAULT_ROUTE_TTL_MS, getRouteHealthStatus } from './routeMetadata'
+import { getEffectiveExecutionPolicy, isExecutionAllowed } from './executionPolicy'
 
 /**
  * XyloNet Router ABI — corrected to match on-chain contract.
@@ -65,6 +66,7 @@ type BuildXyloNetQuoteParams = {
   slippageBps: number
   isLoading?: boolean
   error?: unknown
+  chainId?: number
 }
 
 export function buildXyloNetRouteQuote({
@@ -75,11 +77,17 @@ export function buildXyloNetRouteQuote({
   slippageBps,
   isLoading = false,
   error,
+  chainId,
 }: BuildXyloNetQuoteParams): RouteQuote {
   const xylonet = EXTERNAL_DEXES.xylonet
   const isSupportedPair = isXyloNetPairSupported(tokenIn, tokenOut)
   const hasAmount = amountIn > BigInt(0)
   const hasQuote = Boolean(amountOut && amountOut > BigInt(0))
+
+  // Execution policy gate: operator-approved-executable is Arc Testnet-only and feature-flagged.
+  const effectiveChainId = chainId ?? 0
+  const policy = getEffectiveExecutionPolicy('xylonet', effectiveChainId, { xylonet: 'operator-approved-executable' })
+  const executionAllowed = isExecutionAllowed(policy, effectiveChainId)
 
   let availabilityStatus: RouteAvailabilityStatus = 'available'
   let unavailableReason: RouteUnavailableReason | undefined
@@ -101,6 +109,7 @@ export function buildXyloNetRouteQuote({
   }
 
   const safeAmountOut = amountOut && amountOut > BigInt(0) ? amountOut : BigInt(0)
+  const isExecutable = availabilityStatus === 'available' && executionAllowed
 
   return {
     id: 'xylonet-usdc-eurc',
@@ -121,10 +130,10 @@ export function buildXyloNetRouteQuote({
       : [],
     routerAddress: xylonet.routerAddress,
     poolAddress: xylonet.usdcEurcPoolAddress,
-    isExecutable: availabilityStatus === 'available',
-    executable: availabilityStatus === 'available',
+    isExecutable,
+    executable: isExecutable,
     availabilityStatus,
-    executionStatus: availabilityStatus === 'available' ? 'executable' : 'non_executable',
+    executionStatus: isExecutable ? 'executable' : 'non_executable',
     unavailableReason,
     warning: availabilityStatus === 'available'
       ? 'This swap executes through XyloNet router and requires a separate token approval.'
