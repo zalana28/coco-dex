@@ -4,6 +4,9 @@ export const EIP1967_ADMIN_SLOT_CANONICAL = '0xb53127684a568b3173ae13b9f8a6016e2
 // Per explicit request, read the supplied admin slot too. It does not match the canonical ERC-1967
 // admin slot above, so a divergence is recorded and treated as ambiguous/fail-closed.
 export const EIP1967_ADMIN_SLOT_SUPPLIED = '0xb53127684a568b3173ae13b9f8a6016e019b3ec6a6e8ee1178d6a717850b5d6103' as const
+// NOTE: EIP1967_ADMIN_SLOT_SUPPLIED is 66 hex chars (33 bytes), NOT a valid 32-byte storage key.
+// resolveProxy validates slot format before reading; invalid keys are skipped with a warning
+// so canonical slot reads are not poisoned. Divergence is still documented.
 
 export const PROXY_STATUSES = [
   'non-proxy-confirmed',
