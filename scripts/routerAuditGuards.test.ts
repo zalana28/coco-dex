@@ -122,14 +122,38 @@ describe('router audit base-ref resolver', () => {
 
   it('still detects prohibited file changes in the diff', () => {
     const changed = changedFilesAgainstBase()
-    // This PR must not touch protected runtime/contract/API paths.
-    // executionPolicy.ts is allowed — it is not runtime route selection.
+    // Exact-path allowlist for intentionally permitted router files.
+    const allowedRouterFiles = new Set([
+      'src/lib/router/executionPolicy.ts',
+      'src/lib/router/executionPolicy.test.ts',
+      'src/lib/router/xylonetAdapter.ts',
+      'src/lib/router/routerShadowMode.test.ts',
+      'src/lib/router/xylonetAdapter.test.ts',
+    ])
     expect(changed).not.toContain('vercel.json')
     expect(changed.some((file) => file.startsWith('api/') && !file.startsWith('api/_lib/'))).toBe(false)
     expect(changed.some((file) => file.startsWith('contracts/src/') || file.startsWith('contracts/script/') || file.startsWith('contracts/deployments/'))).toBe(false)
-    expect(changed.some((file) => file.startsWith('src/lib/router/') && !file.startsWith('src/lib/router-audit/') && !file.endsWith('executionPolicy.ts') && !file.endsWith('executionPolicy.test.ts') && !file.endsWith('xylonetAdapter.ts') && !file.endsWith('routerShadowMode.test.ts'))).toBe(false)
+    expect(changed.some((file) => file.startsWith('src/lib/router/') && !file.startsWith('src/lib/router-audit/') && !allowedRouterFiles.has(file))).toBe(false)
     expect(changed.some((file) => file.startsWith('src/features/bridge/'))).toBe(false)
     expect(changed.some((file) => /^src\/pages\/(?:BridgePage|SwapPage)\.tsx$/.test(file))).toBe(false)
+  })
+
+  it('does not bypass the guard with nested or similarly named files', () => {
+    const fakeChanged = [
+      'src/lib/router/unsafe/xylonetAdapter.ts',
+      'src/lib/router/nested/executionPolicy.ts',
+      'src/lib/router/xylonetAdapter.ts.bak',
+      'src/lib/router/executionPolicy.test.ts.old',
+    ]
+    const allowedRouterFiles = new Set([
+      'src/lib/router/executionPolicy.ts',
+      'src/lib/router/executionPolicy.test.ts',
+      'src/lib/router/xylonetAdapter.ts',
+      'src/lib/router/routerShadowMode.test.ts',
+      'src/lib/router/xylonetAdapter.test.ts',
+    ])
+    const hits = fakeChanged.filter((file) => file.startsWith('src/lib/router/') && !file.startsWith('src/lib/router-audit/') && !allowedRouterFiles.has(file))
+    expect(hits).toEqual(fakeChanged)
   })
 })
 
@@ -175,9 +199,16 @@ describe('router audit deployment and execution guards', () => {
   it('keeps runtime route selection, Bridge, contracts, API version, and Vercel config outside the audit module', () => {
     expect(statSync(resolve(root, 'src/lib/router-audit')).isDirectory()).toBe(true)
     const changed = changedFilesAgainstBase()
+    const allowedRouterFiles = new Set([
+      'src/lib/router/executionPolicy.ts',
+      'src/lib/router/executionPolicy.test.ts',
+      'src/lib/router/xylonetAdapter.ts',
+      'src/lib/router/routerShadowMode.test.ts',
+      'src/lib/router/xylonetAdapter.test.ts',
+    ])
     expect(changed.some((file) => file.startsWith('api/'))).toBe(false)
     expect(changed.some((file) => file === 'vercel.json')).toBe(false)
-    expect(changed.some((file) => file.startsWith('src/lib/router/') && !file.startsWith('src/lib/router-audit/') && !file.endsWith('executionPolicy.ts') && !file.endsWith('executionPolicy.test.ts') && !file.endsWith('xylonetAdapter.ts') && !file.endsWith('routerShadowMode.test.ts'))).toBe(false)
+    expect(changed.some((file) => file.startsWith('src/lib/router/') && !file.startsWith('src/lib/router-audit/') && !allowedRouterFiles.has(file))).toBe(false)
     expect(changed.some((file) => file.startsWith('src/features/bridge/'))).toBe(false)
     expect(changed.some((file) => /^src\/pages\/(?:BridgePage|SwapPage)\.tsx$/.test(file))).toBe(false)
     expect(changed.some((file) => file.startsWith('contracts/src/') || file.startsWith('contracts/script/') || file.startsWith('contracts/deployments/'))).toBe(false)
