@@ -54,8 +54,15 @@ export async function createAuditContext(rpc: RpcReader): Promise<AuditContext> 
   }
 }
 
+const STORAGE_SLOT_REGEX = /^0x[0-9a-fA-F]{64}$/
+
+function isValidStorageSlot(slot: string): boolean {
+  return STORAGE_SLOT_REGEX.test(slot)
+}
+
 function safeSlot(reader: RpcReader, address: string, slot: string, blockTag: string): Promise<`0x${string}` | undefined> {
   return (async () => {
+    if (!isValidStorageSlot(slot)) return undefined
     try {
       const raw = (await reader.request('eth_getStorageAt', [address, slot, blockTag])) as string
       return parseAddressFromStorage(raw)
@@ -82,6 +89,7 @@ export async function resolveProxy(
   proxyAddress: `0x${string}`,
   runtimeCode: string,
   blockTag: `0x${string}`,
+  expectedRuntimeCodeHash?: string,
 ): Promise<ProxyResolution> {
   const failures: string[] = []
   const watched: RpcReader = {
@@ -110,7 +118,8 @@ export async function resolveProxy(
     failures.push(redactSensitiveText(error instanceof Error ? error.message : String(error)))
   }
   const pattern = runtimeCode === '0x' ? { kind: 'none' as const } : detectProxyPattern(runtimeCode)
-  const divergence = canonicalAdmin !== suppliedAdmin ? 'admin slot divergence between canonical and supplied slot' : undefined
+  const suppliedSlotValid = isValidStorageSlot(EIP1967_ADMIN_SLOT_SUPPLIED)
+  const divergence = suppliedSlotValid && canonicalAdmin !== suppliedAdmin ? 'admin slot divergence between canonical and supplied slot' : undefined
   if (divergence) failures.push(divergence)
   if (failures.length) {
     return {
@@ -204,6 +213,15 @@ export async function resolveProxy(
     return { status: 'proxy-pattern-other', mutable: true, readsFailed: false, storageReadFailures: failures.length ? failures : undefined, warning: 'Compact delegatecall forwarder with no EIP-1967 slot; treat as proxy.' }
   }
   if (failures.length) return { status: 'unknown', mutable: true, readsFailed: true, storageReadFailures: failures, slotDivergence: divergence, warning: 'Storage reads failed; proxy state unresolved.' }
+  // When all EIP-1967 slots are empty, no proxy pattern is detected, and the runtime code hash
+  // matches the expected canonical hash from the deployment record, we can definitively confirm
+  // non-proxy status: the source is known non-proxy, the bytecode matches, and no proxy slots are set.
+  if (expectedRuntimeCodeHash && runtimeCode !== '0x') {
+    const actualHash = keccak256(runtimeCode as Hex)
+    if (actualHash.toLowerCase() === expectedRuntimeCodeHash.toLowerCase()) {
+      return { status: 'non-proxy-confirmed', mutable: false, readsFailed: false, warning: 'All EIP-1967 slots are empty, no proxy pattern detected, and runtime code hash matches the canonical deployment record.' }
+    }
+  }
   return { status: 'unknown', mutable: true, readsFailed: false, warning: 'No recognized proxy pattern or EIP-1967 slot was found; non-proxy status is not proven.' }
 }
 

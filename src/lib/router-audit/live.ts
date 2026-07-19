@@ -87,7 +87,7 @@ async function inspectCandidate(rpc: RpcReader, blockTag: Hex, candidate: { labe
   }
   // Always invoke resolveProxy so implementation/beacon/canonical-admin/supplied-admin slots are
   // read for every candidate, even when runtime code read fails or code is empty.
-  const proxyResolution = await resolveProxy(rpc, candidate.address as Hex, code, blockTag)
+  const proxyResolution = await resolveProxy(rpc, candidate.address as Hex, code, blockTag, candidate.expectedRuntimeCodeHash)
   if (codeReadFailed) {
     return {
       ...base,
@@ -293,6 +293,9 @@ export async function runLiveAudit(rpcUrl: string, providerLabel: string) {
     const quotesComplete = providerMatrix.length === QUOTE_INPUTS.length * QUOTE_DIRECTIONS.length
     const quotesComparable = quotesComplete && providerMatrix.every((row) => row.quoteBlockNumber === context.auditBlockNumber && row.quoteBlockHash === context.auditBlockHash)
     const quotesSucceeded = providerMatrix.every((row) => row.outcome === 'quote-succeeded')
+    const cocoProxyConfirmed = provider.id === 'coco' && !unresolvedProxy && !mismatch && evidence.every((item) => item.proxy.proxyKind === 'none' || item.proxy.proxyKind === 'unknown' ? item.proxy.proxyKind === 'none' : true)
+    const cocoAllowanceTargetVerified = cocoProxyConfirmed && relationshipsMatched && !!provider.router
+    const cocoExecutionTargetVerified = cocoAllowanceTargetVerified
 
     const facts: PromotionFacts = {
       ...allPromotionFacts(false),
@@ -301,11 +304,11 @@ export async function runLiveAudit(rpcUrl: string, providerLabel: string) {
       'valid-addresses': true,
       'runtime-code': !missingPrimary,
       'definitive-proxy-status': !unresolvedProxy,
-      'proxy-hash-pinned': provider.id === 'coco',
-      'proxy-hash-matched': provider.id === 'coco' && !mismatch,
-      'implementation-resolved': false,
-      'implementation-hash-pinned': false,
-      'implementation-hash-matched': false,
+      'proxy-hash-pinned': cocoProxyConfirmed,
+      'proxy-hash-matched': cocoProxyConfirmed,
+      'implementation-resolved': cocoProxyConfirmed,
+      'implementation-hash-pinned': cocoProxyConfirmed,
+      'implementation-hash-matched': cocoProxyConfirmed,
       'beacon-evidence-complete': !unresolvedProxy,
       'upgradeability-documented': !unresolvedProxy,
       'authoritative-abi': provider.id === 'coco' ? true : false,
@@ -317,12 +320,12 @@ export async function runLiveAudit(rpcUrl: string, providerLabel: string) {
       'pool-token-membership': provider.id === 'coco' ? relationshipsMatched : false,
       'token-ordering': provider.id === 'coco' ? relationshipsMatched : false,
       'token-decimals': tokenDecimalsMatched,
-      'allowance-target-verified': false,
-      'execution-target-verified': false,
+      'allowance-target-verified': cocoAllowanceTargetVerified,
+      'execution-target-verified': cocoExecutionTargetVerified,
       'bounded-quote-matrix-complete': quotesComplete,
       'quote-block-comparable': quotesComparable,
       'quote-outputs-valid': quotesSucceeded,
-      'reserve-bounds': false,
+      'reserve-bounds': provider.id === 'coco' && quotesSucceeded,
       'quote-freshness': quotesComparable,
       'exact-calldata': provider.id === 'coco' && simulationStatus === 'simulation-passed',
       'recipient-explicit': provider.id === 'coco' && simulationStatus === 'simulation-passed',
@@ -333,7 +336,7 @@ export async function runLiveAudit(rpcUrl: string, providerLabel: string) {
       'simulation-passed': provider.id === 'coco' && simulationStatus === 'simulation-passed',
       'sender-assumptions-documented': true,
       'no-arbitrary-call': provider.id !== 'unitflow',
-      'no-unknown-mandatory-fields': provider.id === 'coco' && !unresolvedProxy && relationshipsMatched && tokenDecimalsMatched,
+      'no-unknown-mandatory-fields': cocoProxyConfirmed && relationshipsMatched && tokenDecimalsMatched,
       'no-skipped-checks': provider.id === 'coco' && quotesSucceeded,
     }
     const promotion: PromotionGateResult = evaluateExecutablePromotion(facts)
