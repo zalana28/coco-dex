@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { EURC, USDC } from '@/config/tokens'
+import { arcTestnet } from '@/config/chains'
 import { buildCocoStableShadowRouteQuote } from './cocoStableAdapter'
 import { buildUnitFlowRouteQuote } from './unitflowAdapter'
 import { buildXyloNetRouteQuote } from './xylonetAdapter'
@@ -45,18 +46,38 @@ describe('router shadow mode quotes', () => {
     expect(quote.warnings).toContain('Benchmark unavailable')
   })
 
-  it('keeps a healthy XyloNet route executable', () => {
+  it('keeps a healthy XyloNet route executable when feature flag is on', () => {
+    vi.stubEnv('VITE_ENABLE_XYLONET_EXECUTION', 'true')
     const quote = buildXyloNetRouteQuote({
       tokenIn: USDC,
       tokenOut: EURC,
       amountIn: 100_000n,
       amountOut: 99_900n,
       slippageBps: 50,
+      chainId: arcTestnet.id,
     })
 
     expect(quote.healthStatus).toBe('healthy')
     expect(quote.executionStatus).toBe('executable')
     expect(quote.executable).toBe(true)
+    vi.unstubAllEnvs()
+  })
+
+  it('keeps XyloNet non-executable when feature flag is off', () => {
+    vi.stubEnv('VITE_ENABLE_XYLONET_EXECUTION', 'false')
+    const quote = buildXyloNetRouteQuote({
+      tokenIn: USDC,
+      tokenOut: EURC,
+      amountIn: 100_000n,
+      amountOut: 99_900n,
+      slippageBps: 50,
+      chainId: arcTestnet.id,
+    })
+
+    expect(quote.healthStatus).toBe('healthy')
+    expect(quote.executionStatus).toBe('non_executable')
+    expect(quote.executable).toBe(false)
+    vi.unstubAllEnvs()
   })
 
   it('degrades XyloNet adapter failures gracefully', () => {
