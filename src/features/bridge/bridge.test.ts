@@ -53,8 +53,43 @@ describe('result and estimate normalization', () => {
       fees: [{ type: 'provider', token: 'USDC', amount: '0.000001' }, { type: 'forwarder', token: 'USDC', amount: '0.1' }, { type: 'kit', token: 'USDC', amount: null }],
       gasFees: [{ name: 'burn', token: 'ETH', blockchain: EthereumSepolia.chain, fees: { gas: 1n, gasPrice: 2n, fee: '2' } }],
     }
-    expect(normalizeEstimate(estimate)).toMatchObject({ providerFee: '0.000001', forwarderFee: '0.1', kitFee: null, totalFee: '0.100001', destinationAmount: '9.899999' })
-    expect(normalizeEstimate(estimate).gas).toHaveLength(1)
+    expect(normalizeEstimate(estimate, 'SLOW')).toMatchObject({ providerFee: '0.000001', forwarderFee: '0.1', kitFee: null, totalFee: '0.100001', destinationAmount: '9.899999' })
+    expect(normalizeEstimate(estimate, 'SLOW').gas).toHaveLength(1)
+  })
+
+  it('treats an absent provider fee as zero for Standard/SLOW and never throws', () => {
+    const estimate: EstimateResult = {
+      token: 'USDC', amount: '10', source: { address, chain: EthereumSepolia.chain }, destination: { address: recipient, chain: ArcTestnet.chain },
+      fees: [{ type: 'provider', token: 'USDC', amount: null }, { type: 'forwarder', token: 'USDC', amount: '0.05' }],
+      gasFees: [{ name: 'burn', token: 'ETH', blockchain: EthereumSepolia.chain, fees: { gas: 1n, gasPrice: 2n, fee: '2' } }],
+    }
+    const normalized = normalizeEstimate(estimate, 'SLOW')
+    expect(normalized.providerFee).toBe('0')
+    expect(normalized.totalFee).toBe('0.05')
+    expect(normalized.destinationAmount).toBe('9.95')
+    expect(normalized.warnings).toContain('CCTP protocol fee: 0 USDC — Standard transfer')
+  })
+
+  it('blocks Fast when the provider (CCTP protocol) fee cannot be estimated', () => {
+    const estimate: EstimateResult = {
+      token: 'USDC', amount: '10', source: { address, chain: EthereumSepolia.chain }, destination: { address: recipient, chain: ArcTestnet.chain },
+      fees: [{ type: 'provider', token: 'USDC', amount: null }, { type: 'forwarder', token: 'USDC', amount: '0.1' }],
+      gasFees: [{ name: 'burn', token: 'ETH', blockchain: EthereumSepolia.chain, fees: { gas: 1n, gasPrice: 2n, fee: '2' } }],
+    }
+    expect(() => normalizeEstimate(estimate, 'FAST')).toThrow('CCTP protocol fee estimate is unavailable')
+  })
+
+  it('parses fees by type, never by array position', () => {
+    const estimate: EstimateResult = {
+      token: 'USDC', amount: '10', source: { address, chain: EthereumSepolia.chain }, destination: { address: recipient, chain: ArcTestnet.chain },
+      fees: [{ type: 'forwarder', token: 'USDC', amount: '0.2' }, { type: 'kit', token: 'USDC', amount: '0.01' }, { type: 'provider', token: 'USDC', amount: '0.000003' }],
+      gasFees: [{ name: 'burn', token: 'ETH', blockchain: EthereumSepolia.chain, fees: { gas: 1n, gasPrice: 2n, fee: '2' } }],
+    }
+    const normalized = normalizeEstimate(estimate, 'SLOW')
+    expect(normalized.providerFee).toBe('0.000003')
+    expect(normalized.forwarderFee).toBe('0.2')
+    expect(normalized.kitFee).toBe('0.01')
+    expect(normalized.totalFee).toBe('0.210003')
   })
 
   it('fails closed when forwarding or source gas cannot be estimated', () => {
@@ -63,7 +98,7 @@ describe('result and estimate normalization', () => {
       fees: [{ type: 'provider', token: 'USDC', amount: '0.01' }, { type: 'forwarder', token: 'USDC', amount: null }],
       gasFees: [{ name: 'burn', token: 'ETH', blockchain: EthereumSepolia.chain, fees: null }],
     }
-    expect(() => normalizeEstimate(estimate)).toThrow('Forwarding Service fee estimate is unavailable')
+    expect(() => normalizeEstimate(estimate, 'SLOW')).toThrow('Forwarding Service fee estimate is unavailable')
   })
 })
 
@@ -102,7 +137,7 @@ describe('facade', () => {
     await facade.estimate(input)
     await facade.bridge(input)
     await facade.retryBridge(result([{ name: 'burn', state: 'success', txHash: '0xbb' }]), input)
-    expect(kit.bridge).toHaveBeenCalledWith(expect.objectContaining({ from: { adapter: adapter2, chain: 'Base_Sepolia' }, to: { chain: 'Arc_Testnet', recipientAddress: recipient, useForwarder: true }, config: { transferSpeed: 'SLOW', batchTransactions: false } }))
+    expect(kit.bridge).toHaveBeenCalledWith(expect.objectContaining({ from: { adapter: adapter2, chain: 'Base_Sepolia' }, to: { adapter: adapter2, chain: 'Arc_Testnet', recipientAddress: recipient, useForwarder: true }, token: 'USDC', config: { transferSpeed: 'SLOW', batchTransactions: false } }))
     expect(kit.retry).toHaveBeenCalledWith(expect.anything(), { from: adapter3, to: undefined }, { traceId: input.traceId })
     expect(kit.bridge).toHaveBeenCalledTimes(1)
     expect(makeAdapter).toHaveBeenCalledTimes(3)

@@ -77,6 +77,7 @@ function e2eEstimate(source: SourceChain): NormalizedEstimate {
     destinationAmount: source === 'Ethereum_Sepolia' ? '9.989' : '9.9895',
     duration: source === 'Ethereum_Sepolia' ? '8–20 minutes' : '5–15 minutes',
     gas: [{ name: 'burn', token: 'ETH', blockchain: source, fees: { gas: 120000n, gasPrice: 1n, fee: '120000' } } as never],
+    warnings: [],
   }
 }
 
@@ -197,14 +198,14 @@ export function BridgePage() {
       if (scenario === 'estimate-error') throw new Error('Forwarding Service estimate is temporarily unavailable')
       if (scenario === 'long-error') throw new Error('Bridge estimate failed because the source RPC provider returned a response that could not be validated. Reconnect the active wallet, confirm Ethereum Sepolia is selected, and try again without changing the recipient or submitting a transaction.')
       const provider = scenario ? null : await activeProvider()
-      const normalized = scenario ? e2eEstimate(source) : normalizeEstimate(await bridgeFacade.estimate({ provider: provider!, wallet: wallet!, source, recipient, amount, mode: mode === 'FAST' ? TransferSpeed.FAST : TransferSpeed.SLOW }))
+      const normalized = scenario ? e2eEstimate(source) : normalizeEstimate(await bridgeFacade.estimate({ provider: provider!, wallet: wallet!, source, recipient, amount, mode: mode === 'FAST' ? TransferSpeed.FAST : TransferSpeed.SLOW }), mode)
       setEstimate(normalized)
       if (scenario) {
         setFastEstimate(e2eEstimate(source))
         setFastSupported(true)
       } else if (mode === 'SLOW') {
         try {
-          const fast = normalizeEstimate(await bridgeFacade.estimate({ provider: provider!, wallet: wallet!, source, recipient, amount, mode: TransferSpeed.FAST }))
+          const fast = normalizeEstimate(await bridgeFacade.estimate({ provider: provider!, wallet: wallet!, source, recipient, amount, mode: TransferSpeed.FAST }), 'FAST')
           setFastEstimate(fast)
           setFastSupported(true)
         } catch {
@@ -376,7 +377,7 @@ export function BridgePage() {
             <div className="grid min-w-0 gap-2">
               <label htmlFor="bridge-recipient" className="text-sm font-medium text-coco-dark-secondary">Recipient on Arc</label>
               <input id="bridge-recipient" aria-describedby={`bridge-recipient-help${showRecipientError ? ' bridge-recipient-error' : ''}`} aria-invalid={showRecipientError || undefined} value={recipient} onChange={(event) => { setRecipient(event.target.value); resetEstimate() }} autoComplete="off" spellCheck={false} className="min-h-14 w-full min-w-0 max-w-full overflow-x-auto whitespace-nowrap rounded-xl border border-coco-dark-border bg-coco-dark-bg px-3 font-mono text-sm text-coco-dark-text outline-none focus-visible:border-coco-green-500 focus-visible:ring-2 focus-visible:ring-coco-green-500/30 aria-[invalid=true]:border-coco-red-500" />
-              <p id="bridge-recipient-help" className="break-words text-sm leading-5 text-coco-dark-muted">Defaults to the connected account; no Arc gas required for forwarded mint.</p>
+              <p id="bridge-recipient-help" className="break-words text-sm leading-5 text-coco-dark-muted">Defaults to the connected account. Circle Forwarding Service mints on Arc; no Arc gas required.</p>
               {showRecipientError && <p id="bridge-recipient-error" className="break-words text-sm leading-5 text-coco-red-500">Enter a valid Arc recipient address.</p>}
             </div>
           </div>
@@ -399,7 +400,7 @@ export function BridgePage() {
         </Card>
 
         <div data-testid="bridge-sidebar" className="grid min-w-0 content-start gap-5 xl:w-full">
-          <div data-testid="estimate-panel" className="min-w-0"><Card className="min-w-0 p-4 sm:p-5"><h2 className="font-semibold text-coco-dark-text">Estimate</h2>{estimate ? <dl className="mt-4 grid min-w-0 gap-3 text-sm"><EstimateRow label="Destination amount" value={`${estimate.destinationAmount} USDC`} strong /><EstimateRow label="CCTP protocol fee" value={estimate.providerFee === null ? 'Unavailable' : `${estimate.providerFee} USDC`} /><EstimateRow label="Forwarding Service fee" value={estimate.forwarderFee === null ? 'Unavailable' : `${estimate.forwarderFee} USDC`} /><EstimateRow label="Application fee" value="0 USDC" /><EstimateRow label="Total estimated fee" value={`${estimate.totalFee} USDC`} strong /><EstimateRow label="Estimated duration" value={estimate.duration ?? 'Not provided by Bridge Kit 1.12.1'} icon={<Clock3 className="h-4 w-4" />} /><EstimateRow label="Source gas requirement" value={estimate.gas.map((item) => `${item.name}: ${item.fees?.fee ?? 'unavailable'} ${item.token}`).join(', ') || 'Unavailable'} /></dl> : <p className="mt-3 break-words text-sm leading-6 text-coco-dark-muted">Enter an amount and request an SDK estimate. Submission stays disabled if fees, gas, or forwarding availability cannot be estimated.</p>}</Card></div>
+          <div data-testid="estimate-panel" className="min-w-0"><Card className="min-w-0 p-4 sm:p-5"><h2 className="font-semibold text-coco-dark-text">Estimate</h2>{estimate ? <dl className="mt-4 grid min-w-0 gap-3 text-sm"><EstimateRow label="Destination amount" value={`${estimate.destinationAmount} USDC`} strong /><EstimateRow label="CCTP protocol fee" value={estimate.providerFee === null ? '0 USDC — Standard transfer' : `${estimate.providerFee} USDC`} /><EstimateRow label="Forwarding Service fee" value={estimate.forwarderFee === null ? 'Unavailable' : `${estimate.forwarderFee} USDC`} /><EstimateRow label="Application fee" value="0 USDC" /><EstimateRow label="Total estimated fee" value={`${estimate.totalFee} USDC`} strong /><EstimateRow label="Estimated duration" value={estimate.duration ?? 'Not provided by Bridge Kit 1.12.1'} icon={<Clock3 className="h-4 w-4" />} /><EstimateRow label="Source gas requirement" value={estimate.gas.map((item) => `${item.name}: ${item.fees?.fee ?? 'unavailable'} ${item.token}`).join(', ') || 'Unavailable'} /><EstimateRow label="Destination gas" value="Paid by Forwarding Service" /></dl> : <p className="mt-3 break-words text-sm leading-6 text-coco-dark-muted">Enter an amount and request an SDK estimate. Submission stays disabled if fees, gas, or forwarding availability cannot be estimated.</p>}{estimate?.warnings?.length ? <ul className="mt-3 grid gap-1 rounded-xl border border-coco-teal-400/20 bg-coco-teal-400/5 p-3 text-xs leading-5 text-coco-dark-secondary">{estimate.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}</Card></div>
 
           <Card className="min-w-0 p-4 sm:p-5"><h2 className="font-semibold text-coco-dark-text">Bridge lifecycle</h2>{lifecycleStatusText && <p role="status" aria-label="Bridge lifecycle update" className="sr-only">{lifecycleStatusText}</p>}<ol className="mt-4 grid min-w-0 gap-3">{steps.map((step) => <li key={step.name} className="flex min-w-0 items-center gap-3"><span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border ${step.state === 'success' ? 'border-coco-green-500/30 bg-coco-green-500/10 text-coco-green-500' : step.state === 'error' || step.state === 'recoverable' ? 'border-coco-amber-500/30 bg-coco-amber-500/10 text-coco-amber-500' : 'border-coco-dark-border text-coco-dark-muted'}`}>{step.state === 'success' ? <Check className="h-4 w-4" /> : step.state === 'pending' || step.state === 'waiting-wallet' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <span className="text-xs">{steps.indexOf(step) + 1}</span>}</span><div className="min-w-0 flex-1"><p className="break-words text-sm font-medium text-coco-dark-text">{STEP_LABELS[step.name]}</p><p className="text-sm text-coco-dark-muted">{stateLabel(step.state)}</p></div>{step.explorerUrl && <a href={step.explorerUrl} target="_blank" rel="noreferrer" aria-label={`View ${step.name} transaction`} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-coco-teal-400 focus-visible:ring-2 focus-visible:ring-coco-teal-400/40"><ExternalLink className="h-4 w-4" /></a>}</li>)}</ol></Card>
         </div>
