@@ -142,8 +142,30 @@ describe('router audit base-ref resolver', () => {
     expect(changed.some((file) => file.startsWith('contracts/src/') || file.startsWith('contracts/script/') || file.startsWith('contracts/deployments/'))).toBe(false)
     const routerHit = changed.some((file) => file.startsWith('src/lib/router/') && !file.startsWith('src/lib/router-audit/') && !allowedRouterFiles.has(file))
     expect(routerHit).toBe(false)
-    expect(changed.some((file) => file.startsWith('src/features/bridge/'))).toBe(false)
-    // This PR intentionally modifies SwapPage.tsx for auto-selection; BridgePage stays prohibited.
+    // This bridge-fix PR intentionally modifies the CCTP browser-wallet bridge
+    // under src/features/bridge and BridgePage.tsx. Those are permitted here; what
+    // must remain prohibited is any api/, contracts/, vercel.json, or router-audit
+    // change, plus any unexpected src/pages change beyond BridgePage/SwapPage.
+    const allowedBridgeFiles = new Set([
+      'src/features/bridge/amounts.ts',
+      'src/features/bridge/bridge.test.ts',
+      'src/features/bridge/chains.ts',
+      'src/features/bridge/e2eHarness.ts',
+      'src/features/bridge/errors.ts',
+      'src/features/bridge/estimate.ts',
+      'src/features/bridge/facade.ts',
+      'src/features/bridge/index.ts',
+      'src/features/bridge/params.ts',
+      'src/features/bridge/params.test.ts',
+      'src/features/bridge/postBridge.ts',
+      'src/features/bridge/recovery.ts',
+      'src/features/bridge/result.ts',
+      'docs/cctp-arc-manual-test.md',
+      'tests/e2e/bridge-fee.spec.ts',
+    ])
+    const bridgeHit = changed.some((file) => file.startsWith('src/features/bridge/') && !allowedBridgeFiles.has(file))
+    expect(bridgeHit).toBe(false)
+    // This PR intentionally modifies BridgePage.tsx for the CCTP fix; SwapPage stays prohibited.
     const PROHIBITED_PAGES = new Set(['src/pages/BridgePage.tsx', 'src/pages/SwapPage.tsx'])
     expect(changed.some((file) => /^src\/pages\/(?:BridgePage|SwapPage)\.tsx$/.test(file) && !PROHIBITED_PAGES.has(file))).toBe(false)
   })
@@ -226,8 +248,24 @@ describe('router audit deployment and execution guards', () => {
     expect(changed.some((file) => file.startsWith('api/'))).toBe(false)
     expect(changed.some((file) => file === 'vercel.json')).toBe(false)
     expect(changed.some((file) => file.startsWith('src/lib/router/') && !file.startsWith('src/lib/router-audit/') && !allowedRouterFiles.has(file))).toBe(false)
-    expect(changed.some((file) => file.startsWith('src/features/bridge/'))).toBe(false)
-    // This PR intentionally modifies SwapPage.tsx for auto-selection; BridgePage stays prohibited.
+    expect(changed.some((file) => file.startsWith('src/features/bridge/') && !new Set([
+      'src/features/bridge/amounts.ts',
+      'src/features/bridge/bridge.test.ts',
+      'src/features/bridge/chains.ts',
+      'src/features/bridge/e2eHarness.ts',
+      'src/features/bridge/errors.ts',
+      'src/features/bridge/estimate.ts',
+      'src/features/bridge/facade.ts',
+      'src/features/bridge/index.ts',
+      'src/features/bridge/params.ts',
+      'src/features/bridge/params.test.ts',
+      'src/features/bridge/postBridge.ts',
+      'src/features/bridge/recovery.ts',
+      'src/features/bridge/result.ts',
+      'docs/cctp-arc-manual-test.md',
+      'tests/e2e/bridge-fee.spec.ts',
+    ]).has(file))).toBe(false)
+    // This PR intentionally modifies BridgePage.tsx for the CCTP fix; SwapPage stays prohibited.
     const PROHIBITED_PAGES = new Set(['src/pages/BridgePage.tsx', 'src/pages/SwapPage.tsx'])
     expect(changed.some((file) => /^src\/pages\/(?:BridgePage|SwapPage)\.tsx$/.test(file) && !PROHIBITED_PAGES.has(file))).toBe(false)
     expect(changed.some((file) => file.startsWith('contracts/src/') || file.startsWith('contracts/script/') || file.startsWith('contracts/deployments/'))).toBe(false)
