@@ -160,8 +160,17 @@ describe('router audit base-ref resolver', () => {
       'src/features/bridge/postBridge.ts',
       'src/features/bridge/recovery.ts',
       'src/features/bridge/result.ts',
+      'src/features/bridge/attempt.ts',
+      'src/features/bridge/lifecycle.ts',
+      'src/features/bridge/lifecycle.test.ts',
+      'src/features/bridge/events.ts',
+      'src/features/bridge/iris.ts',
+      'src/features/bridge/explorer.ts',
+      'src/features/bridge/recovery-store.test.ts',
       'docs/cctp-arc-manual-test.md',
+      'docs/cctp-arc-lifecycle-recovery-manual-test.md',
       'tests/e2e/bridge-fee.spec.ts',
+      'tests/e2e/bridge-lifecycle.spec.ts',
     ])
     const bridgeHit = changed.some((file) => file.startsWith('src/features/bridge/') && !allowedBridgeFiles.has(file))
     expect(bridgeHit).toBe(false)
@@ -262,8 +271,17 @@ describe('router audit deployment and execution guards', () => {
       'src/features/bridge/postBridge.ts',
       'src/features/bridge/recovery.ts',
       'src/features/bridge/result.ts',
+      'src/features/bridge/attempt.ts',
+      'src/features/bridge/lifecycle.ts',
+      'src/features/bridge/lifecycle.test.ts',
+      'src/features/bridge/events.ts',
+      'src/features/bridge/iris.ts',
+      'src/features/bridge/explorer.ts',
+      'src/features/bridge/recovery-store.test.ts',
       'docs/cctp-arc-manual-test.md',
+      'docs/cctp-arc-lifecycle-recovery-manual-test.md',
       'tests/e2e/bridge-fee.spec.ts',
+      'tests/e2e/bridge-lifecycle.spec.ts',
     ]).has(file))).toBe(false)
     // This PR intentionally modifies BridgePage.tsx for the CCTP fix; SwapPage stays prohibited.
     const PROHIBITED_PAGES = new Set(['src/pages/BridgePage.tsx', 'src/pages/SwapPage.tsx'])
