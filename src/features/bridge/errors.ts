@@ -10,9 +10,15 @@ export function redactErrorMessage(input: string): string {
 }
 
 export function classifyBridgeError(error: unknown): SafeBridgeError {
-  const record = typeof error === 'object' && error !== null ? error as Record<string, unknown> : {}
+  const record = typeof error === 'object' && error !== null && !(error instanceof Error) ? error as Record<string, unknown> : {}
   const code = typeof record.code === 'string' || typeof record.code === 'number' ? record.code : undefined
-  const raw = typeof record.message === 'string' ? record.message : error instanceof Error ? error.message : 'Bridge operation failed'
+  const raw = typeof error === 'string'
+    ? error
+    : error instanceof Error
+      ? error.message
+      : typeof record.message === 'string'
+        ? record.message
+        : 'Bridge operation failed'
   const message = redactErrorMessage(raw).slice(0, 500)
   const lower = message.toLowerCase()
   if (code === 4001 || lower.includes('user rejected') || lower.includes('denied')) return { category: 'user-rejected', recoverable: false, message, code }

@@ -217,9 +217,9 @@ test.describe('Bridge responsive layout', () => {
     await expect(page.getByRole('button', { name: 'Estimate bridge' })).toBeDisabled()
     await expectNoHorizontalOverflow(page)
 
-    for (const [scenario, label] of [['pending-approve', 'Approve USDC'], ['pending-burn', 'Burn on source'], ['pending-attestation', 'Circle attestation'], ['pending-mint', 'Forwarded mint on Arc']] as const) {
+    for (const [scenario, label, status] of [['pending-approve', 'Approve USDC', 'Waiting'], ['pending-burn', 'Burn on source', 'Confirming on Ethereum Sepolia'], ['pending-attestation', 'Circle attestation', 'Waiting for Circle'], ['pending-mint', 'Forwarded mint on Arc', 'Forwarding Service processing']] as const) {
       await page.goto(`/bridge?bridge-e2e=${scenario}`)
-      await expect(page.getByRole('list').locator('li', { hasText: label })).toContainText('Pending')
+      await expect(page.getByRole('list').locator('li', { hasText: label })).toContainText(status)
       await expectNoHorizontalOverflow(page)
     }
   })

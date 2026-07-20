@@ -64,7 +64,7 @@ test.describe('CCTP bridge mobile MVP', () => {
     await page.getByRole('button', { name: 'Resume' }).click()
     await expect(page.getByRole('heading', { name: 'USDC arrived on Arc Testnet' })).toBeVisible()
 
-    await page.goto('/bridge?bridge-e2e=restored')
+    await page.goto('/bridge?bridge-e2e=recoverable')
     await expect(page.getByTestId('recovery-card')).toBeVisible()
     await page.getByRole('button', { name: 'Dismiss' }).click()
     await expect(page.getByTestId('recovery-card')).toHaveCount(0)

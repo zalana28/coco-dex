@@ -167,6 +167,42 @@ export function BridgePage() {
   const submitLock = useRef(false)
   const dialogRef = useRef<HTMLDivElement>(null)
   const dialogOpenerRef = useRef<HTMLElement | null>(null)
+
+  // Focus trap for the confirmation dialog: focus Cancel on open, restore the
+  // opener on close, cycle Tab within the dialog, and close on Escape.
+  useEffect(() => {
+    if (!confirming || !estimate) return
+    const dialog = dialogRef.current
+    if (!dialog) return
+    dialogOpenerRef.current = (document.activeElement as HTMLElement) ?? null
+    const focusables = () => Array.from(dialog.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"]):not([disabled])')) as HTMLElement[]
+    const cancel = focusables()[0] ?? dialog
+    cancel.focus()
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setConfirming(false)
+        return
+      }
+      if (event.key !== 'Tab') return
+      const items = focusables()
+      if (items.length === 0) return
+      const first = items[0]!
+      const last = items[items.length - 1]!
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    dialog.addEventListener('keydown', onKeyDown)
+    return () => {
+      dialog.removeEventListener('keydown', onKeyDown)
+      dialogOpenerRef.current?.focus?.()
+    }
+  }, [confirming, estimate])
   const pollAbort = useRef<AbortController | null>(null)
   const { switchChainAsync, isPending: isSwitching } = useSwitchChain()
   const sourceClient = usePublicClient({ chainId: route.chainId })
