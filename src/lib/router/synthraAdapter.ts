@@ -9,24 +9,21 @@ import { DEFAULT_ROUTE_TTL_MS, getRouteHealthStatus } from './routeMetadata'
 import { classifyQuoteError, isTransientRpcError } from './quoteState'
 import { getEffectiveExecutionPolicy, isExecutionAllowed } from './executionPolicy'
 
+// Verified on-chain: selector 0xc6a5026a
+// quoteExactInputSingle(address tokenIn, address tokenOut, uint256 amountIn, uint24 fee, uint160 sqrtPriceLimitX96)
+// Returns: (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)
+// The struct-based Quoter V2 ABI (selector 0xf7729d43) reverts on this deployment.
 export const SYNTHRA_V3_QUOTER_ABI = [
   {
     type: 'function',
     name: 'quoteExactInputSingle',
     stateMutability: 'nonpayable',
     inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'tokenIn', type: 'address' },
-          { name: 'tokenOut', type: 'address' },
-          { name: 'amountIn', type: 'uint256' },
-          { name: 'fee', type: 'uint24' },
-          { name: 'sqrtPriceLimitX96', type: 'uint160' },
-          { name: 'recipient', type: 'address' },
-        ],
-      },
+      { name: 'tokenIn', type: 'address' },
+      { name: 'tokenOut', type: 'address' },
+      { name: 'amountIn', type: 'uint256' },
+      { name: 'fee', type: 'uint24' },
+      { name: 'sqrtPriceLimitX96', type: 'uint160' },
     ],
     outputs: [
       { name: 'amountOut', type: 'uint256' },
@@ -43,7 +40,6 @@ type SynthraQuoteRequest = {
   tokenIn: `0x${string}`
   tokenOut: `0x${string}`
   amountIn: bigint
-  recipient: `0x${string}`
 }
 
 type SynthraFeeQuote = {
@@ -79,14 +75,13 @@ export function isSynthraPairSupported(tokenIn: Token, tokenOut: Token): boolean
   )
 }
 
-export function getSynthraV3QuoteRequest(tokenIn: Token, tokenOut: Token, amountIn: bigint, recipient: `0x${string}` = '0x0000000000000000000000000000000000000000'): SynthraQuoteRequest | undefined {
+export function getSynthraV3QuoteRequest(tokenIn: Token, tokenOut: Token, amountIn: bigint): SynthraQuoteRequest | undefined {
   if (amountIn <= BigInt(0) || !isSynthraPairSupported(tokenIn, tokenOut)) return undefined
 
   return {
     tokenIn: tokenIn.address as `0x${string}`,
     tokenOut: tokenOut.address as `0x${string}`,
     amountIn,
-    recipient,
   }
 }
 

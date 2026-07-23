@@ -94,14 +94,15 @@ export function useAggregatedQuotes({
     },
   })
 
-  const synthraQuoteArgs = (fee: 500 | 3_000 | 10_000) => [{
-    tokenIn: synthraQuoteRequest?.tokenIn ?? synthra.supportedTokens.USDC,
-    tokenOut: synthraQuoteRequest?.tokenOut ?? synthra.supportedTokens.EURC,
-    amountIn: synthraQuoteRequest?.amountIn ?? BigInt(0),
+  // Flat args matching verified on-chain ABI: (tokenIn, tokenOut, amountIn, fee, sqrtPriceLimitX96)
+  // Returns tuple: [amountOut, sqrtPriceX96After, initializedTicksCrossed, gasEstimate]
+  const synthraQuoteArgs = (fee: 500 | 3_000 | 10_000) => [
+    synthraQuoteRequest?.tokenIn ?? synthra.supportedTokens.USDC,
+    synthraQuoteRequest?.tokenOut ?? synthra.supportedTokens.EURC,
+    synthraQuoteRequest?.amountIn ?? BigInt(0),
     fee,
-    sqrtPriceLimitX96: BigInt(0),
-    recipient: synthraQuoteRequest?.recipient ?? '0x0000000000000000000000000000000000000000',
-  }] as const
+    BigInt(0),
+  ] as const
 
   const { data: synthraFee500AmountOut, isLoading: isSynthraFee500Loading, error: synthraFee500Error } = useReadContract({
     address: synthra.v3.quoterAddress,
@@ -202,9 +203,9 @@ export function useAggregatedQuotes({
         tokenOut,
         amountIn,
         feeQuotes: [
-          { fee: 500, amountOut: synthraFee500AmountOut },
-          { fee: 3_000, amountOut: synthraFee3000AmountOut },
-          { fee: 10_000, amountOut: synthraFee10000AmountOut },
+          { fee: 500, amountOut: Array.isArray(synthraFee500AmountOut) ? synthraFee500AmountOut[0] : synthraFee500AmountOut },
+          { fee: 3_000, amountOut: Array.isArray(synthraFee3000AmountOut) ? synthraFee3000AmountOut[0] : synthraFee3000AmountOut },
+          { fee: 10_000, amountOut: Array.isArray(synthraFee10000AmountOut) ? synthraFee10000AmountOut[0] : synthraFee10000AmountOut },
         ],
         slippageBps,
         isLoading: isSynthraLoading,

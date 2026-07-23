@@ -83,7 +83,14 @@ function classifyXyloNetSimulationError(error: unknown): string {
 
   if (n.includes('429') || n.includes('rate limit') || n.includes('too many requests'))
     return 'RPC rate limit reached — wait a moment and try again'
-  if (n.includes('rpc request failed') || n.includes('http request failed') || n.includes('fetch failed') || n.includes('network'))
+  // Check explicit revert BEFORE generic network/fetch checks to avoid
+  // misclassifying ContractFunctionExecutionError (which wraps reverts and
+  // may mention 'network' in its message chain).
+  if (n.includes('execution reverted') || n.includes('reverted')) {
+    const reason = details.causeReason ?? details.details ?? details.shortMessage
+    return reason ? `Swap reverted: ${reason}` : 'Swap simulation reverted'
+  }
+  if (n.includes('rpc request failed') || n.includes('http request failed') || n.includes('fetch failed'))
     return 'RPC unavailable — check your connection and try again'
   if (n.includes('timeout') || n.includes('timed out'))
     return 'RPC request timed out — try again'
@@ -97,10 +104,6 @@ function classifyXyloNetSimulationError(error: unknown): string {
     return 'Transaction deadline expired — try again'
   if (n.includes('too little received') || n.includes('minimum') || n.includes('slippage'))
     return 'Min received too high — increase slippage tolerance'
-  if (n.includes('execution reverted') || n.includes('reverted')) {
-    const reason = details.causeReason ?? details.details ?? details.shortMessage
-    return reason ? `Swap reverted: ${reason}` : 'Swap simulation reverted'
-  }
   const fallback = details.shortMessage ?? details.causeShortMessage ?? details.details ?? details.causeReason ?? details.message
   return fallback ? `XyloNet simulation failed: ${fallback}` : 'XyloNet simulation failed'
 }

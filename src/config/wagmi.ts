@@ -30,8 +30,10 @@ export const wagmiConfig = createConfig({
   connectors,
   transports: {
     [arcTestnet.id]: http('https://rpc.testnet.arc.network', {
-      // Retry on transient errors (rate-limit, network blip).
-      // 3 retries with 2s back-off is gentle on the public RPC.
+      // 3 retries with 2s back-off to handle transient 429 rate-limits.
+      // multicall batch is intentionally disabled — the Arc Testnet RPC does
+      // not support it reliably and Synthra/UnitFlow use nonpayable quote
+      // functions that must not be batched via eth_aggregate.
       retryCount: 3,
       retryDelay: 2_000,
       timeout: 30_000,
@@ -39,6 +41,4 @@ export const wagmiConfig = createConfig({
     [sepolia.id]: http(),
     [baseSepolia.id]: http(),
   },
-  // Batch eth_call requests via multicall where possible to reduce round-trips.
-  batch: { multicall: true },
 })
