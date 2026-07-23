@@ -142,6 +142,9 @@ describe('router audit base-ref resolver', () => {
       // contract address verification (PR #111)
       'src/lib/router/contractVerification.ts',
       'src/lib/router/contractVerification.test.ts',
+      // Coco price-impact guard (Phase 2)
+      'src/lib/router/cocoAdapter.ts',
+      'src/lib/router/cocoAdapter.test.ts',
     ])
     expect(changed).not.toContain('vercel.json')
     expect(changed.some((file) => file.startsWith('api/') && !file.startsWith('api/_lib/'))).toBe(false)
@@ -203,6 +206,9 @@ describe('router audit base-ref resolver', () => {
       'src/lib/router/unitflowAdapter.test.ts',
       'src/lib/router/contractVerification.ts',
       'src/lib/router/contractVerification.test.ts',
+      // Coco price-impact guard (Phase 2)
+      'src/lib/router/cocoAdapter.ts',
+      'src/lib/router/cocoAdapter.test.ts',
     ])
     const pr111Files = [
       'src/lib/router/unitflowAdapter.ts',
@@ -233,9 +239,11 @@ describe('router audit base-ref resolver', () => {
       'src/lib/router/unitflowAdapter.test.ts',
       'src/lib/router/contractVerification.ts',
       'src/lib/router/contractVerification.test.ts',
+      // Coco price-impact guard (Phase 2)
+      'src/lib/router/cocoAdapter.ts',
+      'src/lib/router/cocoAdapter.test.ts',
     ])
     const prohibited = [
-      'src/lib/router/cocoAdapter.ts',
       'src/lib/router/unknownRouter.ts',
       'src/lib/router/someNewFile.ts',
       'api/some-new-endpoint.ts',
@@ -334,6 +342,9 @@ describe('router audit deployment and execution guards', () => {
       // contract address verification (PR #111)
       'src/lib/router/contractVerification.ts',
       'src/lib/router/contractVerification.test.ts',
+      // Coco price-impact guard (Phase 2)
+      'src/lib/router/cocoAdapter.ts',
+      'src/lib/router/cocoAdapter.test.ts',
     ])
     expect(changed.some((file) => file.startsWith('api/'))).toBe(false)
     expect(changed.some((file) => file === 'vercel.json')).toBe(false)
