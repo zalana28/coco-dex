@@ -54,7 +54,7 @@ test.describe('CCTP bridge mobile MVP', () => {
     const swap = page.getByRole('link', { name: 'Swap USDC to EURC' })
     await expect(swap).toHaveAttribute('href', /\/swap\?from=USDC&to=EURC&chain=Arc_Testnet&amount=/)
     await expect(page.getByRole('link', { name: 'Add Liquidity' })).toHaveAttribute('href', '/pools/add')
-    await expect(page.getByRole('link', { name: /View destination tx/ })).toHaveAttribute('href', 'https://testnet.arcscan.app/tx/mock-mint')
+    await expect(page.getByRole('link', { name: /View destination tx/ })).toHaveAttribute('href', /^https:\/\/testnet\.arcscan\.app\/tx\/0x[0-9a-f]{64}$/)
   })
 
   test('restores and retries recoverable transfers without another burn', async ({ page }) => {

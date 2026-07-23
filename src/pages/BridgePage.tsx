@@ -28,6 +28,7 @@ import {
   type LifecycleStep,
   type LifecycleStepName,
   LIFECYCLE_STEP_LABELS,
+  canonicalStepName,
   recoveryToBridgeResult,
   resumeAfterBurn,
   subscribeBridgeEvents,
@@ -79,7 +80,7 @@ function stepStatusText(step: LifecycleStep, source: SourceChain): string {
     case 'awaiting-wallet': return 'Awaiting wallet'
     case 'submitted': return 'Submitted'
     case 'confirming': return step.name === 'burn' ? `Confirming on ${chain}` : 'Confirming'
-    case 'waiting': return step.name === 'attestation' ? 'Waiting for Circle' : step.name === 'forwarded-mint' ? 'Forwarding Service processing' : 'Waiting'
+    case 'waiting': return step.name === 'burn' ? 'Pending' : step.name === 'attestation' ? 'Waiting for Circle' : step.name === 'forwarded-mint' ? 'Forwarding Service processing' : 'Waiting'
     case 'success': return 'Complete'
     case 'noop': return 'Not required'
     case 'skipped': return 'Skipped'
@@ -115,7 +116,7 @@ function mockResult(source: SourceChain, state: 'success' | 'error'): BridgeResu
     { name: 'burn', state: 'success', txHash: `0x${'b'.repeat(64)}`, explorerUrl: 'https://sepolia.etherscan.io/tx/mock-burn' },
     { name: 'fetchAttestation', state: 'success' },
     state === 'success'
-      ? { name: 'mint', state: 'success', txHash: `0x${'c'.repeat(64)}`, explorerUrl: 'https://testnet.arcscan.app/tx/mock-mint', forwarded: true }
+      ? { name: 'mint', state: 'success', txHash: `0x${'c'.repeat(64)}`, forwarded: true }
       : { name: 'mint', state: 'error', errorMessage: 'Forwarding service confirmation timed out' },
   ]
   return {
@@ -128,11 +129,19 @@ function mockResult(source: SourceChain, state: 'success' | 'error'): BridgeResu
 
 function mockPendingResult(source: SourceChain, pending: LifecycleStepName): BridgeResult {
   const result = mockResult(source, 'success')
-  const pendingIndex = STEP_ORDER.indexOf(pending)
+  const canonical = canonicalStepName(pending) ?? pending
+  const pendingIndex = result.steps.findIndex((step) => (canonicalStepName(step.name) ?? step.name) === canonical)
   return {
     ...result,
     state: 'pending',
-    steps: result.steps.slice(0, pendingIndex + 1).map((step, index) => (index === pendingIndex ? { name: step.name, state: 'pending' } : step)),
+    // Only include steps up to and including the pending one so that later
+    // steps stay at their base not-started state (matching the original intent
+    // of the slice).  The pending step itself is marked pending so deriveState
+    // correctly identifies the active step without prematurely reaching
+    // forwarded-mint success which would set overallState 'complete'.
+    steps: result.steps
+      .slice(0, pendingIndex + 1)
+      .map((step, index) => (index === pendingIndex ? { name: step.name, state: 'pending' } : step)),
   }
 }
 
@@ -174,7 +183,11 @@ export function BridgePage() {
     if (!confirming || !estimate) return
     const dialog = dialogRef.current
     if (!dialog) return
-    dialogOpenerRef.current = (document.activeElement as HTMLElement) ?? null
+    // Preserve the opener captured by the open handler; fall back to the
+    // currently focused element only if the handler did not set one (the
+    // page content becomes inert on open, which would otherwise move focus
+    // to <body> before this effect runs).
+    if (!dialogOpenerRef.current) dialogOpenerRef.current = (document.activeElement as HTMLElement) ?? null
     const focusables = () => Array.from(dialog.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"]):not([disabled])')) as HTMLElement[]
     const cancel = focusables()[0] ?? dialog
     cancel.focus()
@@ -439,7 +452,13 @@ export function BridgePage() {
     setIsSubmitting(true)
     setError(null)
     try {
-      if (scenario) { persist({ ...activeAttempt, overallState: 'complete' }); setActiveAttempt({ ...activeAttempt, overallState: 'complete' }); return }
+      if (scenario) {
+        const completed: BridgeAttempt = { ...activeAttempt, overallState: 'complete' }
+        completed.steps['forwarded-mint'] = { name: 'forwarded-mint', state: 'success', txHash: '0xbeef', explorerUrl: arcExplorerTxUrl('0xbeef'), forwarded: true, completedAt: Date.now() }
+        persist(completed)
+        setActiveAttempt(completed)
+        return
+      }
       assertRecoveryBindings(activeAttempt as unknown as BridgeRecoveryRecord, { wallet, source, recipient })
       if (!sourceClient) throw new Error('Source RPC is unavailable for burn verification')
       const burn = await sourceClient.getTransaction({ hash: activeAttempt.steps.burn.txHash as Hash })
