@@ -30,6 +30,7 @@ import type { TransactionType } from '@/types/transactions'
 import type { RouteQuote } from '@/lib/router/types'
 import { isQuoteStale } from '@/lib/router/selectBestRoute'
 import { safeBridgeAmount } from '@/features/bridge/postBridge'
+import { classifySwapError, acquireSubmitLock, releaseSubmitLock, generateLockId, isDocumentActive, waitForDocumentActive } from '@/lib/mobileWallet'
 
 export function SwapPage() {
   const { address, isConnected } = useAccount()
@@ -334,13 +335,13 @@ export function SwapPage() {
     if (!txProgress.currentFlow || !approveError) return
     const step = txProgress.currentFlow.steps.find((s) => s.type === approveType)
     if (!step || step.status === 'success' || step.status === 'idle') return
-    const msg = approveError.message || 'Approval failed'
-    if (msg.includes('rejected') || msg.includes('denied')) {
+    const classified = classifySwapError(approveError, { router: activeQuote?.source ?? 'coco' })
+    if (classified.code === 'USER_REJECTED') {
       txProgress.markRejected(approveType)
     } else {
-      txProgress.markFailed(approveType, msg.slice(0, 80))
+      txProgress.markFailed(approveType, classified.message.slice(0, 80))
     }
-  }, [approveError, approveType, txProgress])
+  }, [approveError, approveType, txProgress, activeQuote])
 
   // ─── Fix 1: Track swap submitted state via hash ───
   useEffect(() => {
@@ -477,15 +478,33 @@ export function SwapPage() {
     }
   }, [isConnected, isWrongNetwork, isSwitching, reservesLoading, hasLiquidity, fromAmount, fromBalance, fromAmountRaw, activeQuote, isFindingRoute, noExecutableRouteReason, isApproving, isApprovalConfirming, needsApproval, fromToken.symbol, isSwapping, isSwapConfirming, isXyloNetRoute, isUnitFlowRoute, isSynthraRoute, xyloNetSimulationError, unitFlowSimulationError, synthraSimulationError])
 
-  const handleButtonClick = () => {
+  const handleButtonClick = async () => {
     if (buttonState.action === 'switch-network') {
       switchToArc()
       return
     }
-
-    // ─── Hard guard: never start DEX actions on wrong network ───
     if (isWrongNetwork) return
 
+    // ─── Global submit lock: prevent double-tap duplicate wallet requests ───
+    const lockId = generateLockId()
+    if (!acquireSubmitLock(lockId)) {
+      console.warn('[SwapPage] BLOCKED: submit lock already held')
+      return
+    }
+
+    try {
+      // ─── Tab visibility guard: don't make wallet requests when tab is inactive ───
+      if (!isDocumentActive()) {
+        const becameActive = await waitForDocumentActive(10_000)
+        if (!becameActive) return
+      }
+      await handleButtonClickInner()
+    } finally {
+      releaseSubmitLock(lockId)
+    }
+  }
+
+  const handleButtonClickInner = async () => {
     if (buttonState.action === 'approve') {
       // Start flow with approve + swap steps
       const swapLabel = isUnitFlowRoute
@@ -505,6 +524,17 @@ export function SwapPage() {
         txProgress.markSubmitted(approveType, hash)
       })
     } else if (buttonState.action === 'swap' && address) {
+      // ─── Approval prerequisite check ───
+      // If this is a two-step flow (approve + swap), verify that approval
+      // actually succeeded before allowing swap. If approval failed or was
+      // rejected, block the swap and surface a clear error.
+      if (txProgress.currentFlow) {
+        const approveStep = txProgress.currentFlow.steps.find((s) => s.type === approveType)
+        if (approveStep && approveStep.status !== 'success' && approveStep.status !== 'idle') {
+          txProgress.markFailed('swap', 'Approval not confirmed — complete approval first')
+          return
+        }
+      }
       // ─── Requote-before-execute guard ───
       // Never execute on a stale/non-executable quote, and surface a review
       // prompt if a better route appeared since selection. The aggregator
