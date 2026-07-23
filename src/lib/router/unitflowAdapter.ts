@@ -22,6 +22,21 @@ export const UNITFLOW_V25_ROUTER_ABI = [
 
 const WUSDC_DECIMAL_SCALE = 1_000_000_000_000n
 
+/**
+ * Maximum plausible output ratio: if amountOut/amountIn (in same-decimal
+ * token units) exceeds this factor, the pool is considered to have
+ * insufficient or severely imbalanced liquidity and the quote is rejected.
+ *
+ * Audit finding (2026-07): The UnitFlow WUSDC/EURC pair had r0(WUSDC) ≈ 1e-6
+ * WUSDC equivalent, making getAmountsOut return astronomically large EURC
+ * values (1.3M EURC per 1 USDC). A swap would fail on-chain; we surface
+ * this as insufficient_liquidity before simulation.
+ *
+ * 10× is generous — a healthy stable-ish pool should output 0.7–1.3×
+ * the input for a 1:1 pegged pair.
+ */
+const MAX_REASONABLE_OUTPUT_RATIO = 10n
+
 type UnitFlowQuoteRequest = {
   amountIn: bigint
   path: readonly [`0x${string}`, `0x${string}`]
@@ -77,6 +92,21 @@ function normalizeUnitFlowAmountOut(tokenOut: Token, amountOut?: bigint): bigint
   return amountOut / WUSDC_DECIMAL_SCALE
 }
 
+/**
+ * Detect whether the pool has grossly imbalanced or insufficient liquidity.
+ *
+ * Returns true (insufficient) when the normalised output exceeds
+ * MAX_REASONABLE_OUTPUT_RATIO × the input.  Both values are in the same
+ * 6-decimal token units after normalisation so the ratio is dimensionless.
+ *
+ * This catches the on-chain state where one reserve is near zero and the
+ * AMM formula returns an absurdly large output that would revert on execution.
+ */
+function isUnitFlowLiquidityInsufficient(amountIn: bigint, safeAmountOut: bigint): boolean {
+  if (amountIn <= 0n || safeAmountOut <= 0n) return false
+  return safeAmountOut > amountIn * MAX_REASONABLE_OUTPUT_RATIO
+}
+
 function isUnitFlowUniversalRouterExecutable(tokenIn: Token, tokenOut: Token, availabilityStatus: RouteAvailabilityStatus): boolean {
   return (
     availabilityStatus === 'available' &&
@@ -103,6 +133,7 @@ export function buildUnitFlowRouteQuote({
 
   let availabilityStatus: RouteAvailabilityStatus = 'available'
   let unavailableReason: RouteUnavailableReason | undefined
+  let insufficientLiquidity = false
 
   if (!hasAmount) {
     availabilityStatus = 'unavailable'
@@ -118,9 +149,16 @@ export function buildUnitFlowRouteQuote({
   } else if (!hasQuote) {
     availabilityStatus = 'unavailable'
     unavailableReason = 'No quote returned'
+  } else if (isUnitFlowLiquidityInsufficient(amountIn, safeAmountOut)) {
+    // Pool reserve is critically imbalanced: the AMM returns a nonsensical
+    // output (e.g. 1.3M EURC per 1 USDC) that would revert on execution.
+    // Surface this as unavailable so the aggregator never auto-selects it.
+    availabilityStatus = 'unavailable'
+    unavailableReason = 'No active USDC/EURC pool'
+    insufficientLiquidity = true
   }
 
-  const minAmountOut = safeAmountOut > BigInt(0)
+  const minAmountOut = safeAmountOut > BigInt(0) && !insufficientLiquidity
     ? calculateMinimumReceived(safeAmountOut, slippageBps)
     : BigInt(0)
   const isExecutable = isUnitFlowUniversalRouterExecutable(tokenIn, tokenOut, availabilityStatus)
@@ -132,8 +170,8 @@ export function buildUnitFlowRouteQuote({
     inputToken: tokenIn,
     outputToken: tokenOut,
     amountIn,
-    amountOut: safeAmountOut,
-    amountOutFormatted: safeAmountOut > BigInt(0) ? formatTokenAmount(safeAmountOut, tokenOut.decimals) : '-',
+    amountOut: insufficientLiquidity ? BigInt(0) : safeAmountOut,
+    amountOutFormatted: insufficientLiquidity ? '-' : safeAmountOut > BigInt(0) ? formatTokenAmount(safeAmountOut, tokenOut.decimals) : '-',
     minAmountOut,
     routePath: [tokenIn.symbol, 'WUSDC', tokenOut.symbol],
     quoteTimestamp: Date.now(),
@@ -148,10 +186,13 @@ export function buildUnitFlowRouteQuote({
     availabilityStatus,
     executionStatus: isExecutable ? 'executable' : 'non_executable',
     unavailableReason,
+    blockedReason: insufficientLiquidity ? 'Simulation missing' : undefined,
     warning: availabilityStatus === 'available'
       ? isExecutable
         ? 'Executes through UnitFlow UniversalRouter with native USDC wrapping.'
         : 'Execution coming soon'
-      : undefined,
+      : insufficientLiquidity
+        ? 'UnitFlow liquidity is insufficient for this trade.'
+        : undefined,
   }
 }
