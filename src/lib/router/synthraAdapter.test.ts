@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { buildSynthraRouteQuote, isSynthraPairSupported, getSynthraV3QuoteRequest, SYNTHRA_V3_QUOTER_ABI } from './synthraAdapter'
 import { USDC, EURC } from '@/config/tokens'
 import { classifyQuoteError } from './quoteState'
@@ -107,10 +107,12 @@ describe('Synthra adapter', () => {
 
   describe('valid quote', () => {
     it('builds executable quote with positive minReceived', () => {
+      vi.stubEnv('VITE_ENABLE_SYNTHRA_EXECUTION', 'true')
       const quote = buildSynthraRouteQuote({
         tokenIn: usdc, tokenOut: eurc, amountIn: 1_000_000n,
         feeQuotes: [{ fee: 500, amountOut: 980_000n }],
         slippageBps: 50,
+        chainId: 5_042_002,
       })
       expect(quote.availabilityStatus).toBe('available')
       expect(quote.isExecutable).toBe(true)

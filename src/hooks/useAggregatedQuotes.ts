@@ -209,6 +209,7 @@ export function useAggregatedQuotes({
         slippageBps,
         isLoading: isSynthraLoading,
         error: synthraError,
+        chainId: connectedChainId,
       }),
     ].filter((quote): quote is RouteQuote => Boolean(quote))
 
