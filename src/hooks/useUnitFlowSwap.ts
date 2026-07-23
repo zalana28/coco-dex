@@ -23,7 +23,6 @@ const UNITFLOW_UNIVERSAL_ROUTER_ABI = [
   },
 ] as const
 
-// WRAP_ETH(0x0b) + V2_SWAP_EXACT_IN(0x08) + SWEEP(0x04)
 const UNITFLOW_COMMANDS: Hex = '0x0b0804'
 
 export type UnitFlowSwapParams = {
@@ -51,51 +50,77 @@ function stringifyErrorField(value: unknown): string | undefined {
 
 function getNestedRevertReason(error: unknown): string | undefined {
   const walk = getErrorField(error, 'walk')
-  if (typeof walk !== 'function') return stringifyErrorField(getErrorField(error, 'reason'))
-  const reasonError = walk.call(error, (value: unknown) => Boolean(getErrorField(value, 'reason')))
-  return stringifyErrorField(getErrorField(reasonError, 'reason'))
+  if (typeof walk === 'function') {
+    const re = walk.call(error, (v: unknown) => Boolean(getErrorField(v, 'reason')))
+    const r = stringifyErrorField(getErrorField(re, 'reason'))
+    if (r) return r
+  }
+  const direct = stringifyErrorField(getErrorField(error, 'reason'))
+  if (direct) return direct
+  let cause: unknown = getErrorField(error, 'cause')
+  for (let i = 0; i < 5 && cause; i++) {
+    const r = stringifyErrorField(getErrorField(cause, 'reason'))
+    if (r) return r
+    cause = getErrorField(cause, 'cause')
+  }
+  return undefined
 }
 
 function classifyUnitFlowSimulationError(error: unknown): string {
   const cause = getErrorField(error, 'cause')
   const metaMessages = getErrorField(error, 'metaMessages')
-  const details = {
-    name: stringifyErrorField(getErrorField(error, 'name')),
-    shortMessage: stringifyErrorField(getErrorField(error, 'shortMessage')),
-    details: stringifyErrorField(getErrorField(error, 'details')),
-    metaMessages: Array.isArray(metaMessages) ? metaMessages.map(String).join(' ') : undefined,
-    causeShortMessage: stringifyErrorField(getErrorField(cause, 'shortMessage')),
-    causeReason: getNestedRevertReason(error) ?? stringifyErrorField(getErrorField(cause, 'reason')),
-    message: error instanceof Error ? error.message : stringifyErrorField(error),
-  }
+  const name = stringifyErrorField(getErrorField(error, 'name')) ?? ''
+  const shortMessage = stringifyErrorField(getErrorField(error, 'shortMessage')) ?? ''
+  const details = stringifyErrorField(getErrorField(error, 'details')) ?? ''
+  const metaMsgs = Array.isArray(metaMessages) ? metaMessages.map(String).join(' ') : ''
+  const causeShort = stringifyErrorField(getErrorField(cause, 'shortMessage')) ?? ''
+  const revertReason = getNestedRevertReason(error) ?? ''
+  const rawMessage = error instanceof Error ? error.message : stringifyErrorField(error) ?? ''
 
   if (import.meta.env.DEV) {
-    console.debug('[useUnitFlowSwap] error details:', {
-      router: UNITFLOW_UNIVERSAL_ROUTER_ADDRESS, chainId: ARC_CHAIN_ID, ...details,
+    console.debug('[useUnitFlowSwap] classifyError:', {
+      router: UNITFLOW_UNIVERSAL_ROUTER_ADDRESS, chainId: ARC_CHAIN_ID,
+      name, shortMessage, details, causeShort, revertReason, rawMessage,
     })
   }
 
-  const combined = [details.name, details.shortMessage, details.details, details.metaMessages,
-    details.causeShortMessage, details.causeReason, details.message].filter(Boolean).join(' ')
+  const combined = [name, shortMessage, details, metaMsgs, causeShort, revertReason, rawMessage].join(' ')
   const n = combined.toLowerCase()
 
   if (n.includes('429') || n.includes('rate limit') || n.includes('too many requests'))
     return 'RPC rate limit reached — wait a moment and try again'
-  if (n.includes('rpc request failed') || n.includes('http request failed') || n.includes('fetch failed') || n.includes('network'))
+
+  if (revertReason) {
+    const r = revertReason.toLowerCase()
+    if (r.includes('allowance') || r.includes('transfer amount exceeds allowance'))
+      return 'Insufficient allowance for UnitFlow router'
+    if (r.includes('insufficient balance') || r.includes('exceeds balance'))
+      return 'Insufficient balance'
+    if (r.includes('expired')) return 'Transaction deadline expired — try again'
+    return `UnitFlow reverted: ${revertReason}`
+  }
+
+  if (n.includes('execution reverted') || n.includes('reverted')) {
+    if (n.includes('allowance') || n.includes('transfer amount exceeds allowance'))
+      return 'Insufficient allowance for UnitFlow router'
+    if (n.includes('insufficient balance') || n.includes('exceeds balance'))
+      return 'Insufficient balance'
+    const reason = details || causeShort || shortMessage
+    return reason ? `UnitFlow reverted: ${reason}` : 'UnitFlow simulation reverted'
+  }
+
+  if (n.includes('allowance') || n.includes('insufficient allowance'))
+    return 'Insufficient allowance for UnitFlow router'
+  if (n.includes('http request failed') || n.includes('rpc request failed') || n.includes('fetch failed'))
     return 'RPC unavailable — check your connection and try again'
   if (n.includes('timeout') || n.includes('timed out'))
     return 'RPC request timed out — try again'
-  if (n.includes('allowance') || n.includes('insufficient allowance'))
-    return 'Insufficient allowance for UnitFlow router'
   if (n.includes('insufficient balance') || n.includes('exceeds balance'))
     return 'Insufficient balance'
-  if (n.includes('too little received') || n.includes('minimum') || n.includes('slippage'))
+  if (n.includes('minimum') || n.includes('slippage') || n.includes('too little received'))
     return 'Min received too high — increase slippage tolerance'
-  if (n.includes('execution reverted') || n.includes('reverted')) {
-    const reason = details.causeReason ?? details.details ?? details.shortMessage
-    return reason ? `UnitFlow reverted: ${reason}` : 'UnitFlow simulation reverted'
-  }
-  const fallback = details.shortMessage ?? details.causeShortMessage ?? details.details ?? details.causeReason ?? details.message
+
+  const fallback = shortMessage || causeShort || details || revertReason || rawMessage
   return fallback ? `UnitFlow simulation failed: ${fallback}` : 'UnitFlow simulation failed'
 }
 
@@ -167,8 +192,6 @@ export function useUnitFlowSwap() {
     const nativeAmountIn = amountIn * WUSDC_DECIMAL_SCALE
     const safeDeadlineMinutes = Number.isFinite(deadlineMinutes) && deadlineMinutes > 0
       ? deadlineMinutes : DEFAULT_DEADLINE_MINUTES
-
-    // Use wall-clock time — avoids one getBlock RPC round-trip.
     const deadlineSeconds = BigInt(Math.floor(Date.now() / 1000)) + BigInt(Math.ceil(safeDeadlineMinutes * 60))
 
     if (minAmountOut <= 0n) {
@@ -181,16 +204,11 @@ export function useUnitFlowSwap() {
 
     if (import.meta.env.DEV) {
       console.debug('[useUnitFlowSwap] swap args:', {
-        router: UNITFLOW_UNIVERSAL_ROUTER_ADDRESS,
-        chainId: ARC_CHAIN_ID,
+        router: UNITFLOW_UNIVERSAL_ROUTER_ADDRESS, chainId: ARC_CHAIN_ID,
         commands: UNITFLOW_COMMANDS,
-        amountIn: amountIn.toString(),
-        nativeAmountIn: nativeAmountIn.toString(),
-        minAmountOut: minAmountOut.toString(),
-        path: [UNITFLOW_WUSDC_ADDRESS, EURC.address],
-        account,
-        recipient: to,
-        deadlineSeconds: deadlineSeconds.toString(),
+        amountIn: amountIn.toString(), nativeAmountIn: nativeAmountIn.toString(),
+        minAmountOut: minAmountOut.toString(), deadlineSeconds: deadlineSeconds.toString(),
+        account, recipient: to,
       })
     }
 
@@ -207,7 +225,7 @@ export function useUnitFlowSwap() {
       if (import.meta.env.DEV) console.debug('[useUnitFlowSwap] simulation passed')
     } catch (simErr: unknown) {
       const reason = classifyUnitFlowSimulationError(simErr)
-      if (import.meta.env.DEV) console.debug('[useUnitFlowSwap] simulation failed:', { reason, rawError: simErr })
+      if (import.meta.env.DEV) console.debug('[useUnitFlowSwap] simulation failed:', { reason })
       setSimulationError(reason)
       return { status: 'SIMULATION_FAILED', reason }
     }

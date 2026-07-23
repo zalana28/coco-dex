@@ -57,51 +57,79 @@ function stringifyErrorField(value: unknown): string | undefined {
 
 function getNestedRevertReason(error: unknown): string | undefined {
   const walk = getErrorField(error, 'walk')
-  if (typeof walk !== 'function') return stringifyErrorField(getErrorField(error, 'reason'))
-  const reasonError = walk.call(error, (value: unknown) => Boolean(getErrorField(value, 'reason')))
-  return stringifyErrorField(getErrorField(reasonError, 'reason'))
+  if (typeof walk === 'function') {
+    const re = walk.call(error, (v: unknown) => Boolean(getErrorField(v, 'reason')))
+    const r = stringifyErrorField(getErrorField(re, 'reason'))
+    if (r) return r
+  }
+  const direct = stringifyErrorField(getErrorField(error, 'reason'))
+  if (direct) return direct
+  let cause: unknown = getErrorField(error, 'cause')
+  for (let i = 0; i < 5 && cause; i++) {
+    const r = stringifyErrorField(getErrorField(cause, 'reason'))
+    if (r) return r
+    cause = getErrorField(cause, 'cause')
+  }
+  return undefined
 }
 
 function classifySynthraSimulationError(error: unknown): string {
   const cause = getErrorField(error, 'cause')
   const metaMessages = getErrorField(error, 'metaMessages')
-  const details = {
-    name: stringifyErrorField(getErrorField(error, 'name')),
-    shortMessage: stringifyErrorField(getErrorField(error, 'shortMessage')),
-    details: stringifyErrorField(getErrorField(error, 'details')),
-    metaMessages: Array.isArray(metaMessages) ? metaMessages.map(String).join(' ') : undefined,
-    causeShortMessage: stringifyErrorField(getErrorField(cause, 'shortMessage')),
-    causeReason: getNestedRevertReason(error) ?? stringifyErrorField(getErrorField(cause, 'reason')),
-    message: error instanceof Error ? error.message : stringifyErrorField(error),
-  }
+  const name = stringifyErrorField(getErrorField(error, 'name')) ?? ''
+  const shortMessage = stringifyErrorField(getErrorField(error, 'shortMessage')) ?? ''
+  const details = stringifyErrorField(getErrorField(error, 'details')) ?? ''
+  const metaMsgs = Array.isArray(metaMessages) ? metaMessages.map(String).join(' ') : ''
+  const causeShort = stringifyErrorField(getErrorField(cause, 'shortMessage')) ?? ''
+  const revertReason = getNestedRevertReason(error) ?? ''
+  const rawMessage = error instanceof Error ? error.message : stringifyErrorField(error) ?? ''
 
   if (import.meta.env.DEV) {
-    console.debug('[useSynthraSwap] error details:', {
-      router: SYNTHRA_V3_SWAP_ROUTER_ADDRESS, chainId: ARC_CHAIN_ID, ...details,
+    console.debug('[useSynthraSwap] classifyError:', {
+      router: SYNTHRA_V3_SWAP_ROUTER_ADDRESS, chainId: ARC_CHAIN_ID,
+      name, shortMessage, details, causeShort, revertReason, rawMessage, fullError: error,
     })
   }
 
-  const combined = [details.name, details.shortMessage, details.details, details.metaMessages,
-    details.causeShortMessage, details.causeReason, details.message].filter(Boolean).join(' ')
+  const combined = [name, shortMessage, details, metaMsgs, causeShort, revertReason, rawMessage].join(' ')
   const n = combined.toLowerCase()
 
   if (n.includes('429') || n.includes('rate limit') || n.includes('too many requests'))
     return 'RPC rate limit reached — wait a moment and try again'
-  if (n.includes('rpc request failed') || n.includes('http request failed') || n.includes('fetch failed') || n.includes('network'))
+
+  if (revertReason) {
+    const r = revertReason.toLowerCase()
+    if (r.includes('stf') || r.includes('allowance') || r.includes('transfer amount exceeds allowance'))
+      return 'Insufficient allowance for Synthra router — approve first'
+    if (r.includes('insufficient balance') || r.includes('exceeds balance'))
+      return 'Insufficient balance'
+    if (r.includes('minimum') || r.includes('slippage') || r.includes('too little received'))
+      return 'Min received too high — increase slippage tolerance'
+    if (r.includes('expired')) return 'Transaction deadline expired — try again'
+    return `Synthra reverted: ${revertReason}`
+  }
+
+  if (n.includes('execution reverted') || n.includes('reverted')) {
+    if (n.includes('stf') || n.includes('allowance') || n.includes('transfer amount exceeds allowance'))
+      return 'Insufficient allowance for Synthra router — approve first'
+    if (n.includes('insufficient balance') || n.includes('exceeds balance'))
+      return 'Insufficient balance'
+    const reason = details || causeShort || shortMessage
+    return reason ? `Synthra reverted: ${reason}` : 'Synthra simulation reverted'
+  }
+
+  if (n.includes('stf') || n.includes('allowance') || n.includes('insufficient allowance'))
+    return 'Insufficient allowance for Synthra router — approve first'
+  if (n.includes('http request failed') || n.includes('rpc request failed') || n.includes('fetch failed'))
     return 'RPC unavailable — check your connection and try again'
   if (n.includes('timeout') || n.includes('timed out'))
     return 'RPC request timed out — try again'
-  if (n.includes('stf') || n.includes('allowance') || n.includes('insufficient allowance') || n.includes('transfer amount exceeds allowance'))
-    return 'Insufficient allowance for Synthra router — approve first'
   if (n.includes('insufficient balance') || n.includes('exceeds balance'))
     return 'Insufficient balance'
-  if (n.includes('too little received') || n.includes('minimum') || n.includes('slippage'))
+  if (n.includes('minimum') || n.includes('slippage') || n.includes('too little received'))
     return 'Min received too high — increase slippage tolerance'
-  if (n.includes('execution reverted') || n.includes('reverted')) {
-    const reason = details.causeReason ?? details.details ?? details.shortMessage
-    return reason ? `Synthra reverted: ${reason}` : 'Synthra simulation reverted'
-  }
-  const fallback = details.shortMessage ?? details.causeShortMessage ?? details.details ?? details.causeReason ?? details.message
+
+  const fallback = shortMessage || causeShort || details || revertReason || rawMessage
   return fallback ? `Synthra simulation failed: ${fallback}` : 'Synthra simulation failed'
 }
 
