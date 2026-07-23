@@ -91,10 +91,56 @@ function isRateLimitError(error: unknown) {
   return message.includes('429') || /rate.?limit/i.test(message) || /too many requests/i.test(message)
 }
 
+function getViemFriendlyMessage(error: unknown): string {
+  if (!error || typeof error !== 'object') return String(error)
+
+  const getField = (e: unknown, f: string) =>
+    e && typeof e === 'object' ? (e as Record<string, unknown>)[f] : undefined
+  const str = (v: unknown) => (typeof v === 'string' ? v : undefined)
+
+  // Walk cause chain for a revert reason
+  let cause: unknown = error
+  for (let i = 0; i < 6 && cause; i++) {
+    const reason = str(getField(cause, 'reason'))
+    if (reason) return reason
+    cause = getField(cause, 'cause')
+  }
+
+  // Rate limit / request limit
+  const short = str(getField(error, 'shortMessage')) ?? ''
+  const details = str(getField(error, 'details')) ?? ''
+  const raw = error instanceof Error ? error.message : String(error)
+  const n = (short + ' ' + details + ' ' + raw).toLowerCase()
+
+  if (n.includes('429') || n.includes('rate limit') || n.includes('request limit') || n.includes('too many requests'))
+    return 'Arc Testnet RPC is rate-limited. Please wait a moment and try again.'
+  if (n.includes('user rejected') || n.includes('rejected') || n.includes('denied'))
+    return 'Rejected by user'
+  if (n.includes('stf') || (n.includes('allowance') && n.includes('transfer')))
+    return 'Insufficient allowance — approve first'
+  if (n.includes('insufficient balance') || n.includes('exceeds balance'))
+    return 'Insufficient balance'
+  if (n.includes('execution reverted') || n.includes('reverted')) {
+    const r = short || details
+    return r ? `Transaction reverted: ${r}` : 'Transaction reverted'
+  }
+  if (n.includes('timeout') || n.includes('timed out')) return 'Request timed out — try again'
+  if (n.includes('rpc request failed') || n.includes('http request failed') || n.includes('fetch failed'))
+    return 'RPC unavailable — check your connection'
+
+  // Fallback: use shortMessage if available (concise), else truncate raw message
+  if (short) return short
+  if (details) return details.slice(0, 120)
+  // Truncate at first newline or URL to avoid dumping full viem trace
+  const firstLine = raw.split('\n')[0] ?? raw
+  const truncated = firstLine.length > 150 ? firstLine.slice(0, 150) + '…' : firstLine
+  return truncated
+}
+
 function getFriendlyErrorMessage(error: unknown) {
   if (isUserRejected(error)) return 'Rejected by user'
   if (isRateLimitError(error)) return RATE_LIMIT_COPY
-  return error instanceof Error ? error.message : String(error)
+  return getViemFriendlyMessage(error)
 }
 
 function delay(ms: number) {
@@ -534,7 +580,7 @@ export function CocoStableAddLiquidityPanel({
     } catch (error) {
       const message = isRateLimitError(error)
         ? RATE_LIMIT_COPY
-        : error instanceof Error ? error.message : 'Add liquidity simulation failed'
+        : getViemFriendlyMessage(error)
       setTxError(message)
       txProgress.markFailed('add_liquidity', message.slice(0, 80))
       return
