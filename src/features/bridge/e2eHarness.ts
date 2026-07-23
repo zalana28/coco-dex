@@ -15,6 +15,8 @@ export type BridgeE2EScenario =
   | 'lifecycle'
   | 'recoverable'
   | 'restored'
+  | 'recover-success'
+  | 'duplicate'
 
 export function getBridgeE2EScenario(): BridgeE2EScenario | null {
   const local = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost'
@@ -37,6 +39,8 @@ export function getBridgeE2EScenario(): BridgeE2EScenario | null {
     'lifecycle',
     'recoverable',
     'restored',
+    'recover-success',
+    'duplicate',
   ]
   return scenarios.includes(value as BridgeE2EScenario) ? (value as BridgeE2EScenario) : null
 }

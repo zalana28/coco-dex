@@ -3,9 +3,11 @@ import { z } from 'zod'
 import { normalizeUsdc } from './amounts'
 import { normalizeBridgeResult } from './result'
 import type { SourceChain } from './chains'
+import type { BridgeAttempt, LifecycleStep, LifecycleStepName } from './attempt'
 
 export const BRIDGE_RECOVERY_KEY = 'coco:cctp-v2:recovery'
-export const RECOVERY_SCHEMA_VERSION = 1 as const
+export const BRIDGE_ATTEMPTS_KEY = 'coco:cctp-v2:attempts'
+export const RECOVERY_SCHEMA_VERSION = 2 as const
 export const RECOVERY_SDK_VERSION = '@circle-fin/bridge-kit@1.12.1' as const
 export const RECOVERY_PROTOCOL_VERSION = 'CCTPV2' as const
 
@@ -193,4 +195,170 @@ export function memoryStorage(): StorageLike {
 export function browserRecoveryStore() {
   if (typeof localStorage === 'undefined') throw new Error('localStorage is unavailable')
   return recoveryStore(localStorage)
+}
+
+// ---------------------------------------------------------------------------
+// Multi-attempt persistent store (versioned, with migration + history)
+// ---------------------------------------------------------------------------
+
+export interface StoredAttempts {
+  schemaVersion: number
+  attempts: BridgeAttempt[]
+}
+
+const HISTORY_LIMIT = 5
+
+function sanitizeAttempt(attempt: BridgeAttempt): BridgeAttempt {
+  // Never persist non-serializable or sensitive objects.
+  return JSON.parse(JSON.stringify(attempt)) as BridgeAttempt
+}
+
+function migrate(raw: unknown): StoredAttempts {
+  if (!raw || typeof raw !== 'object') return { schemaVersion: RECOVERY_SCHEMA_VERSION, attempts: [] }
+  const record = raw as Record<string, unknown>
+  // v1 single-record shape → wrap into v2 attempts list (best-effort).
+  if (record.schemaVersion === 1 && record.sdkResult) {
+    try {
+      const legacy = BridgeRecoverySchema.parse(record)
+      return { schemaVersion: RECOVERY_SCHEMA_VERSION, attempts: [legacyToAttempt(legacy)] }
+    } catch {
+      // Defensive: a v1 record that no longer matches the strict schema still
+      // migrates via a structural (best-effort) conversion so recovery history
+      // is never silently dropped.
+      const loose = looseLegacyToAttempt(record)
+      if (loose) return { schemaVersion: RECOVERY_SCHEMA_VERSION, attempts: [loose] }
+      return { schemaVersion: RECOVERY_SCHEMA_VERSION, attempts: [] }
+    }
+  }
+  if (Array.isArray(record.attempts)) {
+    const attempts = (record.attempts as unknown[]).filter((item): item is BridgeAttempt => typeof item === 'object' && item !== null && 'id' in item)
+    return { schemaVersion: RECOVERY_SCHEMA_VERSION, attempts }
+  }
+  return { schemaVersion: RECOVERY_SCHEMA_VERSION, attempts: [] }
+}
+
+/** Best-effort structural conversion of a legacy v1 record when strict parse fails. */
+function looseLegacyToAttempt(record: Record<string, unknown>): BridgeAttempt | null {
+  const sdk = (record.sdkResult ?? {}) as Record<string, unknown>
+  const stepsRaw = (sdk.steps ?? []) as Array<Record<string, unknown>>
+  const map: Record<string, string> = { approve: 'approve', burn: 'burn', fetchAttestation: 'attestation', mint: 'forwarded-mint' }
+  const steps = Object.fromEntries(
+    Object.entries(map).map(([sdkName, canonical]) => {
+      const s = stepsRaw.find((x) => x.name === sdkName)
+      const base: LifecycleStep = {
+        name: canonical as LifecycleStepName,
+        state: s?.state === 'success' ? 'success' : s?.state === 'error' ? 'retryable-error' : 'not-started',
+      }
+      if (s && typeof s.txHash === 'string') base.txHash = s.txHash
+      if (s && typeof s.explorerUrl === 'string') base.explorerUrl = s.explorerUrl
+      return [canonical, base]
+    }),
+  ) as Record<LifecycleStepName, LifecycleStep>
+  const source = record.source === 'Base_Sepolia' ? 'Base_Sepolia' : 'Ethereum_Sepolia'
+  return {
+    id: typeof record.burnHash === 'string' ? `migrated_${record.burnHash.slice(0, 10)}` : `migrated_${Date.now()}`,
+    ...(typeof record.traceId === 'string' ? { traceId: record.traceId } : {}),
+    createdAt: typeof record.createdAt === 'number' ? record.createdAt : Date.now(),
+    updatedAt: typeof record.updatedAt === 'number' ? record.updatedAt : Date.now(),
+    account: typeof record.wallet === 'string' ? record.wallet : '0x0',
+    sourceChain: source,
+    sourceChainId: source === 'Ethereum_Sepolia' ? 11155111 : 84532,
+    sourceDomain: source === 'Ethereum_Sepolia' ? 0 : 6,
+    destinationChain: 'Arc_Testnet',
+    destinationChainId: 5042002,
+    destinationDomain: 26,
+    token: 'USDC',
+    amount: typeof record.amount === 'string' ? record.amount : '0',
+    recipient: typeof record.recipient === 'string' ? record.recipient : (typeof sdk.recipientAddress === 'string' ? sdk.recipientAddress : '0x0'),
+    transferSpeed: record.mode === 'FAST' ? 'FAST' : 'SLOW',
+    useForwarder: true,
+    overallState: sdk.state === 'success' ? 'complete' : 'unknown-checking',
+    steps,
+    bridgeResult: sdk,
+  }
+}
+
+function legacyToAttempt(legacy: BridgeRecoveryRecord): BridgeAttempt {
+  const steps = Object.fromEntries(
+    (['approve', 'burn', 'fetchAttestation', 'mint'] as const).map((name) => {
+      const canonical = name === 'fetchAttestation' ? 'attestation' : name === 'mint' ? 'forwarded-mint' : name
+      const sdk = legacy.sdkResult.steps.find((s) => s.name === name)
+      return [canonical, {
+        name: canonical,
+        state: sdk ? (sdk.state === 'success' ? 'success' : sdk.state === 'error' ? 'retryable-error' : 'not-started') : 'not-started',
+        ...(sdk?.txHash ? { txHash: sdk.txHash } : {}),
+        ...(sdk?.explorerUrl ? { explorerUrl: sdk.explorerUrl } : {}),
+      } as LifecycleStep]
+    }),
+  ) as Record<LifecycleStepName, LifecycleStep>
+  return {
+    id: `migrated_${legacy.burnHash.slice(0, 10)}`,
+    ...(legacy.traceId ? { traceId: legacy.traceId } : {}),
+    createdAt: legacy.createdAt,
+    updatedAt: legacy.updatedAt,
+    account: legacy.wallet,
+    sourceChain: legacy.source,
+    sourceChainId: legacy.source === 'Ethereum_Sepolia' ? 11155111 : 84532,
+    sourceDomain: legacy.source === 'Ethereum_Sepolia' ? 0 : 6,
+    destinationChain: 'Arc_Testnet',
+    destinationChainId: 5042002,
+    destinationDomain: 26,
+    token: 'USDC',
+    amount: legacy.amount,
+    recipient: legacy.recipient,
+    transferSpeed: legacy.mode,
+    useForwarder: true,
+    overallState: legacy.sdkResult.state === 'success' ? 'complete' : 'unknown-checking',
+    steps,
+    bridgeResult: legacy.sdkResult,
+  }
+}
+
+export interface AttemptStore {
+  loadAll(): BridgeAttempt[]
+  save(attempt: BridgeAttempt): void
+  upsert(attempt: BridgeAttempt): void
+  remove(id: string): void
+  clear(): void
+}
+
+export function attemptStore(storage: StorageLike): AttemptStore {
+  return {
+    loadAll(): BridgeAttempt[] {
+      const raw = storage.getItem(BRIDGE_ATTEMPTS_KEY)
+      if (!raw) return []
+      try {
+        const parsed = migrate(JSON.parse(raw))
+        storage.setItem(BRIDGE_ATTEMPTS_KEY, JSON.stringify(parsed))
+        return parsed.attempts
+      } catch {
+        storage.removeItem(BRIDGE_ATTEMPTS_KEY)
+        return []
+      }
+    },
+    save(attempt: BridgeAttempt): void {
+      const all = this.loadAll()
+      const safe = sanitizeAttempt(attempt)
+      const idx = all.findIndex((a) => a.id === safe.id)
+      if (idx >= 0) all[idx] = safe
+      else all.push(safe)
+      const trimmed = all.slice(-HISTORY_LIMIT * 2)
+      storage.setItem(BRIDGE_ATTEMPTS_KEY, JSON.stringify({ schemaVersion: RECOVERY_SCHEMA_VERSION, attempts: trimmed } satisfies StoredAttempts))
+    },
+    upsert(attempt: BridgeAttempt): void {
+      this.save(attempt)
+    },
+    remove(id: string): void {
+      const all = this.loadAll().filter((a) => a.id !== id)
+      storage.setItem(BRIDGE_ATTEMPTS_KEY, JSON.stringify({ schemaVersion: RECOVERY_SCHEMA_VERSION, attempts: all } satisfies StoredAttempts))
+    },
+    clear(): void {
+      storage.removeItem(BRIDGE_ATTEMPTS_KEY)
+    },
+  }
+}
+
+export function browserAttemptStore(): AttemptStore {
+  if (typeof localStorage === 'undefined') throw new Error('localStorage is unavailable')
+  return attemptStore(localStorage)
 }
