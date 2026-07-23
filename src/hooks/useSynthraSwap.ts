@@ -58,7 +58,6 @@ function stringifyErrorField(value: unknown): string | undefined {
 function getNestedRevertReason(error: unknown): string | undefined {
   const walk = getErrorField(error, 'walk')
   if (typeof walk !== 'function') return stringifyErrorField(getErrorField(error, 'reason'))
-
   const reasonError = walk.call(error, (value: unknown) => Boolean(getErrorField(value, 'reason')))
   return stringifyErrorField(getErrorField(reasonError, 'reason'))
 }
@@ -66,33 +65,43 @@ function getNestedRevertReason(error: unknown): string | undefined {
 function classifySynthraSimulationError(error: unknown): string {
   const cause = getErrorField(error, 'cause')
   const metaMessages = getErrorField(error, 'metaMessages')
-  const combined = [
-    stringifyErrorField(getErrorField(error, 'name')),
-    stringifyErrorField(getErrorField(error, 'shortMessage')),
-    stringifyErrorField(getErrorField(error, 'details')),
-    Array.isArray(metaMessages) ? metaMessages.map(String).join(' ') : undefined,
-    stringifyErrorField(getErrorField(cause, 'shortMessage')),
-    getNestedRevertReason(error),
-    error instanceof Error ? error.message : stringifyErrorField(error),
-  ].filter(Boolean).join(' ')
-  const normalized = combined.toLowerCase()
-
-  if (normalized.includes('stf') || normalized.includes('allowance') || normalized.includes('insufficient allowance') || normalized.includes('transfer amount exceeds allowance')) {
-    return 'Insufficient allowance for Synthra router'
+  const details = {
+    name: stringifyErrorField(getErrorField(error, 'name')),
+    shortMessage: stringifyErrorField(getErrorField(error, 'shortMessage')),
+    details: stringifyErrorField(getErrorField(error, 'details')),
+    metaMessages: Array.isArray(metaMessages) ? metaMessages.map(String).join(' ') : undefined,
+    causeShortMessage: stringifyErrorField(getErrorField(cause, 'shortMessage')),
+    causeReason: getNestedRevertReason(error) ?? stringifyErrorField(getErrorField(cause, 'reason')),
+    message: error instanceof Error ? error.message : stringifyErrorField(error),
   }
-  if (normalized.includes('insufficient balance') || normalized.includes('transfer amount exceeds balance') || normalized.includes('exceeds balance')) {
+
+  if (import.meta.env.DEV) {
+    console.debug('[useSynthraSwap] error details:', {
+      router: SYNTHRA_V3_SWAP_ROUTER_ADDRESS, chainId: ARC_CHAIN_ID, ...details,
+    })
+  }
+
+  const combined = [details.name, details.shortMessage, details.details, details.metaMessages,
+    details.causeShortMessage, details.causeReason, details.message].filter(Boolean).join(' ')
+  const n = combined.toLowerCase()
+
+  if (n.includes('429') || n.includes('rate limit') || n.includes('too many requests'))
+    return 'RPC rate limit reached — wait a moment and try again'
+  if (n.includes('rpc request failed') || n.includes('http request failed') || n.includes('fetch failed') || n.includes('network'))
+    return 'RPC unavailable — check your connection and try again'
+  if (n.includes('timeout') || n.includes('timed out'))
+    return 'RPC request timed out — try again'
+  if (n.includes('stf') || n.includes('allowance') || n.includes('insufficient allowance') || n.includes('transfer amount exceeds allowance'))
+    return 'Insufficient allowance for Synthra router — approve first'
+  if (n.includes('insufficient balance') || n.includes('exceeds balance'))
     return 'Insufficient balance'
+  if (n.includes('too little received') || n.includes('minimum') || n.includes('slippage'))
+    return 'Min received too high — increase slippage tolerance'
+  if (n.includes('execution reverted') || n.includes('reverted')) {
+    const reason = details.causeReason ?? details.details ?? details.shortMessage
+    return reason ? `Synthra reverted: ${reason}` : 'Synthra simulation reverted'
   }
-  if (normalized.includes('too little received') || normalized.includes('minimum') || normalized.includes('slippage')) {
-    return 'Min received too high'
-  }
-  if (normalized.includes('execution reverted') || normalized.includes('reverted')) {
-    return 'Synthra router reverted'
-  }
-
-  const fallback = stringifyErrorField(getErrorField(error, 'shortMessage'))
-    ?? stringifyErrorField(getErrorField(error, 'details'))
-    ?? getNestedRevertReason(error)
+  const fallback = details.shortMessage ?? details.causeShortMessage ?? details.details ?? details.causeReason ?? details.message
   return fallback ? `Synthra simulation failed: ${fallback}` : 'Synthra simulation failed'
 }
 
@@ -112,35 +121,34 @@ export function useSynthraSwap() {
   })
 
   const isReverted = swapReceipt?.status === 'reverted'
-
-  const clearSimulationError = useCallback(() => {
-    setSimulationError(undefined)
-  }, [])
+  const clearSimulationError = useCallback(() => setSimulationError(undefined), [])
 
   const swap = useCallback(async (
     params: SynthraSwapParams,
     onHash?: (hash: `0x${string}`) => void,
   ): Promise<SynthraSwapResult | undefined> => {
     if (chainId !== ARC_CHAIN_ID) {
-      console.warn('[useSynthraSwap] BLOCKED: wallet is on wrong network', chainId)
-      return { status: 'WRONG_NETWORK', reason: 'Wrong network' }
+      console.warn('[useSynthraSwap] BLOCKED: wrong network', chainId)
+      return { status: 'WRONG_NETWORK', reason: 'Wrong network — switch to Arc Testnet' }
     }
 
     setSimulationError(undefined)
 
     if (!publicClient) {
-      const reason = 'Synthra simulation failed: RPC client unavailable'
+      const reason = 'RPC client unavailable — reload and try again'
       setSimulationError(reason)
       return { status: 'SIMULATION_FAILED', reason }
     }
 
     const { tokenIn, tokenOut, amountIn, minAmountOut, feeTier, account, to } = params
+
     if (!isSupportedFeeTier(feeTier)) {
       const reason = `Synthra simulation failed: unsupported fee tier ${feeTier}`
       setSimulationError(reason)
       return { status: 'SIMULATION_FAILED', reason }
     }
-    if (amountIn <= BigInt(0) || minAmountOut <= BigInt(0)) {
+
+    if (amountIn <= 0n || minAmountOut <= 0n) {
       const reason = 'Synthra simulation failed: invalid quote amounts'
       setSimulationError(reason)
       return { status: 'SIMULATION_FAILED', reason }
@@ -156,6 +164,20 @@ export function useSynthraSwap() {
       sqrtPriceLimitX96: BigInt(0),
     }] as const
 
+    if (import.meta.env.DEV) {
+      console.debug('[useSynthraSwap] swap args:', {
+        router: SYNTHRA_V3_SWAP_ROUTER_ADDRESS,
+        chainId: ARC_CHAIN_ID,
+        tokenIn: tokenIn.address,
+        tokenOut: tokenOut.address,
+        feeTier,
+        amountIn: amountIn.toString(),
+        minAmountOut: minAmountOut.toString(),
+        account,
+        recipient: to,
+      })
+    }
+
     try {
       await publicClient.simulateContract({
         address: SYNTHRA_V3_SWAP_ROUTER_ADDRESS,
@@ -165,8 +187,10 @@ export function useSynthraSwap() {
         account,
         chain: arcTestnet,
       })
+      if (import.meta.env.DEV) console.debug('[useSynthraSwap] simulation passed')
     } catch (simErr: unknown) {
       const reason = classifySynthraSimulationError(simErr)
+      if (import.meta.env.DEV) console.debug('[useSynthraSwap] simulation failed:', { reason, rawError: simErr })
       setSimulationError(reason)
       return { status: 'SIMULATION_FAILED', reason }
     }
@@ -181,12 +205,15 @@ export function useSynthraSwap() {
       },
       {
         onSuccess: (hash) => {
+          if (import.meta.env.DEV) console.log('[useSynthraSwap] tx sent:', hash)
           setTxHash(hash)
           onHash?.(hash)
         },
+        onError: (err) => {
+          if (import.meta.env.DEV) console.error('[useSynthraSwap] writeContract error:', err.message?.slice(0, 200))
+        },
       },
     )
-
     return undefined
   }, [chainId, publicClient, writeContract])
 
@@ -197,15 +224,7 @@ export function useSynthraSwap() {
   }, [resetWrite])
 
   return {
-    swap,
-    isPending,
-    isConfirming,
-    isSuccess,
-    isReverted,
-    txHash,
-    error,
-    simulationError,
-    clearSimulationError,
-    reset: resetSwap,
+    swap, isPending, isConfirming, isSuccess, isReverted,
+    txHash, error, simulationError, clearSimulationError, reset: resetSwap,
   }
 }
