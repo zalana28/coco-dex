@@ -7,6 +7,7 @@ import { calculateMinimumReceived } from '@/utils/price'
 import type { RouteAvailabilityStatus, RouteQuote, RouteUnavailableReason } from './types'
 import { DEFAULT_ROUTE_TTL_MS, getRouteHealthStatus } from './routeMetadata'
 import { classifyQuoteError, isTransientRpcError } from './quoteState'
+import { getEffectiveExecutionPolicy, isExecutionAllowed } from './executionPolicy'
 
 export const SYNTHRA_V3_QUOTER_ABI = [
   {
@@ -58,6 +59,7 @@ type BuildSynthraQuoteParams = {
   slippageBps: number
   isLoading?: boolean
   error?: unknown
+  chainId?: number
 }
 
 function formatFeeTier(fee?: SynthraQuoteFeeTier): string {
@@ -96,6 +98,7 @@ export function buildSynthraRouteQuote({
   slippageBps,
   isLoading = false,
   error,
+  chainId,
 }: BuildSynthraQuoteParams): RouteQuote {
   const synthra = EXTERNAL_DEXES.synthra
   const isSupportedPair = isSynthraPairSupported(tokenIn, tokenOut)
@@ -107,6 +110,12 @@ export function buildSynthraRouteQuote({
   }, undefined)
   const safeAmountOut = bestFeeQuote?.amountOut ?? BigInt(0)
   const hasQuote = safeAmountOut > BigInt(0)
+
+  // Execution policy gate: mirrors XyloNet — operator-approved-executable on Arc Testnet
+  // only when VITE_ENABLE_SYNTHRA_EXECUTION=true.
+  const effectiveChainId = chainId ?? 0
+  const policy = getEffectiveExecutionPolicy('synthra', effectiveChainId, { synthra: 'operator-approved-executable' })
+  const executionAllowed = isExecutionAllowed(policy, effectiveChainId)
 
   let availabilityStatus: RouteAvailabilityStatus = 'available'
   let unavailableReason: RouteUnavailableReason | undefined
@@ -143,6 +152,8 @@ export function buildSynthraRouteQuote({
     ? calculateMinimumReceived(safeAmountOut, slippageBps)
     : BigInt(0)
 
+  const isExecutable = availabilityStatus === 'available' && Boolean(bestFeeQuote?.fee) && executionAllowed
+
   return {
     id: bestFeeQuote ? `synthra-v3-${bestFeeQuote.fee}` : 'synthra-v3',
     source: 'synthra',
@@ -162,10 +173,10 @@ export function buildSynthraRouteQuote({
       ? ['Executes through Synthra V3 swap router and requires token approval.']
       : [],
     routerAddress: synthra.v3.swapRouterAddress,
-    isExecutable: availabilityStatus === 'available' && Boolean(bestFeeQuote?.fee),
-    executable: availabilityStatus === 'available' && Boolean(bestFeeQuote?.fee),
+    isExecutable,
+    executable: isExecutable,
     availabilityStatus,
-    executionStatus: availabilityStatus === 'available' && Boolean(bestFeeQuote?.fee) ? 'executable' : 'non_executable',
+    executionStatus: isExecutable ? 'executable' : 'non_executable',
     unavailableReason,
     warning: availabilityStatus === 'available'
       ? 'Executes through Synthra V3 swap router and requires token approval.'
