@@ -136,6 +136,12 @@ describe('router audit base-ref resolver', () => {
       'src/lib/router/types.ts',
       'src/lib/router/synthraAdapter.test.ts',
       'src/lib/router/selectBestRoute.test.ts',
+      // unitflow liquidity guard (PR #111)
+      'src/lib/router/unitflowAdapter.ts',
+      'src/lib/router/unitflowAdapter.test.ts',
+      // contract address verification (PR #111)
+      'src/lib/router/contractVerification.ts',
+      'src/lib/router/contractVerification.test.ts',
     ])
     expect(changed).not.toContain('vercel.json')
     expect(changed.some((file) => file.startsWith('api/') && !file.startsWith('api/_lib/'))).toBe(false)
@@ -179,7 +185,76 @@ describe('router audit base-ref resolver', () => {
     expect(changed.some((file) => /^src\/pages\/(?:BridgePage|SwapPage)\.tsx$/.test(file) && !PROHIBITED_PAGES.has(file))).toBe(false)
   })
 
-  it('does not bypass the guard with nested or similarly named files', () => {
+  it('new PR #111 allowlist paths are accepted by the guard', () => {
+    const allowedRouterFiles = new Set([
+      'src/lib/router/executionPolicy.ts',
+      'src/lib/router/executionPolicy.test.ts',
+      'src/lib/router/xylonetAdapter.ts',
+      'src/lib/router/routerShadowMode.test.ts',
+      'src/lib/router/xylonetAdapter.test.ts',
+      'src/lib/router/quoteState.ts',
+      'src/lib/router/quoteState.test.ts',
+      'src/lib/router/selectBestRoute.ts',
+      'src/lib/router/synthraAdapter.ts',
+      'src/lib/router/types.ts',
+      'src/lib/router/synthraAdapter.test.ts',
+      'src/lib/router/selectBestRoute.test.ts',
+      'src/lib/router/unitflowAdapter.ts',
+      'src/lib/router/unitflowAdapter.test.ts',
+      'src/lib/router/contractVerification.ts',
+      'src/lib/router/contractVerification.test.ts',
+    ])
+    const pr111Files = [
+      'src/lib/router/unitflowAdapter.ts',
+      'src/lib/router/unitflowAdapter.test.ts',
+      'src/lib/router/contractVerification.ts',
+      'src/lib/router/contractVerification.test.ts',
+    ]
+    for (const file of pr111Files) {
+      expect(allowedRouterFiles.has(file)).toBe(true)
+    }
+  })
+
+  it('unlisted router files are still prohibited after PR #111 allowlist additions', () => {
+    const allowedRouterFiles = new Set([
+      'src/lib/router/executionPolicy.ts',
+      'src/lib/router/executionPolicy.test.ts',
+      'src/lib/router/xylonetAdapter.ts',
+      'src/lib/router/routerShadowMode.test.ts',
+      'src/lib/router/xylonetAdapter.test.ts',
+      'src/lib/router/quoteState.ts',
+      'src/lib/router/quoteState.test.ts',
+      'src/lib/router/selectBestRoute.ts',
+      'src/lib/router/synthraAdapter.ts',
+      'src/lib/router/types.ts',
+      'src/lib/router/synthraAdapter.test.ts',
+      'src/lib/router/selectBestRoute.test.ts',
+      'src/lib/router/unitflowAdapter.ts',
+      'src/lib/router/unitflowAdapter.test.ts',
+      'src/lib/router/contractVerification.ts',
+      'src/lib/router/contractVerification.test.ts',
+    ])
+    const prohibited = [
+      'src/lib/router/cocoAdapter.ts',
+      'src/lib/router/unknownRouter.ts',
+      'src/lib/router/someNewFile.ts',
+      'api/some-new-endpoint.ts',
+      'vercel.json',
+      'contracts/src/NewContract.sol',
+      'contracts/script/Deploy.s.sol',
+      'contracts/deployments/5042002/NewContract.json',
+    ]
+    for (const file of prohibited) {
+      const isRouter = file.startsWith('src/lib/router/') && !file.startsWith('src/lib/router-audit/')
+      const isRouterViolation = isRouter && !allowedRouterFiles.has(file)
+      const isApiViolation = file.startsWith('api/') && !file.startsWith('api/_lib/')
+      const isVercelViolation = file === 'vercel.json'
+      const isContractsViolation = file.startsWith('contracts/src/') || file.startsWith('contracts/script/') || file.startsWith('contracts/deployments/')
+      expect(isRouterViolation || isApiViolation || isVercelViolation || isContractsViolation, `${file} should be prohibited`).toBe(true)
+    }
+  })
+
+    it('does not bypass the guard with nested or similarly named files', () => {
     const fakeChanged = [
       'src/lib/router/unsafe/xylonetAdapter.ts',
       'src/lib/router/nested/executionPolicy.ts',
@@ -253,6 +328,12 @@ describe('router audit deployment and execution guards', () => {
       'src/lib/router/types.ts',
       'src/lib/router/synthraAdapter.test.ts',
       'src/lib/router/selectBestRoute.test.ts',
+      // unitflow liquidity guard (PR #111)
+      'src/lib/router/unitflowAdapter.ts',
+      'src/lib/router/unitflowAdapter.test.ts',
+      // contract address verification (PR #111)
+      'src/lib/router/contractVerification.ts',
+      'src/lib/router/contractVerification.test.ts',
     ])
     expect(changed.some((file) => file.startsWith('api/'))).toBe(false)
     expect(changed.some((file) => file === 'vercel.json')).toBe(false)
