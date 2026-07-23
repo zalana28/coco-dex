@@ -6,48 +6,17 @@ import { arcTestnet } from '@/config/chains'
 import type { Token } from '@/types/token'
 
 const ARC_CHAIN_ID = arcTestnet.id
-
-/**
- * Default deadline minutes if none provided or invalid.
- */
 const DEFAULT_DEADLINE_MINUTES = 5
 
-/**
- * Hook for executing swap via the XyloNet Router.
- *
- * Hard guard: refuses to execute writeContract if chainId !== 5042002.
- * Passes explicit chainId to writeContract.
- *
- * Deadline handling:
- *   The deadline is derived from the latest Arc block timestamp immediately
- *   before simulation/execution, using the caller's configured minute window.
- *
- * Executes simulateContract before writeContract to catch reverts early.
- * If simulation fails, the transaction is NOT sent and a clear error is surfaced.
- *
- * IMPORTANT: The caller MUST ensure token allowance is sufficient before calling swap().
- *
- * XyloNet swap signature:
- *   swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline)
- *
- * All amounts use ERC-20 decimals (6 for USDC/EURC on Arc).
- */
 export type XyloNetSwapParams = {
   tokenIn: Token
   tokenOut: Token
   amountIn: bigint
-  /**
-   * UI quote min-out, used only for dev diagnostics. Execution always refreshes
-   * the XyloNet quote immediately before simulation/write.
-   */
+  /** UI quote min-out — only used for dev diagnostics. Execution refreshes quote. */
   minAmountOut: bigint
   slippageBps: number
   account: `0x${string}`
   to: `0x${string}`
-  /**
-   * User-configured deadline window in minutes. The hook converts this into
-   * an Arc block-time deadline immediately before simulation/execution.
-   */
   deadlineMinutes: number
 }
 
@@ -79,7 +48,6 @@ function stringifyErrorField(value: unknown): string | undefined {
 function getNestedRevertReason(error: unknown): string | undefined {
   const walk = getErrorField(error, 'walk')
   if (typeof walk !== 'function') return stringifyErrorField(getErrorField(error, 'reason'))
-
   const reasonError = walk.call(error, (value: unknown) => Boolean(getErrorField(value, 'reason')))
   return stringifyErrorField(getErrorField(reasonError, 'reason'))
 }
@@ -87,7 +55,6 @@ function getNestedRevertReason(error: unknown): string | undefined {
 function getViemErrorDetails(error: unknown): ViemErrorDetails {
   const cause = getErrorField(error, 'cause')
   const metaMessages = getErrorField(error, 'metaMessages')
-
   return {
     name: stringifyErrorField(getErrorField(error, 'name')),
     shortMessage: stringifyErrorField(getErrorField(error, 'shortMessage')),
@@ -102,32 +69,38 @@ function getViemErrorDetails(error: unknown): ViemErrorDetails {
 function classifyXyloNetSimulationError(error: unknown): string {
   const details = getViemErrorDetails(error)
   const combined = [
-    details.name,
-    details.shortMessage,
-    details.details,
-    details.metaMessages?.join(' '),
-    details.causeShortMessage,
-    details.causeReason,
-    details.message,
+    details.name, details.shortMessage, details.details,
+    details.metaMessages?.join(' '), details.causeShortMessage,
+    details.causeReason, details.message,
   ].filter(Boolean).join(' ')
-  const normalized = combined.toLowerCase()
+  const n = combined.toLowerCase()
 
-  if (normalized.includes('allowance') || normalized.includes('erc20: insufficient allowance') || normalized.includes('transfer amount exceeds allowance')) {
-    return 'Insufficient allowance for XyloNet router'
-  }
-  if (normalized.includes('insufficient balance') || normalized.includes('transfer amount exceeds balance') || normalized.includes('exceeds balance')) {
-    return 'Insufficient balance'
-  }
-  if (/\bexpired\b/i.test(combined) || combined.includes('EXPIRED')) {
-    return 'Deadline expired'
-  }
-  if (normalized.includes('insufficient_output') || normalized.includes('too little received') || normalized.includes('minimum') || normalized.includes('slippage')) {
-    return 'Min received too high'
-  }
-  if (normalized.includes('execution reverted') || normalized.includes('reverted')) {
-    return 'Router reverted'
+  if (import.meta.env.DEV) {
+    console.debug('[useXyloNetSwap] error details:', {
+      router: XYLONET_ROUTER_ADDRESS, chainId: ARC_CHAIN_ID, ...details,
+    })
   }
 
+  if (n.includes('429') || n.includes('rate limit') || n.includes('too many requests'))
+    return 'RPC rate limit reached — wait a moment and try again'
+  if (n.includes('rpc request failed') || n.includes('http request failed') || n.includes('fetch failed') || n.includes('network'))
+    return 'RPC unavailable — check your connection and try again'
+  if (n.includes('timeout') || n.includes('timed out'))
+    return 'RPC request timed out — try again'
+  if (n.includes('allowance') || n.includes('insufficient allowance') || n.includes('transfer amount exceeds allowance'))
+    return 'Insufficient allowance — approve XyloNet router first'
+  if (n.includes('insufficient_output') || n.includes('insufficient output'))
+    return 'Slippage too low — increase slippage tolerance'
+  if (n.includes('insufficient balance') || n.includes('exceeds balance'))
+    return 'Insufficient token balance'
+  if (/\bexpired\b/i.test(combined) || combined.includes('EXPIRED'))
+    return 'Transaction deadline expired — try again'
+  if (n.includes('too little received') || n.includes('minimum') || n.includes('slippage'))
+    return 'Min received too high — increase slippage tolerance'
+  if (n.includes('execution reverted') || n.includes('reverted')) {
+    const reason = details.causeReason ?? details.details ?? details.shortMessage
+    return reason ? `Swap reverted: ${reason}` : 'Swap simulation reverted'
+  }
   const fallback = details.shortMessage ?? details.causeShortMessage ?? details.details ?? details.causeReason ?? details.message
   return fallback ? `XyloNet simulation failed: ${fallback}` : 'XyloNet simulation failed'
 }
@@ -144,86 +117,77 @@ export function useXyloNetSwap() {
   })
 
   const isReverted = swapReceipt?.status === 'reverted'
+  const clearSimulationError = useCallback(() => setSimulationError(undefined), [])
 
-  const clearSimulationError = useCallback(() => {
-    setSimulationError(undefined)
-  }, [])
-
-  /**
-   * Execute XyloNet swap with simulation pre-check.
-   *
-   * Deadline is validated and refreshed if stale before any on-chain call.
-   */
   const swap = useCallback(async (
     params: XyloNetSwapParams,
-    onHash?: (hash: `0x${string}`) => void
+    onHash?: (hash: `0x${string}`) => void,
   ): Promise<XyloNetSwapResult | undefined> => {
     if (chainId !== ARC_CHAIN_ID) {
-      console.warn('[useXyloNetSwap] BLOCKED: wallet is on wrong network', chainId)
-      return { status: 'WRONG_NETWORK', reason: 'Wrong network' }
+      console.warn('[useXyloNetSwap] BLOCKED: wrong network', chainId)
+      return { status: 'WRONG_NETWORK', reason: 'Wrong network — switch to Arc Testnet' }
     }
 
     const { tokenIn, tokenOut, amountIn, minAmountOut: uiMinAmountOut, slippageBps, account, to, deadlineMinutes } = params
-
     setSimulationError(undefined)
 
     if (!publicClient) {
-      const reason = 'XyloNet simulation failed: RPC client unavailable'
+      const reason = 'RPC client unavailable — reload and try again'
       setSimulationError(reason)
       return { status: 'SIMULATION_FAILED', reason }
     }
 
     const safeDeadlineMinutes = Number.isFinite(deadlineMinutes) && deadlineMinutes > 0
-      ? deadlineMinutes
-      : DEFAULT_DEADLINE_MINUTES
-    const latestBlock = await publicClient.getBlock({ blockTag: 'latest' })
-    const latestBlockTimestamp = latestBlock.timestamp
-    const deadlineSeconds = latestBlockTimestamp + BigInt(Math.ceil(safeDeadlineMinutes * 60))
+      ? deadlineMinutes : DEFAULT_DEADLINE_MINUTES
+
+    // Use wall-clock time — avoids one getBlock RPC round-trip.
+    // Arc block time ~2s; wall-clock is accurate for a 5-20 min deadline window.
+    const deadlineSeconds = BigInt(Math.floor(Date.now() / 1000)) + BigInt(Math.ceil(safeDeadlineMinutes * 60))
     const path = [tokenIn.address as `0x${string}`, tokenOut.address as `0x${string}`] as const
 
-    const freshAmountOut = await publicClient.readContract({
-      address: XYLONET_ROUTER_ADDRESS,
-      abi: XYLONET_ROUTER_ABI,
-      functionName: 'getAmountOut',
-      args: [path[0], path[1], amountIn],
-    })
-    const safeSlippageBps = BigInt(Math.min(10_000, Math.max(0, Math.trunc(slippageBps))))
-    const freshMinAmountOut = freshAmountOut - (freshAmountOut * safeSlippageBps) / 10_000n
-
-    if (freshAmountOut <= 0n || freshMinAmountOut < 0n) {
-      const reason = 'XyloNet simulation failed: fresh quote returned no output'
+    // Refresh quote before simulation so minAmountOut is always fresh.
+    let freshAmountOut: bigint
+    try {
+      freshAmountOut = await publicClient.readContract({
+        address: XYLONET_ROUTER_ADDRESS,
+        abi: XYLONET_ROUTER_ABI,
+        functionName: 'getAmountOut',
+        args: [path[0], path[1], amountIn],
+      })
+    } catch (quoteErr: unknown) {
+      const reason = classifyXyloNetSimulationError(quoteErr)
       setSimulationError(reason)
       return { status: 'SIMULATION_FAILED', reason }
     }
 
-    const swapArgs = [
-      amountIn,
-      freshMinAmountOut,
-      path,
-      to,
-      deadlineSeconds,
-    ] as const
+    const safeSlippageBps = BigInt(Math.min(10_000, Math.max(0, Math.trunc(slippageBps))))
+    const freshMinAmountOut = freshAmountOut - (freshAmountOut * safeSlippageBps) / 10_000n
 
-    // ─── DEV logging ───
+    if (freshAmountOut <= 0n || freshMinAmountOut < 0n) {
+      const reason = 'XyloNet pool returned no output — pool may be empty or paused'
+      setSimulationError(reason)
+      return { status: 'SIMULATION_FAILED', reason }
+    }
+
+    const swapArgs = [amountIn, freshMinAmountOut, path, to, deadlineSeconds] as const
+
     if (import.meta.env.DEV) {
-      console.debug('[useXyloNetSwap] XyloNet swap args:', {
-        latestBlockNumber: latestBlock.number?.toString(),
-        latestBlockTimestamp: latestBlockTimestamp.toString(),
-        deadlineMinutes: safeDeadlineMinutes,
-        deadlineSeconds: deadlineSeconds.toString(),
+      console.debug('[useXyloNetSwap] swap args:', {
+        router: XYLONET_ROUTER_ADDRESS,
         pool: XYLONET_USDC_EURC_POOL_ADDRESS,
+        chainId: ARC_CHAIN_ID,
         path,
         amountIn: amountIn.toString(),
         uiMinAmountOut: uiMinAmountOut.toString(),
         freshAmountOut: freshAmountOut.toString(),
         freshMinAmountOut: freshMinAmountOut.toString(),
         slippageBps,
+        deadlineSeconds: deadlineSeconds.toString(),
         account,
         recipient: to,
       })
     }
 
-    // ─── Simulate before sending ───
     try {
       await publicClient.simulateContract({
         address: XYLONET_ROUTER_ADDRESS,
@@ -233,25 +197,14 @@ export function useXyloNetSwap() {
         account,
         chain: arcTestnet,
       })
-      if (import.meta.env.DEV) {
-        console.debug('[useXyloNetSwap] Simulation passed')
-      }
+      if (import.meta.env.DEV) console.debug('[useXyloNetSwap] simulation passed')
     } catch (simErr: unknown) {
       const reason = classifyXyloNetSimulationError(simErr)
-
-      if (import.meta.env.DEV) {
-        console.debug('[useXyloNetSwap] Simulation failed:', {
-          ...getViemErrorDetails(simErr),
-          reason,
-          rawError: simErr,
-        })
-      }
-
+      if (import.meta.env.DEV) console.debug('[useXyloNetSwap] simulation failed:', { reason, rawError: simErr })
       setSimulationError(reason)
       return { status: 'SIMULATION_FAILED', reason }
     }
 
-    // ─── Simulation passed — send real transaction ───
     writeContract(
       {
         address: XYLONET_ROUTER_ADDRESS,
@@ -262,22 +215,17 @@ export function useXyloNetSwap() {
       },
       {
         onSuccess: (hash) => {
-          if (import.meta.env.DEV) {
-            console.log('[useXyloNetSwap] Transaction sent:', hash)
-          }
+          if (import.meta.env.DEV) console.log('[useXyloNetSwap] tx sent:', hash)
           setTxHash(hash)
           onHash?.(hash)
         },
         onError: (err) => {
-          if (import.meta.env.DEV) {
-            console.error('[useXyloNetSwap] writeContract error:', err.message?.slice(0, 200))
-          }
+          if (import.meta.env.DEV) console.error('[useXyloNetSwap] writeContract error:', err.message?.slice(0, 200))
           const errMsg = err.message || ''
-          if (errMsg.includes('revert') || errMsg.includes('execution reverted')) {
-            setSimulationError('XyloNet swap reverted.')
-          }
+          if (errMsg.includes('revert') || errMsg.includes('execution reverted'))
+            setSimulationError('XyloNet swap reverted on-chain')
         },
-      }
+      },
     )
     return undefined
   }, [writeContract, chainId, publicClient])
@@ -289,15 +237,7 @@ export function useXyloNetSwap() {
   }, [resetWrite])
 
   return {
-    swap,
-    isPending,
-    isConfirming,
-    isSuccess,
-    isReverted,
-    txHash,
-    error,
-    simulationError,
-    clearSimulationError,
-    reset: resetSwap,
+    swap, isPending, isConfirming, isSuccess, isReverted,
+    txHash, error, simulationError, clearSimulationError, reset: resetSwap,
   }
 }
