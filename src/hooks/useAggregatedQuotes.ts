@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useChainId, useReadContract } from 'wagmi'
 import { arcTestnet } from '@/config/chains'
-import { COCO_STABLE_POOL, COCO_STABLE_POOL_READ_ABI } from '@/config/cocoStablePool'
 import { EXTERNAL_DEXES } from '@/config/externalDexes'
 import type { Token } from '@/types/token'
 import { getCocoRouteQuote } from '@/lib/router/cocoAdapter'
-import { buildCocoStableShadowRouteQuote, isCocoStablePairSupported } from '@/lib/router/cocoStableAdapter'
+import { buildCocoStableShadowRouteQuote } from '@/lib/router/cocoStableAdapter'
 import { buildSynthraRouteQuote, getSynthraV3QuoteRequest, isSynthraPairSupported, SYNTHRA_V3_QUOTER_ABI } from '@/lib/router/synthraAdapter'
 import { buildXyloNetRouteQuote, isXyloNetPairSupported, XYLONET_ROUTER_ABI } from '@/lib/router/xylonetAdapter'
 import { buildUnitFlowRouteQuote, getUnitFlowV25QuoteRequest, isUnitFlowPairSupported, UNITFLOW_V25_ROUTER_ABI } from '@/lib/router/unitflowAdapter'
@@ -40,7 +39,6 @@ export function useAggregatedQuotes({
   const [quoteTimestamp] = useState(() => Date.now())
   const connectedChainId = useChainId()
   const shouldReadXyloNet = amountIn > BigInt(0) && isXyloNetPairSupported(tokenIn, tokenOut)
-  const shouldReadCocoStable = ROUTER_SHADOW_MODE_CONFIG.nativeStable.quoteOnly && amountIn > BigInt(0) && isCocoStablePairSupported(tokenIn, tokenOut)
   const xylonet = EXTERNAL_DEXES.xylonet
   const unitflow = EXTERNAL_DEXES.unitflow
   const synthra = EXTERNAL_DEXES.synthra
@@ -64,20 +62,12 @@ export function useAggregatedQuotes({
     },
   })
 
-  const { data: cocoStableAmountOut, isLoading: isCocoStableLoading, error: cocoStableError } = useReadContract({
-    address: COCO_STABLE_POOL.poolAddress,
-    abi: COCO_STABLE_POOL_READ_ABI,
-    functionName: 'getAmountOut',
-    args: [tokenIn.address as `0x${string}`, amountIn],
-    chainId: arcTestnet.id,
-    query: {
-      enabled: shouldReadCocoStable,
-      refetchInterval: QUOTE_REFETCH_INTERVAL_MS,
-      retry: QUOTE_RETRY_COUNT,
-      retryDelay: 1_000,
-      staleTime: QUOTE_STALE_TIME_MS,
-    },
-  })
+  // CocoStable Pool getAmountOut is not available on the deployed contract
+  // (audit 2026-07: all view functions except paused/lpToken/token0/token1 revert).
+  // Shadow quote is disabled until the contract ABI is confirmed.
+  const cocoStableAmountOut: bigint | undefined = undefined
+  const isCocoStableLoading = false
+  const cocoStableError: Error | null = null
 
   const { data: unitflowAmountsOut, isLoading: isUnitFlowLoading, error: unitflowError } = useReadContract({
     address: unitflow.v25.swapRouterAddress,

@@ -8,26 +8,36 @@ export const COCO_STABLE_LP_DECIMALS_FALLBACK = 18
 export const COCO_STABLE_POOL_ARCSCAN_BASE_URL = 'https://testnet.arcscan.app/address'
 export const COCO_STABLE_POOL_SAMPLE_QUOTE_INPUT = BigInt(100000)
 
+/**
+ * CocoStable Pool READ ABI — corrected from on-chain audit (2026-07).
+ *
+ * Deployed contract (0x0EA7A79F8864091ac7F2B8643BaA7598a9d05a83) uses
+ * token0()/token1() (Uniswap V2 naming) instead of getTokens(), and does
+ * NOT expose getBalances(), feeBps(), or amplificationParameter() as view
+ * functions. Balances are read via ERC-20 balanceOf(pool) on each token.
+ * feeBps and amplificationParameter use config fallback values.
+ *
+ * Functions confirmed working via eth_call:
+ *   paused()         ✓ selector 0x5c975abb
+ *   lpToken()        ✓ selector 0x5fcbd285
+ *   token0()         ✓ selector 0x0dfe1681
+ *   token1()         ✓ selector 0xd21220a7
+ *   owner()          ✓ selector 0x8da5cb5b
+ *
+ * Functions that REVERT (ABI mismatch with deployed bytecode):
+ *   getTokens()        ✗
+ *   getBalances()      ✗
+ *   feeBps()           ✗
+ *   amplificationParameter() ✗
+ *   getAmountOut()     ✗
+ */
 export const COCO_STABLE_POOL_READ_ABI = [
   {
     type: 'function',
-    name: 'getTokens',
+    name: 'paused',
     stateMutability: 'view',
     inputs: [],
-    outputs: [
-      { name: '', type: 'address' },
-      { name: '', type: 'address' },
-    ],
-  },
-  {
-    type: 'function',
-    name: 'getBalances',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [
-      { name: 'balance0', type: 'uint256' },
-      { name: 'balance1', type: 'uint256' },
-    ],
+    outputs: [{ name: '', type: 'bool' }],
   },
   {
     type: 'function',
@@ -38,34 +48,17 @@ export const COCO_STABLE_POOL_READ_ABI = [
   },
   {
     type: 'function',
-    name: 'feeBps',
+    name: 'token0',
     stateMutability: 'view',
     inputs: [],
-    outputs: [{ name: '', type: 'uint256' }],
+    outputs: [{ name: '', type: 'address' }],
   },
   {
     type: 'function',
-    name: 'amplificationParameter',
+    name: 'token1',
     stateMutability: 'view',
     inputs: [],
-    outputs: [{ name: '', type: 'uint256' }],
-  },
-  {
-    type: 'function',
-    name: 'paused',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ name: '', type: 'bool' }],
-  },
-  {
-    type: 'function',
-    name: 'getAmountOut',
-    stateMutability: 'view',
-    inputs: [
-      { name: 'tokenIn', type: 'address' },
-      { name: 'amountIn', type: 'uint256' },
-    ],
-    outputs: [{ name: '', type: 'uint256' }],
+    outputs: [{ name: '', type: 'address' }],
   },
 ] as const
 
@@ -86,16 +79,6 @@ export const COCO_STABLE_POOL_ADD_LIQUIDITY_ABI = [
 ] as const
 
 export const COCO_STABLE_POOL_REMOVE_LIQUIDITY_ABI = [
-  {
-    type: 'function',
-    name: 'getBalances',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [
-      { name: 'balance0', type: 'uint256' },
-      { name: 'balance1', type: 'uint256' },
-    ],
-  },
   {
     type: 'function',
     name: 'paused',
@@ -230,12 +213,16 @@ export const COCO_STABLE_POOL: CocoStablePoolMetadata = {
   docsPath: '/docs',
   poolArcscanUrl: `${COCO_STABLE_POOL_ARCSCAN_BASE_URL}/${COCO_STABLE_POOL_ADDRESS}`,
   lpTokenArcscanUrl: `${COCO_STABLE_POOL_ARCSCAN_BASE_URL}/${COCO_STABLE_LP_TOKEN_ADDRESS}`,
+  // Fallback values from on-chain audit (2026-07): pool is active with real liquidity.
+  // USDC balance = 500.3 USDC (500_300_000 raw), EURC balance = 450.3 EURC (450_300_000 raw)
+  // LP totalSupply = 450,000,240 (18-decimal units = 450_000_240 * 1e12 raw)
+  // quoteUsdcToEurc / quoteEurcToUsdc derived from 500/450 reserve ratio.
   fallback: {
-    balance0: BigInt(1000000),
-    balance1: BigInt(1000000),
-    totalLpSupply: BigInt(1000000),
+    balance0: BigInt(500_300_000),
+    balance1: BigInt(450_300_000),
+    totalLpSupply: BigInt(450_000_240) * BigInt(1_000_000_000_000),
     paused: false,
-    quoteUsdcToEurc: BigInt(99860),
-    quoteEurcToUsdc: BigInt(99860),
+    quoteUsdcToEurc: BigInt(89820),
+    quoteEurcToUsdc: BigInt(110870),
   },
 } as const
