@@ -36,18 +36,25 @@ describe('Synthra adapter', () => {
       expect(getSynthraV3QuoteRequest(usdc, eurc, 0n)).toBeUndefined()
     })
 
-    it('includes recipient in V2 tuple shape', () => {
-      const req = getSynthraV3QuoteRequest(usdc, eurc, 1_000_000n, '0xabc0000000000000000000000000000000000abc' as `0x${string}`)
-      expect(req?.recipient).toBe('0xabc0000000000000000000000000000000000abc')
+    it('returns tokenIn, tokenOut, amountIn without recipient', () => {
+      const req = getSynthraV3QuoteRequest(usdc, eurc, 1_000_000n)
+      expect(req?.tokenIn).toBe(USDC.address)
+      expect(req?.tokenOut).toBe(EURC.address)
+      expect(req?.amountIn).toBe(1_000_000n)
     })
   })
 
-  describe('ABI is Quoter V2 shape (6-tuple, 4-tuple output)', () => {
-    it('declares recipient component', () => {
+  describe('ABI is flat 5-param shape (verified on-chain selector 0xc6a5026a)', () => {
+    it('declares 5 flat input params without struct or recipient', () => {
       const fn = SYNTHRA_V3_QUOTER_ABI[0]
-      const input = fn.inputs[0] as unknown as { components: Array<{ name: string }> }
-      expect(input.components.map((c) => c.name)).toContain('recipient')
-      expect(input.components).toHaveLength(6)
+      const names = fn.inputs.map((i) => i.name)
+      expect(names).toContain('tokenIn')
+      expect(names).toContain('tokenOut')
+      expect(names).toContain('amountIn')
+      expect(names).toContain('fee')
+      expect(names).toContain('sqrtPriceLimitX96')
+      expect(names).not.toContain('recipient')
+      expect(fn.inputs).toHaveLength(5)
     })
 
     it('declares 4 output fields', () => {
