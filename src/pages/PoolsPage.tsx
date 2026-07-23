@@ -272,7 +272,7 @@ function PoolsTab({
           fee="0.30%"
           tvl={isLoading ? '...' : hasLiquidity ? formatCompact(classicTvl) : '$0'}
           reserveSummary={isLoading ? '...' : `${formatTokenAmount(reserveUsdc ?? 0n, 6)} USDC / ${formatTokenAmount(reserveEurc ?? 0n, 6)} EURC`}
-          lpBalance={classicLpBalance !== undefined ? formatTokenAmount(classicLpBalance, 18) : 'Connect wallet to read'}
+          lpBalance={classicLpBalance !== undefined ? formatTokenAmount(classicLpBalance, 18) : classicLpBalance === undefined ? '...' : 'Connect wallet'}
           badges={['Arc Testnet', hasLiquidity ? 'Active' : 'No Liquidity', 'Routed']}
           onAdd={() => onAdd('classic')}
           onDetails={() => onDetails('classic')}
@@ -284,7 +284,7 @@ function PoolsTab({
           fee={`${(Number(stablePool.feeBps) / 100).toFixed(2)}%`}
           tvl={stablePool.isLoading ? '...' : formatCompact(stableTvl)}
           reserveSummary={stablePool.isLoading ? '...' : `${formatTokenAmount(stablePool.reserve0, stableToken0.decimals)} ${stableToken0.symbol} / ${formatTokenAmount(stablePool.reserve1, stableToken1.decimals)} ${stableToken1.symbol}`}
-          lpBalance={stablePool.userLpBalance !== undefined ? `${formatTokenAmount(stablePool.userLpBalance, stablePool.lpDecimals)} cSLP` : 'Connect wallet to read'}
+          lpBalance={stablePool.userLpBalance !== undefined ? `${formatTokenAmount(stablePool.userLpBalance, stablePool.lpDecimals)} cSLP` : stablePool.isLoading ? '...' : 'Connect wallet'}
           badges={['Arc Testnet', 'LP Beta', 'Unaudited', 'Not Routed', 'Quote-only']}
           health={<StablePoolHealthBadge observability={stableObservability} isLoading={stableObservabilityLoading} />}
           onAdd={() => onAdd('stable')}
