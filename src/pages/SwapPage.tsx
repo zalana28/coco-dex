@@ -31,6 +31,7 @@ import type { RouteQuote } from '@/lib/router/types'
 import { isQuoteStale } from '@/lib/router/selectBestRoute'
 import { safeBridgeAmount } from '@/features/bridge/postBridge'
 import { classifySwapError, acquireSubmitLock, releaseSubmitLock, generateLockId, isDocumentActive, waitForDocumentActive } from '@/lib/mobileWallet'
+import { getExplorerTxUrl } from '@/types/transactions'
 
 export function SwapPage() {
   const { address, isConnected } = useAccount()
@@ -232,7 +233,7 @@ export function SwapPage() {
   const { swap: cocoSwap, isPending: isCocoSwapping, isConfirming: isCocoSwapConfirming, txHash: cocoSwapTxHash, isSuccess: cocoSwapSuccess, isReverted: cocoSwapReverted, error: cocoSwapError, reset: resetCocoSwap } = useSwap()
 
   // XyloNet swap execution
-  const { swap: xyloNetSwap, isPending: isXyloNetSwapping, isConfirming: isXyloNetSwapConfirming, txHash: xyloNetSwapTxHash, isSuccess: xyloNetSwapSuccess, isReverted: xyloNetSwapReverted, error: xyloNetSwapError, simulationError: xyloNetSimulationError, clearSimulationError, reset: resetXyloNetSwap } = useXyloNetSwap()
+  const { swap: xyloNetSwap, isPending: isXyloNetSwapping, isConfirming: isXyloNetSwapConfirming, txHash: xyloNetSwapTxHash, isSuccess: xyloNetSwapSuccess, isReverted: xyloNetSwapReverted, error: xyloNetSwapError, simulationError: xyloNetSimulationError, revertReason: xyloNetRevertReason, decodeReceiptRevert: decodeXyloNetRevert, clearSimulationError, reset: resetXyloNetSwap } = useXyloNetSwap()
 
   // UnitFlow UniversalRouter execution
   const { swap: unitFlowSwap, isPending: isUnitFlowSwapping, isConfirming: isUnitFlowSwapConfirming, txHash: unitFlowSwapTxHash, isSuccess: unitFlowSwapSuccess, isReverted: unitFlowSwapReverted, error: unitFlowSwapError, simulationError: unitFlowSimulationError, clearSimulationError: clearUnitFlowSimulationError, reset: resetUnitFlowSwap } = useUnitFlowSwap()
@@ -365,16 +366,30 @@ export function SwapPage() {
     refetchReserves()
   }, [swapSuccess, txProgress, refetchFromBalance, refetchToBalance, refetchReserves])
 
-  // When swap receipt indicates revert
+  // When swap receipt indicates revert — store tx hash and start decoding reason
   useEffect(() => {
     if (!txProgress.currentFlow || !swapReverted) return
     const step = txProgress.currentFlow.steps.find((s) => s.type === 'swap')
     if (!step || step.status === 'success' || step.status === 'idle') return
+    const txHashForExplorer = swapTxHash
+    const explorerLink = txHashForExplorer ? getExplorerTxUrl(txHashForExplorer) : undefined
     const revertMsg = isXyloNetRoute
-      ? 'XyloNet swap reverted. Check min received, approval, or pool state.'
-      : 'Transaction reverted'
+      ? `XyloNet swap reverted — View: ${explorerLink ?? txHashForExplorer}`
+      : `Transaction reverted — View: ${explorerLink ?? txHashForExplorer}`
     txProgress.markFailed('swap', revertMsg)
-  }, [swapReverted, txProgress, isXyloNetRoute])
+    // Decode revert reason in background (updates revertReason state when done)
+    if (isXyloNetRoute) decodeXyloNetRevert()
+  }, [swapReverted, txProgress, isXyloNetRoute, swapTxHash, decodeXyloNetRevert])
+
+  // When decoded revert reason arrives, update the step error message
+  useEffect(() => {
+    if (!txProgress.currentFlow || !swapReverted || !xyloNetRevertReason || !swapTxHash || !isXyloNetRoute) return
+    const step = txProgress.currentFlow.steps.find((s) => s.type === 'swap')
+    if (!step || step.status !== 'failed') return
+    const explorerLink = getExplorerTxUrl(swapTxHash)
+    const msg = `XyloNet swap reverted: ${xyloNetRevertReason} — View: ${explorerLink}`
+    txProgress.markFailed('swap', msg)
+  }, [xyloNetRevertReason, isXyloNetRoute, txProgress, swapTxHash, swapReverted])
 
   // When swap errors
   useEffect(() => {
@@ -657,7 +672,6 @@ export function SwapPage() {
           })
         }
 
-        // SAFETY: never use Coco minAmountOut for XyloNet route
         xyloNetSwap(
           {
             tokenIn: fromToken,
@@ -677,6 +691,12 @@ export function SwapPage() {
             txProgress.markFailed('swap', result.reason)
           } else if (result?.status === 'WRONG_NETWORK') {
             txProgress.markFailed('swap', result.reason)
+          } else if (result?.status === 'ALLOWANCE_INSUFFICIENT') {
+            txProgress.markFailed('swap',
+              `Insufficient allowance: have ${formatTokenAmount(result.allowance, fromToken.decimals)} ${fromToken.symbol}, ` +
+              `need ${formatTokenAmount(result.amountIn, fromToken.decimals)} ${fromToken.symbol}. ` +
+              `Approve spender: ${result.spender}`
+            )
           }
         })
       } else if (isSynthraRoute) {
@@ -745,6 +765,15 @@ export function SwapPage() {
       }
     }
   }
+
+  const handleClearFlow = useCallback(() => {
+    txProgress.clearFlow()
+    resetApproval()
+    resetCocoSwap()
+    resetXyloNetSwap()
+    resetUnitFlowSwap()
+    resetSynthraSwap()
+  }, [txProgress, resetApproval, resetCocoSwap, resetXyloNetSwap, resetUnitFlowSwap, resetSynthraSwap])
 
   const formattedFromBalance = fromBalance !== undefined ? formatTokenAmount(fromBalance, fromToken.decimals) : '—'
   const formattedToBalance = toBalance !== undefined ? formatTokenAmount(toBalance, toToken.decimals) : '—'
@@ -899,7 +928,7 @@ export function SwapPage() {
             <TransactionProgressPanel
               currentFlow={txProgress.currentFlow}
               history={txProgress.history}
-              onClear={txProgress.clearFlow}
+              onClear={handleClearFlow}
               onCheckStatus={handleCheckStatus}
             />
           </div>
