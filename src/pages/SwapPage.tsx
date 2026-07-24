@@ -105,6 +105,14 @@ export function SwapPage() {
     }
   }, [hasLiquidity, fromAmountRaw, reserveUsdc, reserveEurc, fromToken, slippageBps])
 
+  // Ticking clock for quote-freshness display. Avoids calling Date.now() during
+  // render (impure) while keeping the "Fresh quote" / "Quote stale" label live.
+  // Declared BEFORE useAggregatedQuotes so clockMs is available as nowMs prop.
+  const [clockMs, setClockMs] = useState(() => Date.now())
+  useEffect(() => {
+    const handle = window.setInterval(() => setClockMs(Date.now()), 5_000)
+    return () => window.clearInterval(handle)
+  }, [])
 
   const { quotes, bestQuote, noExecutableRouteReason, isLoading: quotesLoading, comingSoonSources } = useAggregatedQuotes({
     tokenIn: fromToken,
@@ -114,6 +122,7 @@ export function SwapPage() {
     reserveEurc,
     slippageBps,
     selectedQuoteId: manualRouteId ?? undefined,
+    nowMs: clockMs,
   })
 
   // "Finding best route…" while debouncing or quotes are in flight for a valid amount.
@@ -142,19 +151,9 @@ export function SwapPage() {
 
   // Reset manual override when amount or token pair changes → return to best route.
   useEffect(() => {
-    // Intentionally reset manual route override when the swap pair/amount changes.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setManualRouteId(null)
     setRouteChangedWarning(false)
   }, [debouncedFromAmountRaw, fromToken.address, toToken.address])
-
-  // Ticking clock for quote-freshness display. Avoids calling Date.now() during
-  // render (impure) while keeping the "Fresh quote" / "Quote stale" label live.
-  const [clockMs, setClockMs] = useState(() => Date.now())
-  useEffect(() => {
-    const handle = window.setInterval(() => setClockMs(Date.now()), 5_000)
-    return () => window.clearInterval(handle)
-  }, [])
 
   // Selecting a route from the list (only executable routes are selectable).
   const handleSelectRoute = useCallback((quoteId: string) => {
@@ -175,8 +174,10 @@ export function SwapPage() {
       const computedRate = fromAmountRaw > BigInt(0)
         ? Number(amountOut) / Number(fromAmountRaw)
         : undefined
-      // Price impact: only compute for Coco where we have reserves
-      const impact = activeQuote.source === 'coco' ? cocoPriceImpact : 0
+      // Price impact: only compute for Coco where we have live reserves.
+      // Non-Coco routes (XyloNet, Synthra, UnitFlow) show unknown (—) instead of 0%
+      // to avoid misleading the user into thinking there's zero price impact.
+      const impact: number | undefined = activeQuote.source === 'coco' ? cocoPriceImpact : undefined
 
       return {
         toAmountRaw: amountOut,
@@ -838,12 +839,15 @@ export function SwapPage() {
             {fromAmount && parseFloat(fromAmount) > 0 && toAmountRaw > BigInt(0) && (
               <div className="mt-4 rounded-xl bg-coco-dark-bg/75 border border-coco-dark-border p-3.5 space-y-2 shadow-inner">
                 <PriceRow label="Rate" value={`1 ${fromToken.symbol} = ${rate?.toFixed(6) ?? '—'} ${toToken.symbol}`} />
-                {priceImpact > 0 && (
+                {priceImpact !== undefined && priceImpact > 0 && (
                   <PriceRow
                     label="Price Impact"
                     value={`${priceImpact.toFixed(3)}%`}
                     valueColor={priceImpact < 1 ? 'text-coco-green-500' : priceImpact < 3 ? 'text-coco-amber-500' : 'text-coco-red-500'}
                   />
+                )}
+                {priceImpact === undefined && activeQuote && activeQuote.source !== 'coco' && (
+                  <PriceRow label="Price Impact" value="—" />
                 )}
                 <PriceRow label="Min. Received" value={`${minReceivedDisplay} ${toToken.symbol}`} />
                 <PriceRow label="Route" value={activeRouteSummary} />

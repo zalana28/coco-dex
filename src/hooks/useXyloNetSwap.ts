@@ -180,12 +180,12 @@ export function useXyloNetSwap() {
     const path = [tokenIn.address as `0x${string}`, tokenOut.address as `0x${string}`] as const
 
     // Use the aggregator-computed minAmountOut directly — it already incorporates
-    // a fresh quote + slippage. Skipping an extra readContract(getAmountOut) here
-    // saves one RPC round-trip and avoids 429 cascades.
-    const safeSlippageBps = BigInt(Math.min(10_000, Math.max(0, Math.trunc(slippageBps))))
-    const execMinAmountOut = minAmountOut - (minAmountOut * safeSlippageBps) / 20_000n // extra 0.5× buffer
+    // a fresh quote + slippage via calculateMinimumReceived(amountOut, slippageBps).
+    // The canonical formula: amountOutMin = (quotedAmountOut * (10_000 - slippageBps)) / 10_000.
+    // No additional buffer — the user's slippage setting is the sole minimum.
+    // See: src/utils/price.ts calculateMinimumReceived()
 
-    const swapArgs = [amountIn, execMinAmountOut, path, to, deadlineSeconds] as const
+    const swapArgs = [amountIn, minAmountOut, path, to, deadlineSeconds] as const
 
     if (import.meta.env.DEV) {
       console.debug('[useXyloNetSwap] swap args:', {
@@ -195,7 +195,6 @@ export function useXyloNetSwap() {
         path,
         amountIn: amountIn.toString(),
         minAmountOut: minAmountOut.toString(),
-        execMinAmountOut: execMinAmountOut.toString(),
         slippageBps,
         deadlineSeconds: deadlineSeconds.toString(),
         account,
