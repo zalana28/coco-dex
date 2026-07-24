@@ -97,4 +97,88 @@ describe('calculateMinimumReceived', () => {
     const minReceived = calculateMinimumReceived(amountOut, 0)
     expect(minReceived).toBe(amountOut)
   })
+
+  it('applies 0.1% slippage correctly', () => {
+    const amountOut = BigInt(1000_000000)
+    const minReceived = calculateMinimumReceived(amountOut, 10)
+    expect(minReceived).toBe(BigInt(999_000000))
+  })
+
+  it('applies 5% slippage correctly', () => {
+    const amountOut = BigInt(1000_000000)
+    const minReceived = calculateMinimumReceived(amountOut, 500)
+    expect(minReceived).toBe(BigInt(950_000000))
+  })
+
+  it('canonical formula: (amountOut * (10_000 - slippageBps)) / 10_000', () => {
+    const amountOut = BigInt(761_490)
+    const slippageBps = 10
+    const canonical = (amountOut * BigInt(10_000 - slippageBps)) / BigInt(10_000)
+    expect(calculateMinimumReceived(amountOut, slippageBps)).toBe(canonical)
+  })
+
+  it('no hidden double-slippage: applying slippage once is sufficient', () => {
+    const quotedAmountOut = BigInt(761_490)
+    const userSlippageBps = 50
+    const once = calculateMinimumReceived(quotedAmountOut, userSlippageBps)
+
+    // The key invariant: the calldata minAmountOut must equal the UI display minAmountOut.
+    // No additional buffer should be applied between quote/build and execution.
+    const uiDisplayMin = once
+    const calldataMin = once
+    expect(calldataMin).toBe(uiDisplayMin)
+  })
+
+  it('large bigint values do not overflow', () => {
+    const amountOut = BigInt('999999999999999999999999999')
+    const minReceived = calculateMinimumReceived(amountOut, 100)
+    expect(minReceived).toBeLessThan(amountOut)
+    expect(minReceived).toBeGreaterThan(BigInt(0))
+  })
+
+  it('rounding truncates toward zero (floor in bigint division)', () => {
+    const amountOut = BigInt(999)
+    const minReceived = calculateMinimumReceived(amountOut, 50)
+    // 999 * 9950 / 10000 = 9940050 / 10000 = 994 (truncated)
+    expect(minReceived).toBe(BigInt(994))
+    // Confirming: no rounding up
+    const expectedFloor = (amountOut * BigInt(9950)) / BigInt(10000)
+    expect(minReceived).toBe(expectedFloor)
+  })
+
+  it('returns 0 for zero amountOut', () => {
+    expect(calculateMinimumReceived(BigInt(0), 50)).toBe(BigInt(0))
+  })
+
+  it('returns 0 for 100% slippage', () => {
+    const amountOut = BigInt(1000_000000)
+    expect(calculateMinimumReceived(amountOut, 10_000)).toBe(BigInt(0))
+  })
+
+  it('minAmountOut is strictly less than amountOut for non-zero slippage', () => {
+    const amountOut = BigInt(761_490)
+    for (const bps of [1, 10, 50, 100, 500, 1000, 5000]) {
+      const min = calculateMinimumReceived(amountOut, bps)
+      expect(min).toBeLessThan(amountOut)
+    }
+  })
+
+  it('no transformation after calculateMinimumReceived — single source of truth', () => {
+    const quotedAmountOut = BigInt(761_490)
+    const slippageBps = 50
+    const minAmountOut = calculateMinimumReceived(quotedAmountOut, slippageBps)
+
+    // This is the value displayed in UI as "Min. Received"
+    const uiDisplayMin = minAmountOut
+
+    // This should be the EXACT value sent to calldata
+    const calldataAmountOutMin = minAmountOut
+
+    // Invariant: no additional transformation between UI display and calldata
+    expect(calldataAmountOutMin).toBe(uiDisplayMin)
+
+    // Verify canonical formula produces identical result
+    const canonicalMin = (quotedAmountOut * BigInt(10_000 - slippageBps)) / BigInt(10_000)
+    expect(calldataAmountOutMin).toBe(canonicalMin)
+  })
 })

@@ -226,6 +226,10 @@ export function useXyloNetSwap() {
     const deadlineSeconds = BigInt(Math.floor(Date.now() / 1000)) + BigInt(Math.ceil(safeDeadlineMinutes * 60))
     const path = [tokenIn.address as `0x${string}`, tokenOut.address as `0x${string}`] as const
 
+    // Use the aggregator-computed minAmountOut directly — it already incorporates
+    // a fresh quote + slippage via calculateMinimumReceived(amountOut, slippageBps).
+    // The canonical formula: amountOutMin = (quotedAmountOut * (10_000 - slippageBps)) / 10_000.
+    // No additional buffer — the user's slippage setting is the sole minimum.
     const spender = XYLONET_ROUTER_ADDRESS
 
     // ─── Step 1: Read allowance FRESH from chain (no cache) ───
@@ -267,19 +271,11 @@ export function useXyloNetSwap() {
       })
     }
 
-    // ─── Step 2: Compute amountOutMin with correct formula ───
-    // formula: amountOutMin = quotedOutput × (10000 - slippageBps) / 10000
-    // The aggregator's minAmountOut already uses this formula (calculateMinimumReceived).
-    // Apply an additional small buffer using the same formula, NOT a double application.
-    const safeSlippageBps = BigInt(Math.min(10_000, Math.max(0, Math.trunc(slippageBps))))
-    const additionalBuffer = (minAmountOut * safeSlippageBps) / 20_000n
-    const execMinAmountOut = minAmountOut - additionalBuffer
+    const swapArgs = [amountIn, minAmountOut, path, to, deadlineSeconds] as const
 
-    const swapArgs = [amountIn, execMinAmountOut, path, to, deadlineSeconds] as const
-
-    // ─── Step 3: Save simulation fingerprint: args hash + block number ───
+    // ─── Step 2: Save simulation fingerprint: args hash + block number ───
     let simBlockNumber: bigint | undefined
-    const fingerprintArgs = `${amountIn.toString()}:${execMinAmountOut.toString()}:${path.join(',')}:${to}:${deadlineSeconds.toString()}`
+    const fingerprintArgs = `${amountIn.toString()}:${minAmountOut.toString()}:${path.join(',')}:${to}:${deadlineSeconds.toString()}`
 
     if (import.meta.env.DEV) {
       console.debug('[useXyloNetSwap] swap args:', {
@@ -288,9 +284,7 @@ export function useXyloNetSwap() {
         path,
         amountIn: amountIn.toString(),
         minAmountOut: minAmountOut.toString(),
-        execMinAmountOut: execMinAmountOut.toString(),
         slippageBps,
-        additionalBuffer: additionalBuffer.toString(),
         deadlineSeconds: deadlineSeconds.toString(),
         account,
         recipient: to,
@@ -298,7 +292,7 @@ export function useXyloNetSwap() {
       })
     }
 
-    // ─── Step 4: Simulate ───
+    // ─── Step 3: Simulate ───
     try {
       await publicClient.simulateContract({
         address: XYLONET_ROUTER_ADDRESS,
@@ -318,8 +312,8 @@ export function useXyloNetSwap() {
       return { status: 'SIMULATION_FAILED', reason }
     }
 
-    // ─── Step 5: Verify fingerprint before write ───
-    const currentFingerprint = `${amountIn.toString()}:${execMinAmountOut.toString()}:${path.join(',')}:${to}:${deadlineSeconds.toString()}`
+    // ─── Step 4: Verify fingerprint before write ───
+    const currentFingerprint = `${amountIn.toString()}:${minAmountOut.toString()}:${path.join(',')}:${to}:${deadlineSeconds.toString()}`
     if (fingerprintArgs !== currentFingerprint) {
       const reason = 'Swap parameters changed between simulation and execution — refresh and try again'
       if (import.meta.env.DEV) console.warn('[useXyloNetSwap] FINGERPRINT MISMATCH', { fingerprintArgs, currentFingerprint })
@@ -327,7 +321,7 @@ export function useXyloNetSwap() {
       return { status: 'SIMULATION_FAILED', reason }
     }
 
-    // ─── Step 6: Submit via writeContract ───
+    // ─── Step 5: Submit via writeContract ───
     writeContract(
       {
         address: XYLONET_ROUTER_ADDRESS,

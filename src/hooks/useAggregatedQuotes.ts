@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useChainId, useReadContract } from 'wagmi'
 import { arcTestnet } from '@/config/chains'
 import { EXTERNAL_DEXES } from '@/config/externalDexes'
@@ -20,6 +20,10 @@ type UseAggregatedQuotesParams = {
   reserveEurc?: bigint
   slippageBps: number
   selectedQuoteId?: string
+  /** Live clock timestamp (ms). When provided, quotes are checked for staleness
+   *  against this clock instead of a frozen mount-time value.
+   *  Pass the ticking `clockMs` from SwapPage to keep TTL checks live. */
+  nowMs?: number
 }
 
 const BETTER_ROUTE_WARNING_THRESHOLD_BPS = BigInt(500)
@@ -35,9 +39,20 @@ export function useAggregatedQuotes({
   reserveEurc,
   slippageBps,
   selectedQuoteId,
+  nowMs: externalNowMs,
 }: UseAggregatedQuotesParams) {
-  const [quoteTimestamp] = useState(() => Date.now())
   const connectedChainId = useChainId()
+  // Reactive clock for TTL checks: use external clock (from SwapPage) if provided,
+  // otherwise maintain an internal ticking clock for standalone usage.
+  const [internalNowMs, setInternalNowMs] = useState(() => Date.now())
+  const hasExternalClock = externalNowMs !== undefined && externalNowMs > 0
+  useEffect(() => {
+    if (!hasExternalClock) {
+      const id = window.setInterval(() => setInternalNowMs(Date.now()), 5_000)
+      return () => window.clearInterval(id)
+    }
+  }, [hasExternalClock])
+  const quoteTimestamp = hasExternalClock ? externalNowMs : internalNowMs
   const shouldReadXyloNet = amountIn > BigInt(0) && isXyloNetPairSupported(tokenIn, tokenOut)
   const xylonet = EXTERNAL_DEXES.xylonet
   const unitflow = EXTERNAL_DEXES.unitflow
