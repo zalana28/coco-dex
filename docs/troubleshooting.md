@@ -34,6 +34,25 @@ Coco DEX requires Arc Testnet. Use the app prompt or wallet network selector to 
 
 Confirm the wallet has enough input token and enough native gas token for the transaction. Arc Testnet uses USDC as the native gas token, while the app also displays ERC-20 USDC for DeFi token flows.
 
+## Insufficient gas
+
+The wallet's native balance is too low to pay for a transaction. Because Arc
+pays gas in USDC, this can happen while the ERC-20 USDC balance still looks
+healthy — they are the same underlying asset at different decimal scales
+(native 18, ERC-20 6).
+
+This is also why **Max** on USDC does not select the entire balance: it holds
+back a small reserve (`GAS_BUFFER_USDC`, 0.1 USDC). Without it, a max swap
+simulates cleanly and then reverts. `eth_call` does not deduct the upfront gas
+cost, but `eth_estimateGas` and real execution deduct `gasLimit × gasPrice`
+*before* the call runs, so `transferFrom` finds the balance short. Max on EURC
+still selects the full balance — EURC does not pay for gas.
+
+## State moved — refresh quote and retry
+
+The chain advanced more than two blocks between the simulation and submission,
+so the simulated result may no longer hold. Re-quote and try again.
+
 ## Approval required
 
 The selected route's spender or permission flow is not satisfied. Approve the selected token for the selected route if prompted, wait for confirmation, then continue.

@@ -3,6 +3,12 @@ import { useState, useCallback } from 'react'
 import { arcTestnet } from '@/config/chains'
 import { SYNTHRA_QUOTE_FEE_TIERS, SYNTHRA_V3_SWAP_ROUTER_ADDRESS } from '@/config/synthra'
 import type { Token } from '@/types/token'
+import {
+  hasStateMoved,
+  SIMULATION_STATE_MOVED_REASON,
+  tryGetBlockNumber,
+  trySimulate,
+} from '@/lib/router/swapSimulation'
 
 const ARC_CHAIN_ID = arcTestnet.id
 
@@ -206,31 +212,35 @@ export function useSynthraSwap() {
       })
     }
 
-    try {
-      await publicClient.simulateContract({
+    // Record the block the simulation runs against, so state drift between
+    // simulation and submission can be detected below.
+    const simBlockNumber = await tryGetBlockNumber(() => publicClient.getBlockNumber())
+
+    const simulation = await trySimulate(() => publicClient.simulateContract({
         address: SYNTHRA_V3_SWAP_ROUTER_ADDRESS,
         abi: SYNTHRA_V3_SWAP_ROUTER_ABI,
         functionName: 'exactInputSingle',
         args: swapArgs,
         account,
         chain: arcTestnet,
-      })
-      if (import.meta.env.DEV) console.debug('[useSynthraSwap] simulation passed')
-    } catch (simErr: unknown) {
-      const reason = classifySynthraSimulationError(simErr)
-      if (import.meta.env.DEV) console.debug('[useSynthraSwap] simulation failed:', { reason, rawError: simErr })
+      }))
+    if (!simulation.ok) {
+      const reason = classifySynthraSimulationError(simulation.error)
+      if (import.meta.env.DEV) console.debug('[useSynthraSwap] simulation failed:', { reason, rawError: simulation.error })
       setSimulationError(reason)
       return { status: 'SIMULATION_FAILED', reason }
     }
+      if (import.meta.env.DEV) console.debug('[useSynthraSwap] simulation passed')
 
+    if (hasStateMoved(simBlockNumber, await tryGetBlockNumber(() => publicClient.getBlockNumber()))) {
+      setSimulationError(SIMULATION_STATE_MOVED_REASON)
+      return { status: 'SIMULATION_FAILED', reason: SIMULATION_STATE_MOVED_REASON }
+    }
+
+    // Submit the simulated request: validated args plus the gas limit viem
+    // derived, so the wallet does not re-estimate against its own RPC.
     writeContract(
-      {
-        address: SYNTHRA_V3_SWAP_ROUTER_ADDRESS,
-        abi: SYNTHRA_V3_SWAP_ROUTER_ABI,
-        functionName: 'exactInputSingle',
-        args: swapArgs,
-        chainId: ARC_CHAIN_ID,
-      },
+      simulation.value.request,
       {
         onSuccess: (hash) => {
           if (import.meta.env.DEV) console.log('[useSynthraSwap] tx sent:', hash)
