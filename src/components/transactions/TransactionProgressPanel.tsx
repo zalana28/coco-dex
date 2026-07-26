@@ -1,4 +1,4 @@
-import { CheckCircle, XCircle, Loader2, Clock, Copy, ExternalLink, X, RefreshCw } from 'lucide-react'
+import { CheckCircle, XCircle, Loader2, Clock, Copy, ExternalLink, X, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react'
 import type { TransactionFlow, TransactionStep, TransactionStatus } from '@/types/transactions'
 import { getExplorerTxUrl, truncateTxHash, getStatusMessage } from '@/types/transactions'
 import { useState } from 'react'
@@ -116,7 +116,7 @@ function StepRow({ step, stepNumber }: { step: TransactionStep; stepNumber: numb
         )}
 
         {step.error && (
-          <p className="text-[11px] text-coco-red-500/80 mt-0.5 truncate">{step.error}</p>
+          <StepError error={step.error} errorDetail={step.errorDetail} />
         )}
 
         {/* Tx hash with copy + explorer link */}
@@ -124,6 +124,62 @@ function StepRow({ step, stepNumber }: { step: TransactionStep; stepNumber: numb
           <TxHashDisplay txHash={step.txHash} />
         )}
       </div>
+    </div>
+  )
+}
+
+/**
+ * Failure text for a step.
+ *
+ * The short summary always wraps rather than truncating — revert reasons such as
+ * `INSUFFICIENT_OUTPUT_AMOUNT` sit at the *end* of provider strings, so clipping
+ * destroys exactly the part worth reading. When a fuller provider string is
+ * available it goes behind a collapsed "Details" disclosure with a copy button,
+ * so the row stays compact without losing anything.
+ */
+function StepError({ error, errorDetail }: { error: string; errorDetail?: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(errorDetail ?? error)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div className="mt-0.5">
+      <p className="text-[11px] text-coco-red-500/80 break-words">{error}</p>
+
+      {errorDetail && (
+        <>
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="flex items-center gap-0.5 mt-1 text-[10px] text-coco-dark-muted hover:text-coco-red-500/80 transition-colors"
+            aria-expanded={expanded}
+            title={expanded ? 'Hide error details' : 'Show error details'}
+          >
+            {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+            Details
+          </button>
+
+          {expanded && (
+            <div className="mt-1 rounded-lg bg-coco-dark-bg/60 border border-coco-dark-border p-2">
+              <pre className="text-[10px] font-mono text-coco-dark-muted whitespace-pre-wrap break-all max-h-40 overflow-y-auto">
+                {errorDetail}
+              </pre>
+              <button
+                onClick={handleCopy}
+                className="flex items-center gap-1 mt-1.5 text-[10px] text-coco-dark-muted hover:text-coco-teal-400 transition-colors"
+                title="Copy error details"
+              >
+                <Copy className="h-3 w-3" />
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }

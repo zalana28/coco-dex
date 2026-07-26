@@ -582,7 +582,7 @@ export function CocoStableAddLiquidityPanel({
         ? RATE_LIMIT_COPY
         : getViemFriendlyMessage(error)
       setTxError(message)
-      txProgress.markFailed('add_liquidity', message.slice(0, 80))
+      txProgress.markFailed('add_liquidity', message, error instanceof Error ? error.message : String(error))
       return
     }
 

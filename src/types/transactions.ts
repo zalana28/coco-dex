@@ -27,7 +27,18 @@ export interface TransactionStep {
   label: string
   status: TransactionStatus
   txHash?: `0x${string}`
+  /**
+   * Short, human-readable failure summary shown in the collapsed row.
+   * Produced by `classifySwapError` — never a raw provider string.
+   */
   error?: string
+  /**
+   * Full, untruncated failure text (raw viem/provider message, revert reason,
+   * explorer links). Shown only behind the "Details" disclosure and used for
+   * copy-to-clipboard. Kept separate so the collapsed row stays readable while
+   * the real revert reason is never destroyed.
+   */
+  errorDetail?: string
   timestamp: number
 }
 
