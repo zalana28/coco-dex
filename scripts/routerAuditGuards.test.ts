@@ -145,6 +145,15 @@ describe('router audit base-ref resolver', () => {
       // Coco price-impact guard (Phase 2)
       'src/lib/router/cocoAdapter.ts',
       'src/lib/router/cocoAdapter.test.ts',
+      // RPC rate-limiting (PR #117): shared quote query policy, shared-outage
+      // circuit breaker, and Synthra fee-tier cache. All three are quote-side
+      // concerns built on quoteState.ts, which is already allowlisted.
+      'src/lib/router/quoteQueryOptions.ts',
+      'src/lib/router/quoteQueryOptions.test.ts',
+      'src/lib/router/rpcOutageStore.ts',
+      'src/lib/router/rpcOutageStore.test.ts',
+      'src/lib/router/synthraFeeCache.ts',
+      'src/lib/router/synthraFeeCache.test.ts',
     ])
     expect(changed).not.toContain('vercel.json')
     expect(changed.some((file) => file.startsWith('api/') && !file.startsWith('api/_lib/'))).toBe(false)
@@ -345,6 +354,15 @@ describe('router audit deployment and execution guards', () => {
       // Coco price-impact guard (Phase 2)
       'src/lib/router/cocoAdapter.ts',
       'src/lib/router/cocoAdapter.test.ts',
+      // RPC rate-limiting (PR #117): shared quote query policy, shared-outage
+      // circuit breaker, and Synthra fee-tier cache. All three are quote-side
+      // concerns built on quoteState.ts, which is already allowlisted.
+      'src/lib/router/quoteQueryOptions.ts',
+      'src/lib/router/quoteQueryOptions.test.ts',
+      'src/lib/router/rpcOutageStore.ts',
+      'src/lib/router/rpcOutageStore.test.ts',
+      'src/lib/router/synthraFeeCache.ts',
+      'src/lib/router/synthraFeeCache.test.ts',
     ])
     expect(changed.some((file) => file.startsWith('api/'))).toBe(false)
     expect(changed.some((file) => file === 'vercel.json')).toBe(false)
