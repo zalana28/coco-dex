@@ -70,7 +70,18 @@ export function classifyQuoteError(error: unknown): QuoteErrorCategory {
 
   // RPC / transport errors
   if (lower.includes('timeout') || lower.includes('timed out')) return 'rpc-timeout'
-  if (lower.includes('rate limit') || lower.includes('429') || lower.includes('too many requests')) return 'rpc-rate-limit'
+  // 'request limit reached' is what Arc Testnet actually returns, as JSON-RPC
+  // code -32011. Without it this fell through to the 'network' check below and
+  // was classified as rpc-disconnected — correct only by accident, because the
+  // RPC host is literally `rpc.testnet.arc.network`. Verified against the live
+  // endpoint, not assumed.
+  if (
+    lower.includes('rate limit') ||
+    lower.includes('request limit') ||
+    lower.includes('429') ||
+    lower.includes('-32011') ||
+    lower.includes('too many requests')
+  ) return 'rpc-rate-limit'
   if (lower.includes('disconnect') || lower.includes('connection') || lower.includes('network') || lower.includes('fetch')) return 'rpc-disconnected'
   if (lower.includes('temporarily') || lower.includes('unavailable') || lower.includes('service unavailable') || lower.includes('503')) return 'rpc-temporary'
 

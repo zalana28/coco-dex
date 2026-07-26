@@ -55,6 +55,32 @@ it was:
 
 Simulation can fail before the transaction is sent. Common causes include missing allowance, invalid balance, stale quote, wrong network, route state changes, or an RPC/client issue.
 
+## RPC is busy / HTTP 429
+
+Arc Testnet's public RPC is rate-limited, and approve + swap previously competed
+for that budget with roughly ten background pollers.
+
+What the app now does:
+
+- **Pauses quote, balance and reserve polling while a transaction is in flight.**
+  Existing quotes stay on screen; only the requests stop.
+- **Retries transient failures only**, with exponential backoff and jitter
+  (`src/lib/router/quoteQueryOptions.ts`). A reverted call is never retried — it
+  would fail identically.
+- **Keeps one retry layer, not two.** The viem transport is held at
+  `retryCount: 1` because react-query retries above it and the two multiply.
+- **Polls one Synthra fee tier**, the one that last won for the pair; the other
+  two are fetched only when the all-routes panel is open.
+- **Opens a circuit breaker** when two or more distinct routes fail transiently
+  within 10s. Polling stops for 45s behind a single banner —
+  *"Arc Testnet RPC is busy — quotes paused for Ns."* — with a **Retry now**
+  button, instead of five separate red errors for one underlying cause.
+
+If 429s persist, set a dedicated endpoint. `VITE_ARC_RPC_PRIMARY` (see
+`.env.example`) becomes the primary transport with the public endpoint as an
+automatic fallback. Leaving it unset is supported, just more prone to rate
+limiting.
+
 ## Deadline expired
 
 Submit a fresh transaction. Deadlines prevent execution after a configured time window.

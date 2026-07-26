@@ -18,7 +18,11 @@ const ARC_CHAIN_ID = arcTestnet.id
  * DO NOT use wagmi's useBalance() for DEX token amounts — that returns
  * native gas balance at 18 decimals. Use useNativeBalance() for gas display only.
  */
-export function useTokenBalance(token: Token | undefined, address: `0x${string}` | undefined) {
+export function useTokenBalance(
+  token: Token | undefined,
+  address: `0x${string}` | undefined,
+  { pausePolling = false }: { pausePolling?: boolean } = {}
+) {
   const { data, isLoading, refetch } = useReadContract({
     address: token?.address as `0x${string}`,
     abi: ERC20_ABI,
@@ -26,7 +30,9 @@ export function useTokenBalance(token: Token | undefined, address: `0x${string}`
     args: address ? [address] : undefined,
     chainId: ARC_CHAIN_ID,
     query: {
-      enabled: !!token && !!address,
+      // Balances are refetched explicitly after a successful swap, so there is
+      // nothing to lose by holding off while a transaction is in flight.
+      enabled: !!token && !!address && !pausePolling,
     },
   })
 
