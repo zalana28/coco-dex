@@ -157,6 +157,9 @@ describe('router audit base-ref resolver', () => {
       // Quote staleness (PR #118): proves isQuoteStale() actually fires once
       // quoteTimestamp carries the chain read time rather than construction time.
       'src/lib/router/quoteFreshness.test.ts',
+      // Swap execution (PR #119): simulate-then-submit helpers shared by the
+      // XyloNet, UnitFlow and Synthra swap hooks.
+      'src/lib/router/swapSimulation.ts',
     ])
     expect(changed).not.toContain('vercel.json')
     expect(changed.some((file) => file.startsWith('api/') && !file.startsWith('api/_lib/'))).toBe(false)
@@ -369,6 +372,9 @@ describe('router audit deployment and execution guards', () => {
       // Quote staleness (PR #118): proves isQuoteStale() actually fires once
       // quoteTimestamp carries the chain read time rather than construction time.
       'src/lib/router/quoteFreshness.test.ts',
+      // Swap execution (PR #119): simulate-then-submit helpers shared by the
+      // XyloNet, UnitFlow and Synthra swap hooks.
+      'src/lib/router/swapSimulation.ts',
     ])
     expect(changed.some((file) => file.startsWith('api/'))).toBe(false)
     expect(changed.some((file) => file === 'vercel.json')).toBe(false)
