@@ -154,6 +154,9 @@ describe('router audit base-ref resolver', () => {
       'src/lib/router/rpcOutageStore.test.ts',
       'src/lib/router/synthraFeeCache.ts',
       'src/lib/router/synthraFeeCache.test.ts',
+      // Quote staleness (PR #118): proves isQuoteStale() actually fires once
+      // quoteTimestamp carries the chain read time rather than construction time.
+      'src/lib/router/quoteFreshness.test.ts',
     ])
     expect(changed).not.toContain('vercel.json')
     expect(changed.some((file) => file.startsWith('api/') && !file.startsWith('api/_lib/'))).toBe(false)
@@ -363,6 +366,9 @@ describe('router audit deployment and execution guards', () => {
       'src/lib/router/rpcOutageStore.test.ts',
       'src/lib/router/synthraFeeCache.ts',
       'src/lib/router/synthraFeeCache.test.ts',
+      // Quote staleness (PR #118): proves isQuoteStale() actually fires once
+      // quoteTimestamp carries the chain read time rather than construction time.
+      'src/lib/router/quoteFreshness.test.ts',
     ])
     expect(changed.some((file) => file.startsWith('api/'))).toBe(false)
     expect(changed.some((file) => file === 'vercel.json')).toBe(false)
