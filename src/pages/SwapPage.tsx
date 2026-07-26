@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
+import { formatUnits } from 'viem'
 import { useSearchParams } from 'react-router-dom'
 import { Card } from '@/components/common/Card'
 import { TokenIcon } from '@/components/common/TokenIcon'
@@ -21,7 +22,7 @@ import { useTransactionSettings } from '@/hooks/useSettings'
 import type { ApprovalMode } from '@/hooks/useSettings'
 import { useTransactionProgress } from '@/hooks/useTransactionProgress'
 import { useNativeBalance } from '@/hooks/useNativeBalance'
-import { getMaxSpendable, hasInsufficientGas } from '@/lib/gasReserve'
+import { GAS_BUFFER_USDC, getMaxSpendable, hasInsufficientGas, isNativeBackedToken, leavesTooLittleForGas } from '@/lib/gasReserve'
 import { useCheckReceipt } from '@/hooks/useCheckReceipt'
 import { useAggregatedQuotes } from '@/hooks/useAggregatedQuotes'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
@@ -417,12 +418,31 @@ export function SwapPage() {
     const classified = classifySwapError(swapError, { router: activeQuote?.source ?? 'coco' })
     if (classified.code === 'USER_REJECTED') {
       txProgress.markRejected('swap')
-    } else {
-      // The classifier owns the short form; the raw provider string is retained
-      // in full so the real revert reason survives to the Details disclosure.
-      txProgress.markFailed('swap', classified.message, swapError.message)
+      return
     }
-  }, [swapError, txProgress, activeQuote])
+
+    // Mobile wallets often return a generic, locale-translated string instead of
+    // a real revert reason ("Terjadi kesalahan dalam memproses transaksi"), and
+    // viem surfaces it as though the contract had reverted. When the balance is
+    // within the gas reserve of the amount, that is the likelier explanation and
+    // is something the user can act on, so say it instead.
+    const gasStarved = leavesTooLittleForGas(fromAmountRaw, fromBalance, fromToken)
+    const message = gasStarved
+      ? `Not enough ${fromToken.symbol} left for gas — reduce the amount`
+      : classified.message
+
+    // Attach the numbers the raw provider string never carries. Without these a
+    // failure report cannot be diagnosed after the fact.
+    const context = [
+      `route: ${activeQuote?.source ?? 'unknown'}`,
+      `amountIn: ${formatTokenAmount(fromAmountRaw, fromToken.decimals)} ${fromToken.symbol}`,
+      `balance: ${fromBalance === undefined ? 'unknown' : `${formatTokenAmount(fromBalance, fromToken.decimals)} ${fromToken.symbol}`}`,
+      `nativeBalance: ${nativeBalance === undefined ? 'unknown' : `${formatUnits(nativeBalance, 18)} USDC`}`,
+      `gasReserveApplies: ${isNativeBackedToken(fromToken)}`,
+    ].join('\n')
+
+    txProgress.markFailed('swap', message, `${swapError.message}\n\n--- context ---\n${context}`)
+  }, [swapError, txProgress, activeQuote, fromAmountRaw, fromBalance, fromToken, nativeBalance])
 
   // ─── Fix 1: Check Status handler — manually poll receipts for all known tx hashes ───
   const handleCheckStatus = useCallback(async () => {
@@ -478,6 +498,15 @@ export function SwapPage() {
     if (!hasLiquidity && !isXyloNetRoute && !isUnitFlowRoute && !isSynthraRoute) return { text: 'Pool has no liquidity', disabled: true, action: 'no-liquidity' as const }
     if (!fromAmount || parseFloat(fromAmount) <= 0) return { text: 'Enter an amount', disabled: true, action: 'enter' as const }
     if (fromBalance !== undefined && fromAmountRaw > fromBalance) return { text: 'Insufficient balance', disabled: true, action: 'insufficient' as const }
+    // The amount fits, but not once gas is accounted for. Say so specifically:
+    // "insufficient balance" reads as wrong when the balance visibly covers it.
+    if (leavesTooLittleForGas(fromAmountRaw, fromBalance, fromToken)) {
+      return {
+        text: `Leave ${formatTokenAmount(GAS_BUFFER_USDC, fromToken.decimals)} ${fromToken.symbol} for gas`,
+        disabled: true,
+        action: 'insufficient-gas-reserve' as const,
+      }
+    }
     if (hasInsufficientGas(nativeBalance)) return { text: 'Insufficient gas', disabled: true, action: 'insufficient-gas' as const }
     if (isFindingRoute && !activeQuote) return { text: 'Finding best route…', disabled: true, action: 'finding-route' as const }
     if (!activeQuote) return { text: noExecutableRouteReason ?? 'No executable route available for this amount', disabled: true, action: 'no-executable-route' as const }
@@ -512,7 +541,7 @@ export function SwapPage() {
       disabled: false,
       action: 'swap' as const,
     }
-  }, [isConnected, isWrongNetwork, isSwitching, reservesLoading, hasLiquidity, fromAmount, fromBalance, nativeBalance, fromAmountRaw, activeQuote, isFindingRoute, noExecutableRouteReason, isApproving, isApprovalConfirming, needsApproval, fromToken.symbol, isSwapping, isSwapConfirming, isXyloNetRoute, isUnitFlowRoute, isSynthraRoute, xyloNetSimulationError, unitFlowSimulationError, synthraSimulationError])
+  }, [isConnected, isWrongNetwork, isSwitching, reservesLoading, hasLiquidity, fromAmount, fromBalance, nativeBalance, fromAmountRaw, fromToken, activeQuote, isFindingRoute, noExecutableRouteReason, isApproving, isApprovalConfirming, needsApproval, isSwapping, isSwapConfirming, isXyloNetRoute, isUnitFlowRoute, isSynthraRoute, xyloNetSimulationError, unitFlowSimulationError, synthraSimulationError])
 
   const handleButtonClick = async () => {
     if (buttonState.action === 'switch-network') {
