@@ -25,7 +25,16 @@ export const SLIPPAGE_MIN = 0.01 // 0.01%
 export const SLIPPAGE_MAX = 5 // 5%
 export const SLIPPAGE_PRESETS = [0.1, 0.5, 1.0] as const
 
-export const DEADLINE_DEFAULT = 20 // 20 minutes
+/**
+ * Transaction deadline, in minutes.
+ *
+ * 5 rather than 20: a 20-minute window lets a transaction sit in the mempool
+ * and then execute against a `minAmountOut` derived from 20-minute-old pricing.
+ * For a stablecoin pair on testnet there is no reason to keep that window open
+ * — a transaction that has not landed in 5 minutes is better resubmitted at a
+ * fresh price. Users who want longer can still raise it up to DEADLINE_MAX.
+ */
+export const DEADLINE_DEFAULT = 5
 export const DEADLINE_MIN = 1
 export const DEADLINE_MAX = 180
 

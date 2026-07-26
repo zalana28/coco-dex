@@ -18,7 +18,18 @@
 import { classifyQuoteError, getRetryConfig, isTransientRpcError } from './quoteState'
 import { recordQuoteFailure } from './rpcOutageStore'
 
-export const QUOTE_REFETCH_INTERVAL_MS = 30_000
+/**
+ * How often quotes are refreshed.
+ *
+ * 12s rather than 30s, so a quote is refreshed roughly twice within its 30s TTL
+ * instead of expiring at the moment it would be replaced. Only safe because the
+ * rate-limiting work in this module landed first: polling is suspended during a
+ * transaction, only transient failures are retried, retries no longer multiply
+ * across two layers, and a single Synthra fee tier is polled instead of three.
+ * Raising this frequency before those changes would have made the 429 storm
+ * worse.
+ */
+export const QUOTE_REFETCH_INTERVAL_MS = 12_000
 export const QUOTE_STALE_TIME_MS = 30_000
 
 /** Retry only transient RPC failures, and only while `getRetryConfig` allows. */
