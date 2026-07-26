@@ -15,6 +15,7 @@ import { useLPBalance } from '@/hooks/useLPBalance'
 import { useNetworkGuard } from '@/hooks/useNetworkGuard'
 import { useTransactionSettings } from '@/hooks/useSettings'
 import { useTransactionProgress } from '@/hooks/useTransactionProgress'
+import { classifySwapError } from '@/lib/mobileWallet'
 import { formatTokenAmount, parseTokenAmount } from '@/utils/format'
 import type { Token } from '@/types/token'
 
@@ -118,11 +119,11 @@ export function AddLiquidityPage() {
     } else if (approveUsdc.isReverted) {
       txProgress.markFailed('approve_usdc', 'Transaction reverted')
     } else if (approveUsdc.error) {
-      const msg = approveUsdc.error.message || 'Approval failed'
-      if (msg.includes('rejected') || msg.includes('denied')) {
+      const classified = classifySwapError(approveUsdc.error, { router: 'coco' })
+      if (classified.code === 'USER_REJECTED') {
         txProgress.markRejected('approve_usdc')
       } else {
-        txProgress.markFailed('approve_usdc', msg.slice(0, 80))
+        txProgress.markFailed('approve_usdc', classified.message, approveUsdc.error.message)
       }
     }
   }, [approveUsdc.isApproved, approveUsdc.isReverted, approveUsdc.error, txProgress])
@@ -146,11 +147,11 @@ export function AddLiquidityPage() {
     } else if (approveEurc.isReverted) {
       txProgress.markFailed('approve_eurc', 'Transaction reverted')
     } else if (approveEurc.error) {
-      const msg = approveEurc.error.message || 'Approval failed'
-      if (msg.includes('rejected') || msg.includes('denied')) {
+      const classified = classifySwapError(approveEurc.error, { router: 'coco' })
+      if (classified.code === 'USER_REJECTED') {
         txProgress.markRejected('approve_eurc')
       } else {
-        txProgress.markFailed('approve_eurc', msg.slice(0, 80))
+        txProgress.markFailed('approve_eurc', classified.message, approveEurc.error.message)
       }
     }
   }, [approveEurc.isApproved, approveEurc.isReverted, approveEurc.error, txProgress])
@@ -168,11 +169,11 @@ export function AddLiquidityPage() {
       txProgress.markSuccess('add_liquidity')
     }
     if (supplyError) {
-      const msg = supplyError.message || 'Supply failed'
-      if (msg.includes('rejected') || msg.includes('denied')) {
+      const classified = classifySwapError(supplyError, { router: 'coco' })
+      if (classified.code === 'USER_REJECTED') {
         txProgress.markRejected('add_liquidity')
       } else {
-        txProgress.markFailed('add_liquidity', msg.slice(0, 80))
+        txProgress.markFailed('add_liquidity', classified.message, supplyError.message)
       }
     }
   }, [supplyTxHash, supplySuccess, supplyError, txProgress])

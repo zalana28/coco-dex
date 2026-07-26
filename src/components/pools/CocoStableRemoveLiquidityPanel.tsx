@@ -487,9 +487,10 @@ export function CocoStableRemoveLiquidityPanel({
       })
     } catch (error) {
       const message = getSimulationErrorSummary(error)
+      const details = isRateLimitError(error) || isUserRejected(error) ? null : getErrorDetails(error)
       setTxError(message)
-      setTxErrorDetails(isRateLimitError(error) || isUserRejected(error) ? null : getErrorDetails(error))
-      txProgress.markFailed('remove_liquidity', message.slice(0, 80))
+      setTxErrorDetails(details)
+      txProgress.markFailed('remove_liquidity', message, details ?? undefined)
       return
     }
 

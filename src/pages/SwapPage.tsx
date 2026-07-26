@@ -342,7 +342,9 @@ export function SwapPage() {
     if (classified.code === 'USER_REJECTED') {
       txProgress.markRejected(approveType)
     } else {
-      txProgress.markFailed(approveType, classified.message.slice(0, 80))
+      // Keep the classified summary short, but preserve the untruncated provider
+      // string as detail — revert reasons live at the end of viem messages.
+      txProgress.markFailed(approveType, classified.message, approveError.message)
     }
   }, [approveError, approveType, txProgress, activeQuote])
 
@@ -375,10 +377,8 @@ export function SwapPage() {
     if (!step || step.status === 'success' || step.status === 'idle') return
     const txHashForExplorer = swapTxHash
     const explorerLink = txHashForExplorer ? getExplorerTxUrl(txHashForExplorer) : undefined
-    const revertMsg = isXyloNetRoute
-      ? `XyloNet swap reverted — View: ${explorerLink ?? txHashForExplorer}`
-      : `Transaction reverted — View: ${explorerLink ?? txHashForExplorer}`
-    txProgress.markFailed('swap', revertMsg)
+    const revertMsg = isXyloNetRoute ? 'XyloNet swap reverted' : 'Transaction reverted'
+    txProgress.markFailed('swap', revertMsg, explorerLink ? `View on explorer: ${explorerLink}` : txHashForExplorer)
     // Decode revert reason in background (updates revertReason state when done)
     if (isXyloNetRoute) decodeXyloNetRevert()
   }, [swapReverted, txProgress, isXyloNetRoute, swapTxHash, decodeXyloNetRevert])
@@ -389,8 +389,11 @@ export function SwapPage() {
     const step = txProgress.currentFlow.steps.find((s) => s.type === 'swap')
     if (!step || step.status !== 'failed') return
     const explorerLink = getExplorerTxUrl(swapTxHash)
-    const msg = `XyloNet swap reverted: ${xyloNetRevertReason} — View: ${explorerLink}`
-    txProgress.markFailed('swap', msg)
+    txProgress.markFailed(
+      'swap',
+      `XyloNet swap reverted: ${xyloNetRevertReason}`,
+      `${xyloNetRevertReason}\n\nView on explorer: ${explorerLink}`
+    )
   }, [xyloNetRevertReason, isXyloNetRoute, txProgress, swapTxHash, swapReverted])
 
   // When swap errors
@@ -398,13 +401,15 @@ export function SwapPage() {
     if (!txProgress.currentFlow || !swapError) return
     const step = txProgress.currentFlow.steps.find((s) => s.type === 'swap')
     if (!step || step.status === 'success' || step.status === 'idle') return
-    const msg = swapError.message || 'Swap failed'
-    if (msg.includes('rejected') || msg.includes('denied')) {
+    const classified = classifySwapError(swapError, { router: activeQuote?.source ?? 'coco' })
+    if (classified.code === 'USER_REJECTED') {
       txProgress.markRejected('swap')
     } else {
-      txProgress.markFailed('swap', msg.slice(0, 80))
+      // The classifier owns the short form; the raw provider string is retained
+      // in full so the real revert reason survives to the Details disclosure.
+      txProgress.markFailed('swap', classified.message, swapError.message)
     }
-  }, [swapError, txProgress])
+  }, [swapError, txProgress, activeQuote])
 
   // ─── Fix 1: Check Status handler — manually poll receipts for all known tx hashes ───
   const handleCheckStatus = useCallback(async () => {

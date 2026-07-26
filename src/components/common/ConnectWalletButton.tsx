@@ -6,6 +6,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import { useNetworkGuard } from '@/hooks/useNetworkGuard'
+import { classifySwapError, isDocumentActive, waitForDocumentActive } from '@/lib/mobileWallet'
 
 type WalletBrowserProvider = {
   isMetaMask?: boolean
@@ -76,7 +77,34 @@ export function ConnectWalletButton() {
   const connectOptionsRef = useClickOutside<HTMLDivElement>(closeConnectOptions)
   const injectedConnectors = useMemo(() => connectors.filter((connector) => !isWalletConnectConnector(connector)), [connectors])
   const walletConnectConnectors = useMemo(() => connectors.filter(isWalletConnectConnector), [connectors])
-  const networkSwitchError = (switchState === 'error' || switchState === 'rejected') ? switchError?.message : undefined
+  // Never render a raw provider string. `classifySwapError` maps EIP-1193 -32002
+  // ("Requested resource not available" / tab inactive) to actionable copy — that
+  // path is the most common mobile connect failure.
+  const networkSwitchError = (switchState === 'error' || switchState === 'rejected') && switchError
+    ? classifySwapError(switchError).message
+    : undefined
+  const connectErrorMessage = connectError ? classifySwapError(connectError).message : undefined
+
+  // The raw strings never reach the DOM, so keep them reachable while developing.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    if (connectError) console.debug('[ConnectWalletButton] raw connect error:', connectError)
+    if (switchError) console.debug('[ConnectWalletButton] raw network switch error:', switchError)
+  }, [connectError, switchError])
+
+  /**
+   * Mobile wallets return -32002 when the page is backgrounded during the wallet
+   * hand-off. Wait for the tab to come back before dispatching the request, so
+   * the user does not get an unactionable error on returning to the browser.
+   */
+  const handleConnect = useCallback(async (connector: Connector) => {
+    setShowConnectOptions(false)
+    if (!isDocumentActive()) {
+      const active = await waitForDocumentActive(10_000)
+      if (!active) return
+    }
+    connect({ connector })
+  }, [connect])
 
   if (isConnecting) {
     return (
@@ -159,9 +187,9 @@ export function ConnectWalletButton() {
         <span className="hidden sm:inline">Connect Wallet</span>
       </button>
 
-      {connectError && !showConnectOptions && (
+      {connectErrorMessage && !showConnectOptions && (
         <p className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-coco-red-500/20 bg-coco-dark-surface/95 px-3 py-2 text-xs leading-5 text-coco-red-500 shadow-coco-2 backdrop-blur-xl">
-          {connectError.message}
+          {connectErrorMessage}
         </p>
       )}
 
@@ -189,10 +217,7 @@ export function ConnectWalletButton() {
               title="Wallet browser"
               connectors={injectedConnectors}
               isPending={isPending}
-              onConnect={(connector) => {
-                connect({ connector })
-                setShowConnectOptions(false)
-              }}
+              onConnect={(connector) => void handleConnect(connector)}
             />
 
             <div className="space-y-2">
@@ -200,10 +225,7 @@ export function ConnectWalletButton() {
                 title="WalletConnect"
                 connectors={walletConnectConnectors}
                 isPending={isPending}
-                onConnect={(connector) => {
-                  connect({ connector })
-                  setShowConnectOptions(false)
-                }}
+                onConnect={(connector) => void handleConnect(connector)}
               />
 
               {!isWalletConnectConfigured && (
@@ -233,9 +255,9 @@ export function ConnectWalletButton() {
             )}
           </div>
 
-          {connectError && (
+          {connectErrorMessage && (
             <p className="mt-3 rounded-xl border border-coco-red-500/20 bg-coco-red-500/10 px-3 py-2 text-xs leading-5 text-coco-red-500">
-              {connectError.message}
+              {connectErrorMessage}
             </p>
           )}
         </div>

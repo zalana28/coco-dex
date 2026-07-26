@@ -100,15 +100,27 @@ export function useTransactionProgress() {
 
   /**
    * Mark a step as failed.
+   *
+   * @param error       Short summary for the collapsed row. Should come from
+   *                    `classifySwapError`, not a raw provider message.
+   * @param errorDetail Full untruncated text (raw provider error, revert reason)
+   *                    surfaced behind the "Details" disclosure. Omit when it
+   *                    would just repeat `error`.
    */
-  const markFailed = useCallback((type: TransactionType, error?: string) => {
+  const markFailed = useCallback((type: TransactionType, error?: string, errorDetail?: string) => {
     setCurrentFlow((prev) => {
       if (!prev) return prev
       return {
         ...prev,
         steps: prev.steps.map((step) =>
           step.type === type && step.status !== 'success' && step.status !== 'idle'
-            ? { ...step, status: 'failed' as TransactionStatus, error, timestamp: Date.now() }
+            ? {
+                ...step,
+                status: 'failed' as TransactionStatus,
+                error,
+                errorDetail: errorDetail && errorDetail !== error ? errorDetail : undefined,
+                timestamp: Date.now(),
+              }
             : step
         ),
       }
@@ -142,7 +154,14 @@ export function useTransactionProgress() {
         ...prev,
         steps: prev.steps.map((step) =>
           step.type === type && (step.status === 'failed' || step.status === 'rejected')
-            ? { ...step, status: 'idle' as TransactionStatus, txHash: undefined, error: undefined, timestamp: Date.now() }
+            ? {
+                ...step,
+                status: 'idle' as TransactionStatus,
+                txHash: undefined,
+                error: undefined,
+                errorDetail: undefined,
+                timestamp: Date.now(),
+              }
             : step
         ),
       }
