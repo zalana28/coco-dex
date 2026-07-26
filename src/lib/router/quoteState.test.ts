@@ -247,3 +247,21 @@ describe('quoteState classification', () => {
     })
   })
 })
+  it('classifies the string Arc Testnet actually returns for a rate limit', () => {
+    // JSON-RPC -32011. Verified against the live endpoint. Previously this fell
+    // through to the 'network' branch and was labelled rpc-disconnected —
+    // right by accident, because the host is `rpc.testnet.arc.network`.
+    expect(classifyQuoteError(new Error('request limit reached'))).toBe('rpc-rate-limit')
+  })
+
+  it('classifies a full viem error carrying the Arc rate-limit details', () => {
+    const err = new Error(
+      'RPC Request failed.\n\nURL: https://rpc.testnet.arc.network\nDetails: request limit reached\nVersion: viem@2.51.0'
+    )
+    expect(classifyQuoteError(err)).toBe('rpc-rate-limit')
+  })
+
+  it('classifies the raw JSON-RPC code', () => {
+    expect(classifyQuoteError(new Error('server error -32011'))).toBe('rpc-rate-limit')
+  })
+

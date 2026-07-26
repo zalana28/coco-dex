@@ -32,24 +32,24 @@ describe('quoteRetryDelay', () => {
 
 describe('buildQuoteQueryOptions', () => {
   it('polls when enabled and not paused', () => {
-    const options = buildQuoteQueryOptions(true, false)
+    const options = buildQuoteQueryOptions(true, false, 'xylonet')
     expect(options.enabled).toBe(true)
     expect(options.refetchInterval).toBe(QUOTE_REFETCH_INTERVAL_MS)
   })
 
   it('stops polling while paused, without disabling the route permanently', () => {
-    const options = buildQuoteQueryOptions(true, true)
+    const options = buildQuoteQueryOptions(true, true, 'xylonet')
     expect(options.enabled).toBe(false)
     expect(options.refetchInterval).toBe(false)
   })
 
   it('stays disabled when the route itself is unsupported', () => {
-    expect(buildQuoteQueryOptions(false, false).enabled).toBe(false)
+    expect(buildQuoteQueryOptions(false, false, 'xylonet').enabled).toBe(false)
   })
 
   it('never refetches on window focus or in a background tab', () => {
     // Refocusing previously fired a simultaneous refetch on every quote at once.
-    const options = buildQuoteQueryOptions(true, false)
+    const options = buildQuoteQueryOptions(true, false, 'xylonet')
     expect(options.refetchOnWindowFocus).toBe(false)
     expect(options.refetchIntervalInBackground).toBe(false)
   })
