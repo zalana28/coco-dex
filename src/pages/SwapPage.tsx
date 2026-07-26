@@ -20,6 +20,8 @@ import { useNetworkGuard } from '@/hooks/useNetworkGuard'
 import { useTransactionSettings } from '@/hooks/useSettings'
 import type { ApprovalMode } from '@/hooks/useSettings'
 import { useTransactionProgress } from '@/hooks/useTransactionProgress'
+import { useNativeBalance } from '@/hooks/useNativeBalance'
+import { getMaxSpendable, hasInsufficientGas } from '@/lib/gasReserve'
 import { useCheckReceipt } from '@/hooks/useCheckReceipt'
 import { useAggregatedQuotes } from '@/hooks/useAggregatedQuotes'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
@@ -70,6 +72,10 @@ export function SwapPage() {
   // Live balances (ERC-20, 6 decimals — NOT native 18-decimal gas)
   const { balance: fromBalance, refetch: refetchFromBalance } = useTokenBalance(fromToken, address, { pausePolling: isTxInFlight })
   const { balance: toBalance, refetch: refetchToBalance } = useTokenBalance(toToken, address, { pausePolling: isTxInFlight })
+
+  // Native gas balance (18 decimals). Arc pays gas in USDC, so a swap can be
+  // affordable in token terms yet unaffordable in gas terms.
+  const { balance: nativeBalance } = useNativeBalance(address)
 
   // Parse input to bigint
   const fromAmountRaw = useMemo(() => {
@@ -472,6 +478,7 @@ export function SwapPage() {
     if (!hasLiquidity && !isXyloNetRoute && !isUnitFlowRoute && !isSynthraRoute) return { text: 'Pool has no liquidity', disabled: true, action: 'no-liquidity' as const }
     if (!fromAmount || parseFloat(fromAmount) <= 0) return { text: 'Enter an amount', disabled: true, action: 'enter' as const }
     if (fromBalance !== undefined && fromAmountRaw > fromBalance) return { text: 'Insufficient balance', disabled: true, action: 'insufficient' as const }
+    if (hasInsufficientGas(nativeBalance)) return { text: 'Insufficient gas', disabled: true, action: 'insufficient-gas' as const }
     if (isFindingRoute && !activeQuote) return { text: 'Finding best route…', disabled: true, action: 'finding-route' as const }
     if (!activeQuote) return { text: noExecutableRouteReason ?? 'No executable route available for this amount', disabled: true, action: 'no-executable-route' as const }
     if (activeQuote.executionStatus === 'non_executable') return { text: 'Route is quote only', disabled: true, action: 'route-not-executable' as const }
@@ -505,7 +512,7 @@ export function SwapPage() {
       disabled: false,
       action: 'swap' as const,
     }
-  }, [isConnected, isWrongNetwork, isSwitching, reservesLoading, hasLiquidity, fromAmount, fromBalance, fromAmountRaw, activeQuote, isFindingRoute, noExecutableRouteReason, isApproving, isApprovalConfirming, needsApproval, fromToken.symbol, isSwapping, isSwapConfirming, isXyloNetRoute, isUnitFlowRoute, isSynthraRoute, xyloNetSimulationError, unitFlowSimulationError, synthraSimulationError])
+  }, [isConnected, isWrongNetwork, isSwitching, reservesLoading, hasLiquidity, fromAmount, fromBalance, nativeBalance, fromAmountRaw, activeQuote, isFindingRoute, noExecutableRouteReason, isApproving, isApprovalConfirming, needsApproval, fromToken.symbol, isSwapping, isSwapConfirming, isXyloNetRoute, isUnitFlowRoute, isSynthraRoute, xyloNetSimulationError, unitFlowSimulationError, synthraSimulationError])
 
   const handleButtonClick = async () => {
     if (buttonState.action === 'switch-network') {
@@ -853,7 +860,7 @@ export function SwapPage() {
               amount={fromAmount}
               onAmountChange={setFromAmount}
               balance={formattedFromBalance}
-              onMax={() => fromBalance && setFromAmount(formatTokenAmount(fromBalance, fromToken.decimals))}
+              onMax={() => fromBalance !== undefined && setFromAmount(formatTokenAmount(getMaxSpendable(fromBalance, fromToken), fromToken.decimals))}
             />
 
             {/* Direction toggle — Fix 2: wired up with onClick */}

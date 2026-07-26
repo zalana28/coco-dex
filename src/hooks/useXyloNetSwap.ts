@@ -6,6 +6,12 @@ import { XYLONET_ROUTER_ADDRESS, XYLONET_USDC_EURC_POOL_ADDRESS } from '@/config
 import { ERC20_ABI } from '@/config/abis'
 import { arcTestnet } from '@/config/chains'
 import type { Token } from '@/types/token'
+import {
+  hasStateMoved,
+  SIMULATION_STATE_MOVED_REASON,
+  tryGetBlockNumber,
+  trySimulate,
+} from '@/lib/router/swapSimulation'
 
 const ARC_CHAIN_ID = arcTestnet.id
 const DEFAULT_DEADLINE_MINUTES = 5
@@ -273,9 +279,10 @@ export function useXyloNetSwap() {
 
     const swapArgs = [amountIn, minAmountOut, path, to, deadlineSeconds] as const
 
-    // ─── Step 2: Save simulation fingerprint: args hash + block number ───
-    let simBlockNumber: bigint | undefined
-    const fingerprintArgs = `${amountIn.toString()}:${minAmountOut.toString()}:${path.join(',')}:${to}:${deadlineSeconds.toString()}`
+    // ─── Step 2: Record the block the simulation is about to run against ───
+    // Read before simulating, so it genuinely describes the state the
+    // simulation saw rather than whatever block arrived afterwards.
+    const simBlockNumber = await tryGetBlockNumber(() => publicClient.getBlockNumber())
 
     if (import.meta.env.DEV) {
       console.debug('[useXyloNetSwap] swap args:', {
@@ -292,44 +299,48 @@ export function useXyloNetSwap() {
       })
     }
 
-    // ─── Step 3: Simulate ───
-    try {
-      await publicClient.simulateContract({
+    // ─── Step 3: Simulate, and keep the prepared request ───
+    const simulation = await trySimulate(() => publicClient.simulateContract({
         address: XYLONET_ROUTER_ADDRESS,
         abi: XYLONET_ROUTER_ABI,
         functionName: 'swapExactTokensForTokens',
         args: swapArgs,
         account,
         chain: arcTestnet,
-      })
-      const currentBlock = await publicClient.getBlockNumber()
-      simBlockNumber = currentBlock
-      if (import.meta.env.DEV) console.debug('[useXyloNetSwap] simulation passed at block', simBlockNumber?.toString())
-    } catch (simErr: unknown) {
-      const reason = classifyXyloNetSimulationError(simErr)
+      }))
+    if (!simulation.ok) {
+      const reason = classifyXyloNetSimulationError(simulation.error)
       if (import.meta.env.DEV) console.debug('[useXyloNetSwap] simulation failed:', { reason })
       setSimulationError(reason)
       return { status: 'SIMULATION_FAILED', reason }
     }
+      if (import.meta.env.DEV) console.debug('[useXyloNetSwap] simulation passed at block', simBlockNumber?.toString())
 
-    // ─── Step 4: Verify fingerprint before write ───
-    const currentFingerprint = `${amountIn.toString()}:${minAmountOut.toString()}:${path.join(',')}:${to}:${deadlineSeconds.toString()}`
-    if (fingerprintArgs !== currentFingerprint) {
-      const reason = 'Swap parameters changed between simulation and execution — refresh and try again'
-      if (import.meta.env.DEV) console.warn('[useXyloNetSwap] FINGERPRINT MISMATCH', { fingerprintArgs, currentFingerprint })
+    // ─── Step 4: Reject if chain state moved since the simulation ───
+    // This replaces a fingerprint comparison that could never fail: both sides
+    // were built from the same unchanged local consts within one callback, so
+    // they always matched. Block height is a real signal — reserves and
+    // allowances can move underneath a simulation that has already passed.
+    const blockBeforeWrite = await tryGetBlockNumber(() => publicClient.getBlockNumber())
+    if (hasStateMoved(simBlockNumber, blockBeforeWrite)) {
+      const reason = SIMULATION_STATE_MOVED_REASON
+      if (import.meta.env.DEV) {
+        console.warn('[useXyloNetSwap] block drift', {
+          simBlockNumber: simBlockNumber?.toString(),
+          nowBlock: blockBeforeWrite?.toString(),
+        })
+      }
       setSimulationError(reason)
       return { status: 'SIMULATION_FAILED', reason }
     }
 
-    // ─── Step 5: Submit via writeContract ───
+    // ─── Step 5: Submit the simulated request ───
+    // Passing `request` rather than hand-built args carries the validated
+    // arguments *and* the gas limit viem derived. Rebuilding them made the
+    // wallet re-run eth_estimateGas against the user's own RPC — a different
+    // node, with a different view of state and none of the app's retry config.
     writeContract(
-      {
-        address: XYLONET_ROUTER_ADDRESS,
-        abi: XYLONET_ROUTER_ABI,
-        functionName: 'swapExactTokensForTokens',
-        args: swapArgs,
-        chainId: ARC_CHAIN_ID,
-      },
+      simulation.value.request,
       {
         onSuccess: async (hash) => {
           if (import.meta.env.DEV) console.log('[useXyloNetSwap] tx sent:', hash)

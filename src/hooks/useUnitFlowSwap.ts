@@ -4,6 +4,12 @@ import { encodeAbiParameters, parseAbiParameters, type Hex } from 'viem'
 import { arcTestnet } from '@/config/chains'
 import { EURC } from '@/config/tokens'
 import { UNITFLOW_UNIVERSAL_ROUTER_ADDRESS, UNITFLOW_WUSDC_ADDRESS } from '@/config/unitflow'
+import {
+  hasStateMoved,
+  SIMULATION_STATE_MOVED_REASON,
+  tryGetBlockNumber,
+  trySimulate,
+} from '@/lib/router/swapSimulation'
 
 const ARC_CHAIN_ID = arcTestnet.id
 const DEFAULT_DEADLINE_MINUTES = 5
@@ -212,8 +218,11 @@ export function useUnitFlowSwap() {
       })
     }
 
-    try {
-      await publicClient.simulateContract({
+    // Record the block the simulation runs against, so state drift between
+    // simulation and submission can be detected below.
+    const simBlockNumber = await tryGetBlockNumber(() => publicClient.getBlockNumber())
+
+    const simulation = await trySimulate(() => publicClient.simulateContract({
         address: UNITFLOW_UNIVERSAL_ROUTER_ADDRESS,
         abi: UNITFLOW_UNIVERSAL_ROUTER_ABI,
         functionName: 'execute',
@@ -221,24 +230,24 @@ export function useUnitFlowSwap() {
         account,
         value: nativeAmountIn,
         chain: arcTestnet,
-      })
-      if (import.meta.env.DEV) console.debug('[useUnitFlowSwap] simulation passed')
-    } catch (simErr: unknown) {
-      const reason = classifyUnitFlowSimulationError(simErr)
+      }))
+    if (!simulation.ok) {
+      const reason = classifyUnitFlowSimulationError(simulation.error)
       if (import.meta.env.DEV) console.debug('[useUnitFlowSwap] simulation failed:', { reason })
       setSimulationError(reason)
       return { status: 'SIMULATION_FAILED', reason }
     }
+      if (import.meta.env.DEV) console.debug('[useUnitFlowSwap] simulation passed')
 
+    if (hasStateMoved(simBlockNumber, await tryGetBlockNumber(() => publicClient.getBlockNumber()))) {
+      setSimulationError(SIMULATION_STATE_MOVED_REASON)
+      return { status: 'SIMULATION_FAILED', reason: SIMULATION_STATE_MOVED_REASON }
+    }
+
+    // Submit the simulated request: validated args plus the gas limit viem
+    // derived, so the wallet does not re-estimate against its own RPC.
     writeContract(
-      {
-        address: UNITFLOW_UNIVERSAL_ROUTER_ADDRESS,
-        abi: UNITFLOW_UNIVERSAL_ROUTER_ABI,
-        functionName: 'execute',
-        args: [UNITFLOW_COMMANDS, [...inputs], deadlineSeconds],
-        value: nativeAmountIn,
-        chainId: ARC_CHAIN_ID,
-      },
+      simulation.value.request,
       {
         onSuccess: (hash) => {
           if (import.meta.env.DEV) console.log('[useUnitFlowSwap] tx sent:', hash)
