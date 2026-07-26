@@ -16,7 +16,7 @@ const ARC_CHAIN_ID = arcTestnet.id
  * NEVER confuse with native gas USDC (18 decimals).
  */
 export function usePairReserves({ pausePolling = false }: { pausePolling?: boolean } = {}) {
-  const { data, isLoading, refetch, error } = useReadContract({
+  const { data, dataUpdatedAt, isLoading, refetch, error } = useReadContract({
     address: USDC_EURC_PAIR_ADDRESS,
     abi: UNISWAP_V2_PAIR_ABI,
     functionName: 'getReserves',
@@ -51,6 +51,9 @@ export function usePairReserves({ pausePolling = false }: { pausePolling?: boole
   return {
     reserveUsdc,
     reserveEurc,
+    /** When this read actually completed. Feeds quote-freshness checks — the
+     *  Coco quote is derived from these reserves, so it is only as fresh. */
+    dataUpdatedAt,
     rate,
     hasLiquidity,
     isLoading,

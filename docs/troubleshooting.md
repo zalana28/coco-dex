@@ -81,6 +81,19 @@ If 429s persist, set a dedicated endpoint. `VITE_ARC_RPC_PRIMARY` (see
 automatic fallback. Leaving it unset is supported, just more prone to rate
 limiting.
 
+## Quote stale
+
+The route's quote is older than its TTL (`DEFAULT_ROUTE_TTL_MS`, 30s). The swap
+guard blocks execution and the route badge switches from "Fresh quote" to
+"Quote stale". Wait for the next refresh, or change the amount to force a
+re-quote.
+
+Freshness is measured from when the underlying chain read completed
+(react-query's `dataUpdatedAt`), not from when the quote object was built. This
+matters: the quote objects are rebuilt on every clock tick, so stamping the
+construction time would make every quote look permanently fresh — which is
+exactly what used to happen, leaving the guard and the badge inert.
+
 ## Deadline expired
 
 Submit a fresh transaction. Deadlines prevent execution after a configured time window.

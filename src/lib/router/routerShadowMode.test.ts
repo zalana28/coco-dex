@@ -5,9 +5,13 @@ import { buildCocoStableShadowRouteQuote } from './cocoStableAdapter'
 import { buildUnitFlowRouteQuote } from './unitflowAdapter'
 import { buildXyloNetRouteQuote } from './xylonetAdapter'
 
+/** Fixed read timestamp. Quotes must carry the time the underlying chain
+ *  read completed, never the time the object was constructed. */
+const QUOTED_AT = 1_700_000_000_000
+
 describe('router shadow mode quotes', () => {
   it('displays native stable shadow quotes but never marks them executable', () => {
-    const benchmarkQuote = buildXyloNetRouteQuote({
+    const benchmarkQuote = buildXyloNetRouteQuote({ quotedAt: QUOTED_AT,
       tokenIn: USDC,
       tokenOut: EURC,
       amountIn: 100_000n,
@@ -48,7 +52,7 @@ describe('router shadow mode quotes', () => {
 
   it('keeps a healthy XyloNet route executable when feature flag is on', () => {
     vi.stubEnv('VITE_ENABLE_XYLONET_EXECUTION', 'true')
-    const quote = buildXyloNetRouteQuote({
+    const quote = buildXyloNetRouteQuote({ quotedAt: QUOTED_AT,
       tokenIn: USDC,
       tokenOut: EURC,
       amountIn: 100_000n,
@@ -65,7 +69,7 @@ describe('router shadow mode quotes', () => {
 
   it('keeps XyloNet non-executable when feature flag is off', () => {
     vi.stubEnv('VITE_ENABLE_XYLONET_EXECUTION', 'false')
-    const quote = buildXyloNetRouteQuote({
+    const quote = buildXyloNetRouteQuote({ quotedAt: QUOTED_AT,
       tokenIn: USDC,
       tokenOut: EURC,
       amountIn: 100_000n,
@@ -81,7 +85,7 @@ describe('router shadow mode quotes', () => {
   })
 
   it('degrades XyloNet adapter failures gracefully', () => {
-    const quote = buildXyloNetRouteQuote({
+    const quote = buildXyloNetRouteQuote({ quotedAt: QUOTED_AT,
       tokenIn: USDC,
       tokenOut: EURC,
       amountIn: 100_000n,
@@ -96,7 +100,7 @@ describe('router shadow mode quotes', () => {
   })
 
   it('degrades UnitFlow adapter failures gracefully', () => {
-    const quote = buildUnitFlowRouteQuote({
+    const quote = buildUnitFlowRouteQuote({ quotedAt: QUOTED_AT,
       tokenIn: USDC,
       tokenOut: EURC,
       amountIn: 100_000n,

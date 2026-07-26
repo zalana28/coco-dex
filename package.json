@@ -16,7 +16,7 @@
     "test:e2e": "playwright test",
     "test:e2e:update": "playwright test --update-snapshots",
     "test:mobile": "playwright test --project=\"iPhone 13\" --project=\"Pixel 5\"",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -b",
     "routers:audit": "tsx scripts/routerAudit.ts",
     "routers:audit:offline": "npm run routers:audit -- --offline-fixtures",
     "routers:audit:test": "vitest --run src/lib/router-audit scripts/routerAudit*.test.ts",

@@ -26,6 +26,13 @@ type GetCocoQuoteParams = {
   reserveUsdc?: bigint
   reserveEurc?: bigint
   slippageBps: number
+  /**
+   * When the underlying on-chain read actually completed (react-query's
+   * `dataUpdatedAt`). Required, not defaulted: stamping `Date.now()` here would
+   * silently make every staleness check pass, which is exactly the bug this
+   * parameter exists to prevent.
+   */
+  quotedAt: number
 }
 
 export function getCocoRouteQuote({
@@ -35,6 +42,7 @@ export function getCocoRouteQuote({
   reserveUsdc,
   reserveEurc,
   slippageBps,
+  quotedAt,
 }: GetCocoQuoteParams): RouteQuote | undefined {
   if (amountIn <= BigInt(0) || !reserveUsdc || !reserveEurc) return undefined
 
@@ -69,7 +77,7 @@ export function getCocoRouteQuote({
     minAmountOut: calculateMinimumReceived(amountOut, slippageBps),
     routePath: [tokenIn.symbol, tokenOut.symbol],
     feeBps: 30,
-    quoteTimestamp: Date.now(),
+    quoteTimestamp: quotedAt,
     ttlMs: DEFAULT_ROUTE_TTL_MS,
     healthStatus: highPriceImpact ? 'degraded' : 'healthy',
     warnings: warningText ? [warningText] : [],

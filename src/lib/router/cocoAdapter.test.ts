@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { getCocoRouteQuote } from './cocoAdapter'
 import { USDC, EURC } from '@/config/tokens'
 
+/** Fixed read timestamp. Quotes must carry the time the underlying chain
+ *  read completed, never the time the object was constructed. */
+const QUOTED_AT = 1_700_000_000_000
+
 const usdc = USDC
 const eurc = EURC
 
@@ -11,7 +15,7 @@ const RESERVE_EURC = 43_512_770n
 
 describe('getCocoRouteQuote — price impact guard', () => {
   it('returns executable quote for tiny amount (< 3% impact)', () => {
-    const quote = getCocoRouteQuote({
+    const quote = getCocoRouteQuote({ quotedAt: QUOTED_AT,
       tokenIn: usdc, tokenOut: eurc,
       amountIn: 100_000n, // 0.1 USDC
       reserveUsdc: RESERVE_USDC,
@@ -27,7 +31,7 @@ describe('getCocoRouteQuote — price impact guard', () => {
 
   it('marks non-executable for large amount with high price impact (> 3%)', () => {
     // 10 USDC into a ~85 USDC pool → ~10.7% impact (verified on-chain)
-    const quote = getCocoRouteQuote({
+    const quote = getCocoRouteQuote({ quotedAt: QUOTED_AT,
       tokenIn: usdc, tokenOut: eurc,
       amountIn: 10_000_000n, // 10 USDC
       reserveUsdc: RESERVE_USDC,
@@ -43,7 +47,7 @@ describe('getCocoRouteQuote — price impact guard', () => {
   })
 
   it('still returns amountOut even when impact is too high (quote-only)', () => {
-    const quote = getCocoRouteQuote({
+    const quote = getCocoRouteQuote({ quotedAt: QUOTED_AT,
       tokenIn: usdc, tokenOut: eurc,
       amountIn: 10_000_000n,
       reserveUsdc: RESERVE_USDC,
@@ -56,7 +60,7 @@ describe('getCocoRouteQuote — price impact guard', () => {
 
   it('is executable for balanced pool with 10 USDC (< 3% impact)', () => {
     // Balanced pool: 1M USDC, 740K EURC (approximates market rate)
-    const quote = getCocoRouteQuote({
+    const quote = getCocoRouteQuote({ quotedAt: QUOTED_AT,
       tokenIn: usdc, tokenOut: eurc,
       amountIn: 10_000_000n, // 10 USDC
       reserveUsdc: 1_000_000_000_000n, // 1M USDC
@@ -68,7 +72,7 @@ describe('getCocoRouteQuote — price impact guard', () => {
   })
 
   it('returns undefined for zero amount', () => {
-    const quote = getCocoRouteQuote({
+    const quote = getCocoRouteQuote({ quotedAt: QUOTED_AT,
       tokenIn: usdc, tokenOut: eurc,
       amountIn: 0n,
       reserveUsdc: RESERVE_USDC,
@@ -79,7 +83,7 @@ describe('getCocoRouteQuote — price impact guard', () => {
   })
 
   it('returns undefined when reserves missing', () => {
-    const quote = getCocoRouteQuote({
+    const quote = getCocoRouteQuote({ quotedAt: QUOTED_AT,
       tokenIn: usdc, tokenOut: eurc,
       amountIn: 1_000_000n,
       reserveUsdc: undefined,
@@ -90,7 +94,7 @@ describe('getCocoRouteQuote — price impact guard', () => {
   })
 
   it('uses correct source and router address', () => {
-    const quote = getCocoRouteQuote({
+    const quote = getCocoRouteQuote({ quotedAt: QUOTED_AT,
       tokenIn: usdc, tokenOut: eurc,
       amountIn: 100_000n,
       reserveUsdc: RESERVE_USDC,
@@ -103,7 +107,7 @@ describe('getCocoRouteQuote — price impact guard', () => {
   })
 
   it('supports EURC→USDC direction', () => {
-    const quote = getCocoRouteQuote({
+    const quote = getCocoRouteQuote({ quotedAt: QUOTED_AT,
       tokenIn: eurc, tokenOut: usdc,
       amountIn: 100_000n, // 0.1 EURC
       reserveUsdc: RESERVE_USDC,

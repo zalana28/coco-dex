@@ -50,6 +50,13 @@ type BuildUnitFlowQuoteParams = {
   slippageBps: number
   isLoading?: boolean
   error?: unknown
+  /**
+   * When the underlying on-chain read actually completed (react-query's
+   * `dataUpdatedAt`). Required, not defaulted: stamping `Date.now()` here would
+   * silently make every staleness check pass, which is exactly the bug this
+   * parameter exists to prevent.
+   */
+  quotedAt: number
 }
 
 export function isUnitFlowPairSupported(tokenIn: Token, tokenOut: Token): boolean {
@@ -123,6 +130,7 @@ export function buildUnitFlowRouteQuote({
   slippageBps,
   isLoading = false,
   error,
+  quotedAt,
 }: BuildUnitFlowQuoteParams): RouteQuote {
   const unitflow = EXTERNAL_DEXES.unitflow
   const isSupportedPair = isUnitFlowPairSupported(tokenIn, tokenOut)
@@ -174,7 +182,7 @@ export function buildUnitFlowRouteQuote({
     amountOutFormatted: insufficientLiquidity ? '-' : safeAmountOut > BigInt(0) ? formatTokenAmount(safeAmountOut, tokenOut.decimals) : '-',
     minAmountOut,
     routePath: [tokenIn.symbol, 'WUSDC', tokenOut.symbol],
-    quoteTimestamp: Date.now(),
+    quoteTimestamp: quotedAt,
     ttlMs: DEFAULT_ROUTE_TTL_MS,
     healthStatus: getRouteHealthStatus(availabilityStatus),
     warnings: availabilityStatus === 'available'
