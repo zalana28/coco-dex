@@ -271,6 +271,36 @@ for (const variant of variants) {
 
     console.log('simulation result: success')
     console.log('result:', result.result.map((value) => value.toString()))
+
+    // ─── Quote vs. execution delta ───
+    //
+    // `getAmountOut(tokenIn, tokenOut, amountIn)` is NOT the Uniswap V2 shape
+    // (`getAmountOut(amountIn, reserveIn, reserveOut)`), so this is a custom
+    // router being driven through a V2-style entrypoint. If the quote function
+    // does not model a fee that the swap actually charges, every `minAmountOut`
+    // derived from it is systematically optimistic and the default 0.5%
+    // slippage may not cover the difference.
+    //
+    // A delta that is consistently non-zero across amounts is an unmodelled
+    // fee, and needs a correction factor in `buildXyloNetRouteQuote`.
+    // A delta that scales with size is price impact, which is expected.
+    const simulatedOut = result.result[result.result.length - 1]
+    if (simulatedOut !== undefined && amountOut > BigInt(0)) {
+      const deltaBps = ((amountOut - simulatedOut) * BigInt(10_000)) / amountOut
+      console.log('─── quote vs simulated ───')
+      console.log('quoted   :', amountOut.toString())
+      console.log('simulated:', simulatedOut.toString())
+      console.log('delta    :', (amountOut - simulatedOut).toString())
+      console.log('deltaBps :', deltaBps.toString(), `(${Number(deltaBps) / 100}%)`)
+      console.log(
+        'reading  :',
+        deltaBps === BigInt(0)
+          ? 'quote matches execution exactly'
+          : deltaBps > BigInt(0)
+            ? 'quote is OPTIMISTIC — minAmountOut derived from it is too high'
+            : 'quote is conservative — execution returns more than quoted'
+      )
+    }
   } catch (error: unknown) {
     console.log('simulation result: fail')
     printErrorFields(error)
