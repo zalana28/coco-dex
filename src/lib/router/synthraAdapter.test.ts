@@ -3,6 +3,10 @@ import { buildSynthraRouteQuote, isSynthraPairSupported, getSynthraV3QuoteReques
 import { USDC, EURC } from '@/config/tokens'
 import { classifyQuoteError } from './quoteState'
 
+/** Fixed read timestamp. Quotes must carry the time the underlying chain
+ *  read completed, never the time the object was constructed. */
+const QUOTED_AT = 1_700_000_000_000
+
 function makeToken(addr: string, decimals = 6) {
   return {
     address: addr as `0x${string}`,
@@ -65,7 +69,7 @@ describe('Synthra adapter', () => {
 
   describe('error classification', () => {
     it('classifies transient RPC as temporarily unavailable', () => {
-      const quote = buildSynthraRouteQuote({
+      const quote = buildSynthraRouteQuote({ quotedAt: QUOTED_AT,
         tokenIn: usdc, tokenOut: eurc, amountIn: 1_000_000n,
         feeQuotes: [], slippageBps: 50,
         error: new Error('RPC timeout'),
@@ -75,7 +79,7 @@ describe('Synthra adapter', () => {
     })
 
     it('classifies contract revert as no active pool', () => {
-      const quote = buildSynthraRouteQuote({
+      const quote = buildSynthraRouteQuote({ quotedAt: QUOTED_AT,
         tokenIn: usdc, tokenOut: eurc, amountIn: 1_000_000n,
         feeQuotes: [], slippageBps: 50,
         error: new Error('execution reverted: pool does not exist'),
@@ -85,7 +89,7 @@ describe('Synthra adapter', () => {
     })
 
     it('classifies no-liquidity as no active pool', () => {
-      const quote = buildSynthraRouteQuote({
+      const quote = buildSynthraRouteQuote({ quotedAt: QUOTED_AT,
         tokenIn: usdc, tokenOut: eurc, amountIn: 1_000_000n,
         feeQuotes: [], slippageBps: 50,
         error: new Error('insufficient liquidity'),
@@ -94,7 +98,7 @@ describe('Synthra adapter', () => {
     })
 
     it('does not use generic Contract read failed for classified errors', () => {
-      const quote = buildSynthraRouteQuote({
+      const quote = buildSynthraRouteQuote({ quotedAt: QUOTED_AT,
         tokenIn: usdc, tokenOut: eurc, amountIn: 1_000_000n,
         feeQuotes: [], slippageBps: 50,
         error: new Error('execution reverted'),
@@ -103,7 +107,7 @@ describe('Synthra adapter', () => {
     })
 
     it('falls back to Contract read failed for unknown errors', () => {
-      const quote = buildSynthraRouteQuote({
+      const quote = buildSynthraRouteQuote({ quotedAt: QUOTED_AT,
         tokenIn: usdc, tokenOut: eurc, amountIn: 1_000_000n,
         feeQuotes: [], slippageBps: 50,
         error: new Error('some weird error'),
@@ -115,7 +119,7 @@ describe('Synthra adapter', () => {
   describe('valid quote', () => {
     it('builds executable quote with positive minReceived', () => {
       vi.stubEnv('VITE_ENABLE_SYNTHRA_EXECUTION', 'true')
-      const quote = buildSynthraRouteQuote({
+      const quote = buildSynthraRouteQuote({ quotedAt: QUOTED_AT,
         tokenIn: usdc, tokenOut: eurc, amountIn: 1_000_000n,
         feeQuotes: [{ fee: 500, amountOut: 980_000n }],
         slippageBps: 50,
@@ -128,7 +132,7 @@ describe('Synthra adapter', () => {
     })
 
     it('selects best fee tier by output', () => {
-      const quote = buildSynthraRouteQuote({
+      const quote = buildSynthraRouteQuote({ quotedAt: QUOTED_AT,
         tokenIn: usdc, tokenOut: eurc, amountIn: 1_000_000n,
         feeQuotes: [
           { fee: 500, amountOut: 980_000n },

@@ -42,6 +42,10 @@ type UseAggregatedQuotesParams = {
    *  tiers are only worth polling together when they are actually on screen —
    *  see `src/lib/router/synthraFeeCache.ts`. */
   showAllRoutes?: boolean
+  /** When the pair reserves were last read (react-query `dataUpdatedAt` from
+   *  `usePairReserves`). The Coco quote is computed from those reserves, so its
+   *  freshness is theirs. */
+  reservesUpdatedAt?: number
 }
 
 const BETTER_ROUTE_WARNING_THRESHOLD_BPS = BigInt(500)
@@ -57,6 +61,7 @@ export function useAggregatedQuotes({
   nowMs: externalNowMs,
   pausePolling = false,
   showAllRoutes = false,
+  reservesUpdatedAt = 0,
 }: UseAggregatedQuotesParams) {
   const connectedChainId = useChainId()
   // Reactive clock for TTL checks: use external clock (from SwapPage) if provided,
@@ -90,7 +95,7 @@ export function useAggregatedQuotes({
   const breaker = useRpcCircuitBreaker(quoteTimestamp)
   const paused = pausePolling || breaker.isOpen
 
-  const { data: xylonetAmountOut, isLoading: isXyloNetLoading, error: xylonetError } = useReadContract({
+  const { data: xylonetAmountOut, dataUpdatedAt: xylonetUpdatedAt, isLoading: isXyloNetLoading, error: xylonetError } = useReadContract({
     address: xylonet.routerAddress,
     abi: XYLONET_ROUTER_ABI,
     functionName: 'getAmountOut',
@@ -106,7 +111,7 @@ export function useAggregatedQuotes({
   const isCocoStableLoading = false
   const cocoStableError: Error | null = null
 
-  const { data: unitflowAmountsOut, isLoading: isUnitFlowLoading, error: unitflowError } = useReadContract({
+  const { data: unitflowAmountsOut, dataUpdatedAt: unitflowUpdatedAt, isLoading: isUnitFlowLoading, error: unitflowError } = useReadContract({
     address: unitflow.v25.swapRouterAddress,
     abi: UNITFLOW_V25_ROUTER_ABI,
     functionName: 'getAmountsOut',
@@ -125,7 +130,7 @@ export function useAggregatedQuotes({
     BigInt(0),
   ] as const
 
-  const { data: synthraFee500AmountOut, isLoading: isSynthraFee500Loading, error: synthraFee500Error } = useReadContract({
+  const { data: synthraFee500AmountOut, dataUpdatedAt: synthraFee500UpdatedAt, isLoading: isSynthraFee500Loading, error: synthraFee500Error } = useReadContract({
     address: synthra.v3.quoterAddress,
     abi: SYNTHRA_V3_QUOTER_ABI,
     functionName: 'quoteExactInputSingle',
@@ -134,7 +139,7 @@ export function useAggregatedQuotes({
     query: buildQuoteQueryOptions(shouldReadSynthraFee(500), paused, 'synthra'),
   })
 
-  const { data: synthraFee3000AmountOut, isLoading: isSynthraFee3000Loading, error: synthraFee3000Error } = useReadContract({
+  const { data: synthraFee3000AmountOut, dataUpdatedAt: synthraFee3000UpdatedAt, isLoading: isSynthraFee3000Loading, error: synthraFee3000Error } = useReadContract({
     address: synthra.v3.quoterAddress,
     abi: SYNTHRA_V3_QUOTER_ABI,
     functionName: 'quoteExactInputSingle',
@@ -143,7 +148,7 @@ export function useAggregatedQuotes({
     query: buildQuoteQueryOptions(shouldReadSynthraFee(3_000), paused, 'synthra'),
   })
 
-  const { data: synthraFee10000AmountOut, isLoading: isSynthraFee10000Loading, error: synthraFee10000Error } = useReadContract({
+  const { data: synthraFee10000AmountOut, dataUpdatedAt: synthraFee10000UpdatedAt, isLoading: isSynthraFee10000Loading, error: synthraFee10000Error } = useReadContract({
     address: synthra.v3.quoterAddress,
     abi: SYNTHRA_V3_QUOTER_ABI,
     functionName: 'quoteExactInputSingle',
@@ -169,8 +174,15 @@ export function useAggregatedQuotes({
   })
   if (winningFee) recordWinningSynthraFee(pairKey, winningFee)
 
+  // Freshness is that of the *oldest* contributing read — the conservative
+  // choice. Since only the winning tier is polled continuously, this is usually
+  // a single value. Zero means "never fetched", so it is excluded rather than
+  // treated as 1970.
+  const synthraReadTimes = [synthraFee500UpdatedAt, synthraFee3000UpdatedAt, synthraFee10000UpdatedAt].filter((t) => t > 0)
+  const synthraUpdatedAt = synthraReadTimes.length > 0 ? Math.min(...synthraReadTimes) : 0
+
   return useMemo(() => {
-    const cocoQuote = getCocoRouteQuote({ tokenIn, tokenOut, amountIn, reserveUsdc, reserveEurc, slippageBps })
+    const cocoQuote = getCocoRouteQuote({ tokenIn, tokenOut, amountIn, reserveUsdc, reserveEurc, slippageBps, quotedAt: reservesUpdatedAt })
     const xylonetQuote = buildXyloNetRouteQuote({
       tokenIn,
       tokenOut,
@@ -180,6 +192,7 @@ export function useAggregatedQuotes({
       isLoading: isXyloNetLoading,
       error: xylonetError,
       chainId: connectedChainId,
+      quotedAt: xylonetUpdatedAt,
     })
     const unitflowQuote = buildUnitFlowRouteQuote({
       tokenIn,
@@ -189,6 +202,7 @@ export function useAggregatedQuotes({
       slippageBps,
       isLoading: isUnitFlowLoading,
       error: unitflowError,
+      quotedAt: unitflowUpdatedAt,
     })
     const benchmarkQuote = xylonetQuote.availabilityStatus === 'available' && xylonetQuote.healthStatus === 'healthy'
       ? xylonetQuote
@@ -226,6 +240,7 @@ export function useAggregatedQuotes({
         isLoading: isSynthraLoading,
         error: synthraError,
         chainId: connectedChainId,
+        quotedAt: synthraUpdatedAt,
       }),
     ].filter((quote): quote is RouteQuote => Boolean(quote))
 
@@ -288,6 +303,10 @@ export function useAggregatedQuotes({
     breaker.retryNow,
     amountIn,
     quoteTimestamp,
+    reservesUpdatedAt,
+    xylonetUpdatedAt,
+    unitflowUpdatedAt,
+    synthraUpdatedAt,
     reserveEurc,
     reserveUsdc,
     slippageBps,

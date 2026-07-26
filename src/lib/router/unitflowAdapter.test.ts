@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { buildUnitFlowRouteQuote, getUnitFlowV25QuoteRequest, isUnitFlowPairSupported } from './unitflowAdapter'
 import { USDC, EURC } from '@/config/tokens'
 
+/** Fixed read timestamp. Quotes must carry the time the underlying chain
+ *  read completed, never the time the object was constructed. */
+const QUOTED_AT = 1_700_000_000_000
+
 const usdc = USDC
 const eurc = EURC
 const AMT = 1_000_000n // 1 USDC
@@ -33,7 +37,7 @@ describe('getUnitFlowV25QuoteRequest', () => {
 describe('buildUnitFlowRouteQuote — liquidity guard', () => {
   it('marks quote available when output is reasonable (within 10×)', () => {
     // Normal healthy pool: 1 USDC in → ~0.73 EURC out
-    const quote = buildUnitFlowRouteQuote({
+    const quote = buildUnitFlowRouteQuote({ quotedAt: QUOTED_AT,
       tokenIn: usdc, tokenOut: eurc, amountIn: AMT,
       amountsOut: [AMT * 1_000_000_000_000n, 730_000n], // [WUSDC in, EURC out]
       slippageBps: 50,
@@ -47,7 +51,7 @@ describe('buildUnitFlowRouteQuote — liquidity guard', () => {
     // Audit finding: r0(WUSDC)≈0 causes getAmountsOut to return ~1.36e24 EURC raw
     // After normalization by 1e12: 1,362,044,019,318 EURC — clearly broken
     const brokenOutput = 1_362_044_019_318n  // normalized, massively exceeds 10× input
-    const quote = buildUnitFlowRouteQuote({
+    const quote = buildUnitFlowRouteQuote({ quotedAt: QUOTED_AT,
       tokenIn: usdc, tokenOut: eurc, amountIn: AMT,
       amountsOut: [AMT * 1_000_000_000_000n, brokenOutput * 1_000_000_000_000n],
       slippageBps: 50,
@@ -60,7 +64,7 @@ describe('buildUnitFlowRouteQuote — liquidity guard', () => {
   })
 
   it('marks quote unavailable when output is exactly 11× input', () => {
-    const quote = buildUnitFlowRouteQuote({
+    const quote = buildUnitFlowRouteQuote({ quotedAt: QUOTED_AT,
       tokenIn: usdc, tokenOut: eurc, amountIn: AMT,
       amountsOut: [AMT * 1_000_000_000_000n, AMT * 11n], // 11× → exceeds 10× threshold
       slippageBps: 50,
@@ -70,7 +74,7 @@ describe('buildUnitFlowRouteQuote — liquidity guard', () => {
   })
 
   it('allows output at exactly 10× input (boundary)', () => {
-    const quote = buildUnitFlowRouteQuote({
+    const quote = buildUnitFlowRouteQuote({ quotedAt: QUOTED_AT,
       tokenIn: usdc, tokenOut: eurc, amountIn: AMT,
       amountsOut: [AMT * 1_000_000_000_000n, AMT * 10n], // exactly 10× → within limit
       slippageBps: 50,
@@ -79,7 +83,7 @@ describe('buildUnitFlowRouteQuote — liquidity guard', () => {
   })
 
   it('marks unavailable when no quote returned', () => {
-    const quote = buildUnitFlowRouteQuote({
+    const quote = buildUnitFlowRouteQuote({ quotedAt: QUOTED_AT,
       tokenIn: usdc, tokenOut: eurc, amountIn: AMT,
       amountsOut: undefined,
       slippageBps: 50,
@@ -89,7 +93,7 @@ describe('buildUnitFlowRouteQuote — liquidity guard', () => {
   })
 
   it('marks unavailable on contract read error', () => {
-    const quote = buildUnitFlowRouteQuote({
+    const quote = buildUnitFlowRouteQuote({ quotedAt: QUOTED_AT,
       tokenIn: usdc, tokenOut: eurc, amountIn: AMT,
       amountsOut: undefined,
       slippageBps: 50,
@@ -100,7 +104,7 @@ describe('buildUnitFlowRouteQuote — liquidity guard', () => {
   })
 
   it('shows loading state while fetching', () => {
-    const quote = buildUnitFlowRouteQuote({
+    const quote = buildUnitFlowRouteQuote({ quotedAt: QUOTED_AT,
       tokenIn: usdc, tokenOut: eurc, amountIn: AMT,
       amountsOut: undefined,
       slippageBps: 50,
@@ -111,7 +115,7 @@ describe('buildUnitFlowRouteQuote — liquidity guard', () => {
 
   it('minAmountOut is 0 for insufficient liquidity quote', () => {
     const brokenOutput = AMT * 1_000_000n  // 1M× input — clearly broken
-    const quote = buildUnitFlowRouteQuote({
+    const quote = buildUnitFlowRouteQuote({ quotedAt: QUOTED_AT,
       tokenIn: usdc, tokenOut: eurc, amountIn: AMT,
       amountsOut: [AMT * 1_000_000_000_000n, brokenOutput * 1_000_000_000_000n],
       slippageBps: 50,
@@ -125,7 +129,7 @@ describe('buildUnitFlowRouteQuote — EURC→USDC direction', () => {
     // EURC→USDC goes through EURC→WUSDC path; normalized output divides by 1e12
     // which for EURC input would be WUSDC/1e12 = near-zero. Still unavailable
     // because isUnitFlowUniversalRouterExecutable only allows USDC→EURC.
-    const quote = buildUnitFlowRouteQuote({
+    const quote = buildUnitFlowRouteQuote({ quotedAt: QUOTED_AT,
       tokenIn: eurc, tokenOut: usdc, amountIn: AMT,
       amountsOut: [AMT, 900_000n],
       slippageBps: 50,

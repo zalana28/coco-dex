@@ -67,6 +67,13 @@ type BuildXyloNetQuoteParams = {
   isLoading?: boolean
   error?: unknown
   chainId?: number
+  /**
+   * When the underlying on-chain read actually completed (react-query's
+   * `dataUpdatedAt`). Required, not defaulted: stamping `Date.now()` here would
+   * silently make every staleness check pass, which is exactly the bug this
+   * parameter exists to prevent.
+   */
+  quotedAt: number
 }
 
 export function buildXyloNetRouteQuote({
@@ -78,6 +85,7 @@ export function buildXyloNetRouteQuote({
   isLoading = false,
   error,
   chainId,
+  quotedAt,
 }: BuildXyloNetQuoteParams): RouteQuote {
   const xylonet = EXTERNAL_DEXES.xylonet
   const isSupportedPair = isXyloNetPairSupported(tokenIn, tokenOut)
@@ -122,7 +130,7 @@ export function buildXyloNetRouteQuote({
     amountOutFormatted: safeAmountOut > BigInt(0) ? formatTokenAmount(safeAmountOut, tokenOut.decimals) : '-',
     minAmountOut: safeAmountOut > BigInt(0) ? calculateMinimumReceived(safeAmountOut, slippageBps) : BigInt(0),
     routePath: [tokenIn.symbol, tokenOut.symbol],
-    quoteTimestamp: Date.now(),
+    quoteTimestamp: quotedAt,
     ttlMs: DEFAULT_ROUTE_TTL_MS,
     healthStatus: getRouteHealthStatus(availabilityStatus),
     warnings: availabilityStatus === 'available'

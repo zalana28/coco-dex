@@ -65,7 +65,7 @@ export function SwapPage() {
   const isTxInFlight = txProgress.currentFlow !== null && !txProgress.isFlowComplete
 
   // Live reserves
-  const { reserveUsdc, reserveEurc, hasLiquidity, isLoading: reservesLoading, refetch: refetchReserves } = usePairReserves({ pausePolling: isTxInFlight })
+  const { reserveUsdc, reserveEurc, hasLiquidity, isLoading: reservesLoading, refetch: refetchReserves, dataUpdatedAt: reservesUpdatedAt } = usePairReserves({ pausePolling: isTxInFlight })
 
   // Live balances (ERC-20, 6 decimals — NOT native 18-decimal gas)
   const { balance: fromBalance, refetch: refetchFromBalance } = useTokenBalance(fromToken, address, { pausePolling: isTxInFlight })
@@ -132,6 +132,7 @@ export function SwapPage() {
     nowMs: clockMs,
     pausePolling: isTxInFlight,
     showAllRoutes,
+    reservesUpdatedAt,
   })
 
   // "Finding best route…" while debouncing or quotes are in flight for a valid amount.

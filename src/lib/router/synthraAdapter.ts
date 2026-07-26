@@ -56,6 +56,13 @@ type BuildSynthraQuoteParams = {
   isLoading?: boolean
   error?: unknown
   chainId?: number
+  /**
+   * When the underlying on-chain read actually completed (react-query's
+   * `dataUpdatedAt`). Required, not defaulted: stamping `Date.now()` here would
+   * silently make every staleness check pass, which is exactly the bug this
+   * parameter exists to prevent.
+   */
+  quotedAt: number
 }
 
 function formatFeeTier(fee?: SynthraQuoteFeeTier): string {
@@ -94,6 +101,7 @@ export function buildSynthraRouteQuote({
   isLoading = false,
   error,
   chainId,
+  quotedAt,
 }: BuildSynthraQuoteParams): RouteQuote {
   const synthra = EXTERNAL_DEXES.synthra
   const isSupportedPair = isSynthraPairSupported(tokenIn, tokenOut)
@@ -161,7 +169,7 @@ export function buildSynthraRouteQuote({
     minAmountOut,
     routePath: [tokenIn.symbol, `Synthra V3 ${formatFeeTier(bestFeeQuote?.fee)}`, tokenOut.symbol],
     feeTier: bestFeeQuote?.fee,
-    quoteTimestamp: Date.now(),
+    quoteTimestamp: quotedAt,
     ttlMs: DEFAULT_ROUTE_TTL_MS,
     healthStatus: getRouteHealthStatus(availabilityStatus),
     warnings: availabilityStatus === 'available'
