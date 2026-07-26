@@ -11,6 +11,15 @@ import { buildUnitFlowRouteQuote, getUnitFlowV25QuoteRequest, isUnitFlowPairSupp
 import type { RouteQuote } from '@/lib/router/types'
 import { ROUTER_SHADOW_MODE_CONFIG } from '@/lib/router/routerConfig'
 import { selectBestRoute } from '@/lib/router/selectBestRoute'
+import { buildQuoteQueryOptions } from '@/lib/router/quoteQueryOptions'
+import { useRpcCircuitBreaker } from '@/hooks/useRpcCircuitBreaker'
+import {
+  getPairKey,
+  getWinningSynthraFee,
+  recordWinningSynthraFee,
+  selectWinningSynthraFee,
+  type SynthraFee,
+} from '@/lib/router/synthraFeeCache'
 
 type UseAggregatedQuotesParams = {
   tokenIn: Token
@@ -24,12 +33,18 @@ type UseAggregatedQuotesParams = {
    *  against this clock instead of a frozen mount-time value.
    *  Pass the ticking `clockMs` from SwapPage to keep TTL checks live. */
   nowMs?: number
+  /** Suspend polling while a transaction is in flight. Approve and swap
+   *  otherwise compete for RPC budget with the background quote pollers, which
+   *  is the main source of 429s during a swap. Existing quote data is retained
+   *  while paused, so the UI does not go blank. */
+  pausePolling?: boolean
+  /** Whether the user has the "all routes" panel open. Synthra's three fee
+   *  tiers are only worth polling together when they are actually on screen —
+   *  see `src/lib/router/synthraFeeCache.ts`. */
+  showAllRoutes?: boolean
 }
 
 const BETTER_ROUTE_WARNING_THRESHOLD_BPS = BigInt(500)
-const QUOTE_REFETCH_INTERVAL_MS = 30_000
-const QUOTE_RETRY_COUNT = 2
-const QUOTE_STALE_TIME_MS = 30_000
 
 export function useAggregatedQuotes({
   tokenIn,
@@ -40,6 +55,8 @@ export function useAggregatedQuotes({
   slippageBps,
   selectedQuoteId,
   nowMs: externalNowMs,
+  pausePolling = false,
+  showAllRoutes = false,
 }: UseAggregatedQuotesParams) {
   const connectedChainId = useChainId()
   // Reactive clock for TTL checks: use external clock (from SwapPage) if provided,
@@ -62,19 +79,24 @@ export function useAggregatedQuotes({
   const shouldReadUnitFlow = amountIn > BigInt(0) && isUnitFlowPairSupported(tokenIn, tokenOut) && Boolean(unitflowQuoteRequest)
   const shouldReadSynthra = amountIn > BigInt(0) && isSynthraPairSupported(tokenIn, tokenOut) && Boolean(synthraQuoteRequest)
 
+  const pairKey = getPairKey(tokenIn.address, tokenOut.address)
+  const activeSynthraFee = getWinningSynthraFee(pairKey)
+  const shouldReadSynthraFee = (fee: SynthraFee) =>
+    shouldReadSynthra && (showAllRoutes || fee === activeSynthraFee)
+
+  // Polling is suspended by an in-flight transaction or by the circuit breaker.
+  // The breaker reads from a store outside React, so it can gate the very reads
+  // that feed it without any ordering trick.
+  const breaker = useRpcCircuitBreaker(quoteTimestamp)
+  const paused = pausePolling || breaker.isOpen
+
   const { data: xylonetAmountOut, isLoading: isXyloNetLoading, error: xylonetError } = useReadContract({
     address: xylonet.routerAddress,
     abi: XYLONET_ROUTER_ABI,
     functionName: 'getAmountOut',
     args: [tokenIn.address as `0x${string}`, tokenOut.address as `0x${string}`, amountIn],
     chainId: arcTestnet.id,
-    query: {
-      enabled: shouldReadXyloNet,
-      refetchInterval: QUOTE_REFETCH_INTERVAL_MS,
-      retry: QUOTE_RETRY_COUNT,
-      retryDelay: 1_000,
-      staleTime: QUOTE_STALE_TIME_MS,
-    },
+    query: buildQuoteQueryOptions(shouldReadXyloNet, paused, 'xylonet'),
   })
 
   // CocoStable Pool getAmountOut is not available on the deployed contract
@@ -90,13 +112,7 @@ export function useAggregatedQuotes({
     functionName: 'getAmountsOut',
     args: [unitflowQuoteRequest?.amountIn ?? BigInt(0), unitflowQuoteRequest?.path ?? [unitflow.v25.wusdcAddress, unitflow.v25.wusdcAddress]],
     chainId: arcTestnet.id,
-    query: {
-      enabled: shouldReadUnitFlow,
-      refetchInterval: QUOTE_REFETCH_INTERVAL_MS,
-      retry: QUOTE_RETRY_COUNT,
-      retryDelay: 1_000,
-      staleTime: QUOTE_STALE_TIME_MS,
-    },
+    query: buildQuoteQueryOptions(shouldReadUnitFlow, paused, 'unitflow'),
   })
 
   // Flat args matching verified on-chain ABI: (tokenIn, tokenOut, amountIn, fee, sqrtPriceLimitX96)
@@ -115,13 +131,7 @@ export function useAggregatedQuotes({
     functionName: 'quoteExactInputSingle',
     args: synthraQuoteArgs(500),
     chainId: arcTestnet.id,
-    query: {
-      enabled: shouldReadSynthra,
-      refetchInterval: QUOTE_REFETCH_INTERVAL_MS,
-      retry: QUOTE_RETRY_COUNT,
-      retryDelay: 1_000,
-      staleTime: QUOTE_STALE_TIME_MS,
-    },
+    query: buildQuoteQueryOptions(shouldReadSynthraFee(500), paused, 'synthra'),
   })
 
   const { data: synthraFee3000AmountOut, isLoading: isSynthraFee3000Loading, error: synthraFee3000Error } = useReadContract({
@@ -130,13 +140,7 @@ export function useAggregatedQuotes({
     functionName: 'quoteExactInputSingle',
     args: synthraQuoteArgs(3_000),
     chainId: arcTestnet.id,
-    query: {
-      enabled: shouldReadSynthra,
-      refetchInterval: QUOTE_REFETCH_INTERVAL_MS,
-      retry: QUOTE_RETRY_COUNT,
-      retryDelay: 1_000,
-      staleTime: QUOTE_STALE_TIME_MS,
-    },
+    query: buildQuoteQueryOptions(shouldReadSynthraFee(3_000), paused, 'synthra'),
   })
 
   const { data: synthraFee10000AmountOut, isLoading: isSynthraFee10000Loading, error: synthraFee10000Error } = useReadContract({
@@ -145,19 +149,25 @@ export function useAggregatedQuotes({
     functionName: 'quoteExactInputSingle',
     args: synthraQuoteArgs(10_000),
     chainId: arcTestnet.id,
-    query: {
-      enabled: shouldReadSynthra,
-      refetchInterval: QUOTE_REFETCH_INTERVAL_MS,
-      retry: QUOTE_RETRY_COUNT,
-      retryDelay: 1_000,
-      staleTime: QUOTE_STALE_TIME_MS,
-    },
+    query: buildQuoteQueryOptions(shouldReadSynthraFee(10_000), paused, 'synthra'),
   })
 
   const isSynthraLoading = isSynthraFee500Loading || isSynthraFee3000Loading || isSynthraFee10000Loading
   const synthraError = synthraFee500Error && synthraFee3000Error && synthraFee10000Error
     ? synthraFee500Error
     : undefined
+
+  // Remember which fee tier actually wins for this pair, so the continuous poll
+  // tracks liquidity instead of always defaulting to the lowest tier. Only tiers
+  // that were actually read contribute, so this is a no-op while a single tier
+  // is being polled.
+  const unwrapAmountOut = (v: unknown) => (Array.isArray(v) ? (v[0] as bigint | undefined) : (v as bigint | undefined))
+  const winningFee = selectWinningSynthraFee({
+    500: unwrapAmountOut(synthraFee500AmountOut),
+    3_000: unwrapAmountOut(synthraFee3000AmountOut),
+    10_000: unwrapAmountOut(synthraFee10000AmountOut),
+  })
+  if (winningFee) recordWinningSynthraFee(pairKey, winningFee)
 
   return useMemo(() => {
     const cocoQuote = getCocoRouteQuote({ tokenIn, tokenOut, amountIn, reserveUsdc, reserveEurc, slippageBps })
@@ -265,8 +275,17 @@ export function useAggregatedQuotes({
       synthraError,
       cocoStableError,
       comingSoonSources: [],
+      /** Open when several sources fail at once — render one banner, not five. */
+      rpcOutage: {
+        isPaused: breaker.isOpen,
+        secondsRemaining: breaker.secondsRemaining,
+        retryNow: breaker.retryNow,
+      },
     }
   }, [
+    breaker.isOpen,
+    breaker.secondsRemaining,
+    breaker.retryNow,
     amountIn,
     quoteTimestamp,
     reserveEurc,

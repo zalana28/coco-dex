@@ -58,12 +58,18 @@ export function SwapPage() {
   // Network guard — require Arc Testnet for all DEX operations
   const { isWrongNetwork, switchToArc, isSwitching } = useNetworkGuard()
 
+  // Transaction progress tracking (strict sequential).
+  // Declared before the polling hooks below because it gates them: approve and
+  // swap must not compete with background pollers for RPC budget.
+  const txProgress = useTransactionProgress()
+  const isTxInFlight = txProgress.currentFlow !== null && !txProgress.isFlowComplete
+
   // Live reserves
-  const { reserveUsdc, reserveEurc, hasLiquidity, isLoading: reservesLoading, refetch: refetchReserves } = usePairReserves()
+  const { reserveUsdc, reserveEurc, hasLiquidity, isLoading: reservesLoading, refetch: refetchReserves } = usePairReserves({ pausePolling: isTxInFlight })
 
   // Live balances (ERC-20, 6 decimals — NOT native 18-decimal gas)
-  const { balance: fromBalance, refetch: refetchFromBalance } = useTokenBalance(fromToken, address)
-  const { balance: toBalance, refetch: refetchToBalance } = useTokenBalance(toToken, address)
+  const { balance: fromBalance, refetch: refetchFromBalance } = useTokenBalance(fromToken, address, { pausePolling: isTxInFlight })
+  const { balance: toBalance, refetch: refetchToBalance } = useTokenBalance(toToken, address, { pausePolling: isTxInFlight })
 
   // Parse input to bigint
   const fromAmountRaw = useMemo(() => {
@@ -115,7 +121,7 @@ export function SwapPage() {
     return () => window.clearInterval(handle)
   }, [])
 
-  const { quotes, bestQuote, noExecutableRouteReason, isLoading: quotesLoading, comingSoonSources } = useAggregatedQuotes({
+  const { quotes, bestQuote, noExecutableRouteReason, isLoading: quotesLoading, comingSoonSources, rpcOutage } = useAggregatedQuotes({
     tokenIn: fromToken,
     tokenOut: toToken,
     amountIn: debouncedFromAmountRaw,
@@ -124,6 +130,8 @@ export function SwapPage() {
     slippageBps,
     selectedQuoteId: manualRouteId ?? undefined,
     nowMs: clockMs,
+    pausePolling: isTxInFlight,
+    showAllRoutes,
   })
 
   // "Finding best route…" while debouncing or quotes are in flight for a valid amount.
@@ -292,8 +300,6 @@ export function SwapPage() {
     clearSynthraSimulationError()
   }, [clearSimulationError, clearUnitFlowSimulationError, clearSynthraSimulationError, manualRouteId, fromAmountRaw, activeQuote?.minAmountOut, fromToken.address, toToken.address])
 
-  // Transaction progress tracking (strict sequential)
-  const txProgress = useTransactionProgress()
   const { checkReceipt } = useCheckReceipt()
 
   // Derive approve type from current fromToken
@@ -915,6 +921,25 @@ export function SwapPage() {
                     className="mt-1 text-[11px] font-medium text-coco-teal-400 hover:text-coco-teal-300"
                   >
                     Use best route
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Shared RPC outage — one banner instead of a red error per route */}
+            {rpcOutage.isPaused && (
+              <div className="mt-3 flex items-start gap-2.5 rounded-xl bg-coco-amber-500/10 border border-coco-amber-500/25 p-3.5 shadow-coco-1">
+                <Wifi className="h-4 w-4 text-coco-amber-500 shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-coco-amber-500">
+                    Arc Testnet RPC is busy — quotes paused for {rpcOutage.secondsRemaining}s.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={rpcOutage.retryNow}
+                    className="mt-1 text-[11px] font-medium text-coco-teal-400 hover:text-coco-teal-300"
+                  >
+                    Retry now
                   </button>
                 </div>
               </div>

@@ -13,6 +13,7 @@ interface ImportMetaEnv {
   readonly VITE_ENABLE_XYLONET_EXECUTION?: string
   readonly VITE_ENABLE_UNITFLOW_EXECUTION?: string
   readonly VITE_ENABLE_SYNTHRA_EXECUTION?: string
+  readonly VITE_ARC_RPC_PRIMARY?: string
 }
 
 interface ImportMeta {

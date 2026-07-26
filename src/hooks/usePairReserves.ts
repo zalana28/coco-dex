@@ -15,14 +15,17 @@ const ARC_CHAIN_ID = arcTestnet.id
  * Returns reserves in ERC-20 raw units (6 decimals for both USDC and EURC).
  * NEVER confuse with native gas USDC (18 decimals).
  */
-export function usePairReserves() {
+export function usePairReserves({ pausePolling = false }: { pausePolling?: boolean } = {}) {
   const { data, isLoading, refetch, error } = useReadContract({
     address: USDC_EURC_PAIR_ADDRESS,
     abi: UNISWAP_V2_PAIR_ABI,
     functionName: 'getReserves',
     chainId: ARC_CHAIN_ID,
     query: {
-      refetchInterval: 15_000, // refresh every 15s
+      // Suspended while a transaction is in flight so this does not compete
+      // with approve/swap for RPC budget. Last reserves are retained.
+      refetchInterval: pausePolling ? false : 15_000,
+      refetchIntervalInBackground: false,
     },
   })
 

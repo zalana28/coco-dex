@@ -21,11 +21,15 @@ import { useBalance } from 'wagmi'
  *   USDC: 0x3600000000000000000000000000000000000000 (6 decimals)
  *   EURC: 0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a (6 decimals)
  */
-export function useNativeBalance(address: `0x${string}` | undefined) {
+export function useNativeBalance(
+  address: `0x${string}` | undefined,
+  { pausePolling = false }: { pausePolling?: boolean } = {}
+) {
   const { data, isLoading, refetch } = useBalance({
     address,
     query: {
-      enabled: !!address,
+      enabled: !!address && !pausePolling,
+      refetchIntervalInBackground: false,
     },
   })
 
