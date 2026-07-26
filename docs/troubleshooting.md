@@ -34,6 +34,33 @@ Coco DEX requires Arc Testnet. Use the app prompt or wallet network selector to 
 
 Confirm the wallet has enough input token and enough native gas token for the transaction. Arc Testnet uses USDC as the native gas token, while the app also displays ERC-20 USDC for DeFi token flows.
 
+## "Leave 0.1 USDC for gas"
+
+The amount fits your balance, but not once gas is accounted for. Reduce it.
+
+Arc pays gas in USDC, and per Arc's own fee documentation a transaction needs
+`value + maxFeePerGas × gasLimit`. Since the gas token *is* the token being
+swapped, both come out of one balance. Checking `amount <= balance` is therefore
+not enough — it leaves nothing to pay with.
+
+This is worst on the UnitFlow route, which wraps USDC and so sends the **entire
+input as native `value`** rather than pulling it with `transferFrom`.
+
+Why it is invisible until submission: `eth_call` (simulation) does not deduct
+the upfront gas cost, so the swap simulates cleanly. `eth_estimateGas` and real
+execution do deduct it, so the wallet refuses or the transaction reverts.
+
+### If the wallet shows a vague message instead
+
+Mobile wallets often return a generic, locale-translated string — for example
+*"Terjadi kesalahan dalam memproses transaksi"* — and viem surfaces it as though
+the contract had reverted. It is not a contract revert: no Solidity contract
+emits localized prose. When the balance is within the gas reserve of the amount,
+that is the likelier explanation, and the app now says so directly.
+
+Expand **Details** for the failure context (route, amount, balance, native
+balance) alongside the raw provider string.
+
 ## Insufficient gas
 
 The wallet's native balance is too low to pay for a transaction. Because Arc

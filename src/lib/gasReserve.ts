@@ -50,6 +50,48 @@ export function getMaxSpendable(balance: bigint, token: Token): bigint {
 }
 
 /**
+ * Total balance a swap of `amountIn` needs, including the gas reserve.
+ *
+ * For a native-backed token the amount and the gas come out of one balance, so
+ * `amountIn <= balance` is not enough — it leaves nothing to pay with. Arc's
+ * own documentation states the requirement as `value + maxFeePerGas × gasLimit`,
+ * and on a chain where the gas token *is* the token being swapped, `value` and
+ * the fee draw on the same funds.
+ *
+ * This bites hardest on the UnitFlow route, which wraps USDC and therefore
+ * sends the entire input as native `value` rather than pulling it via
+ * `transferFrom` — but the arithmetic is the same for every route.
+ */
+export function getRequiredBalance(amountIn: bigint, token: Token): bigint {
+  return isNativeBackedToken(token) ? amountIn + GAS_BUFFER_USDC : amountIn
+}
+
+/**
+ * Whether the amount itself exceeds the balance — the plain "too poor" case.
+ */
+export function exceedsBalance(amountIn: bigint, balance: bigint | undefined): boolean {
+  if (balance === undefined) return false
+  return amountIn > balance
+}
+
+/**
+ * Whether the amount fits but leaves too little behind to pay for gas.
+ *
+ * Kept separate from `exceedsBalance` so the UI can say something useful:
+ * "reduce the amount" is actionable, "insufficient balance" is not when the
+ * balance visibly covers what was typed.
+ */
+export function leavesTooLittleForGas(
+  amountIn: bigint,
+  balance: bigint | undefined,
+  token: Token
+): boolean {
+  if (balance === undefined) return false
+  if (amountIn > balance) return false // already the plain insufficient-balance case
+  return getRequiredBalance(amountIn, token) > balance
+}
+
+/**
  * Whether the wallet's native balance is too low to pay for a transaction.
  *
  * Undefined balance means "not loaded yet" and is not treated as insufficient —
